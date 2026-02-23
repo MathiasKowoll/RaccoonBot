@@ -296,7 +296,7 @@ func parseCXEnvVarString(_ string: String) -> (String, String){
         key = match?.1.description ?? ""
         value = match?.2.description ?? ""
     } catch {
-        print(error.localizedDescription)
+        console.error("parseCXEnvVarString: \(error.localizedDescription)")
     }
     return (key, value)
 }
@@ -317,17 +317,22 @@ func isCXPatched(appDir: URL) -> Bool {
 func getCXPatcherBottlesURL(appDir: URL)  throws -> URL {
     let f = FileManager.default
     let base = f.homeDirectoryForCurrentUser
-    // /Contents/SharedSupport/CrossOver/etc/CrossOver.conf
+    
     let confPath: URL = appDir.appendingPathComponent("/Contents/SharedSupport/CrossOver/etc/CrossOver.conf")
     let confFile = try String(contentsOf: confPath, encoding: .utf8)
-    var path = ""
     for line in confFile.components(separatedBy: "\n") {
         let (key, value) = parseCXEnvVarString(String(line))
         if key == "CX_BOTTLE_PATH" {
-            path = value.contains("/Users/${USER}/") ? value.split(separator: "/").last?.base ?? "" : value
+            if(value.contains("/Users/${USER}/")) {
+                let path = value.split(separator: "/").last?.description ?? ""
+                return base.appendingPathComponent(path, isDirectory: true)
+            } else {
+                return URL(filePath: value)
+            }
         }
     }
-    
+    // fallback if it doesn't find it in the config file (just in case)
+    console.warn("Couldn't find CXPatcher bottles configuration")
     let bottlePathForCXP: URL = base.appendingPathComponent("CXPBottles", isDirectory: true)
     return bottlePathForCXP
 }
@@ -689,7 +694,6 @@ func localizedString(forKey: String, value: String? = nil) -> String {
 
 func showFolder(url: URL) {
     let targetURL: URL = url
-print(url)
     NSWorkspace.shared.open(targetURL)
 }
 

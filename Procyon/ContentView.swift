@@ -23,11 +23,11 @@ final class Router: ObservableObject {
 }
 
 final class AppGlobals: ObservableObject {
-    @Published var selectedBottle: String?
+    @Published var selectedBottle: String = ""
     @Published var cxAppPath: String?
     
     init(selectedBottle: String? = "", cxAppPath: String? = nil) {
-        self.selectedBottle = readUsrDefOptionString(key: "selectedBottle")
+        self.selectedBottle = readUsrDefOptionString(key: "selectedBottle") ?? ""
         self.cxAppPath = readUsrDefOptionString(key: "cxAppPath")
     }
 }

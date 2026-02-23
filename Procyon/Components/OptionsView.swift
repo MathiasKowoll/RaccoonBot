@@ -63,22 +63,29 @@ struct OptionsView: View {
                 .padding(.bottom)
                 Button(URL(string: appGlobals.cxAppPath ?? "")?.lastPathComponent ?? "Select a Crossover App...") {
                     if let url = openFolderSelectorPanel(type: .application) {
+                        appGlobals.selectedBottle = ""
                         bottles = getAllBottles(appDir: url)
                         appGlobals.cxAppPath = url.relativePath
                         persistUsrDefOptionString(key: "cxAppPath", value: url.relativePath)
                         persistUsrDefOptionString(key: "cxCompleteAppPath", value: url.path())
                     }
                 }
-                Picker("Select a bottle", selection: $appGlobals.selectedBottle) {
-                    Text("No bottle selected").tag("")
-                    ForEach(bottles, id: \.absoluteString) { bottle in
-                        let text = bottle.pathComponents.suffix(2).joined(separator: "/")
-                        Text(text).tag(bottle.absoluteString)
+                if(!bottles.isEmpty) {
+                    Picker("Select a bottle", selection: $appGlobals.selectedBottle) {
+                        Text("No bottle selected").tag("")
+                        ForEach(bottles, id: \.absoluteString) { bottle in
+                            let components = bottle.pathComponents
+                            let lastTwo = Array(components.suffix(2))
+                            let label = lastTwo.joined(separator: "/")
+                            Text(label).tag(bottle.absoluteString)
+                        }
+                    }.onChange(of: appGlobals.selectedBottle) { oldValue, newValue in
+                        if(newValue != "") {
+                            persistUsrDefOptionString(key: "selectedBottle", value: newValue)
+                        }
                     }
-                }.onChange(of: appGlobals.selectedBottle) { oldValue, newValue in
-                    if(newValue != nil && newValue != "") {
-                        persistUsrDefOptionString(key: "selectedBottle", value: newValue!)
-                    }
+                } else {
+                    Text("No bottles found for this app. Create a new bottle first")
                 }
                 HStack {
                     Button(action: { deleteCache() }) {

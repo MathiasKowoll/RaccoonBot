@@ -62,9 +62,9 @@ struct GameThumbnail: View {
                                             gameOptions.set(data: gameOptionsData)
                                         }
                                         if(item.isNative) {
-                                            try await launchNativeGame(id: String(item.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle!, options: gameOptions)
+                                            try await launchNativeGame(id: String(item.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions)
                                         } else {
-                                            try await launchWindowsGame(id: String(item.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle!, options: gameOptions)
+                                            try await launchWindowsGame(id: String(item.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions)
                                         }
                                         DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
                                             libraryPageGlobals.setLoader(state: false)

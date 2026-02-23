@@ -17,11 +17,11 @@ struct Tag: View {
     var body: some View {
         Text(text)
             .lineLimit(1)
-            .foregroundStyle(.procyonDarkGray)
+            .foregroundStyle(.black)
             .padding(.horizontal, 10)
             .padding(.top, 2)
             .padding(.bottom, 4)
-            .background(.procyonBrightGray)
+            .background(.procyonSecondary)
             .clipShape(Capsule())
     }
 }

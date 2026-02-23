@@ -75,8 +75,9 @@ struct GameThumbnail: View {
                                     }
                                 }
                             } label: {
-                                Label("Play", systemImage: "play.fill")
+                                Label("Play", systemImage: "play.fill").foregroundStyle(.black)
                             }
+                            .background(.procyonSecondary)
                             .cornerRadius(20)
                         } else {
                             ProgressView(value: item.downloadProgress, total: 100,

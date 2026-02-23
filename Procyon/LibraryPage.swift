@@ -118,7 +118,7 @@ struct LibraryPage: View {
                     }
                     .frame(maxWidth: .infinity)
                 } else {
-                    GamesList()
+                    GamesList().padding(.bottom)
                 }
             }
             .sheet(isPresented: $libraryPageGlobals.showOptions) {
@@ -184,13 +184,6 @@ struct LibraryPage: View {
         
         do {
             libraryPageGlobals.games = try await api.fetchGamesInfo(meta: libraryPageGlobals.gamesMeta, setProgress: { self.progress = $0 })
-//            Task {
-//                while progress <= 100 {
-//                    try await Task.sleep(nanoseconds: 100_000_000)
-//                    progress += 1
-//                }
-//            }
-//            libraryPageGlobals.games = try await api.fetchGameInfoArray(appIDs: libraryPageGlobals.appIDs, setProgress: { self.progress = $0 })
             progress = 100
         } catch {
             errorMessage = error.localizedDescription

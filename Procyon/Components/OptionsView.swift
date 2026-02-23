@@ -9,12 +9,11 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct OptionsView: View {
-    @State var bottles = getAllBottles(CXPatched: true)
+    @State var bottles: [URL] = []
     @EnvironmentObject var appGlobals: AppGlobals
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
     var deleteCache: () -> Void
     var load: () async -> Void
-    
     var body: some View {
         Modal(
             showModal: $libraryPageGlobals.showOptions,
@@ -64,8 +63,10 @@ struct OptionsView: View {
                 .padding(.bottom)
                 Button(URL(string: appGlobals.cxAppPath ?? "")?.lastPathComponent ?? "Select a Crossover App...") {
                     if let url = openFolderSelectorPanel(type: .application) {
+                        bottles = getAllBottles(appDir: url)
                         appGlobals.cxAppPath = url.relativePath
                         persistUsrDefOptionString(key: "cxAppPath", value: url.relativePath)
+                        persistUsrDefOptionString(key: "cxCompleteAppPath", value: url.path())
                     }
                 }
                 Picker("Select a bottle", selection: $appGlobals.selectedBottle) {
@@ -100,6 +101,13 @@ struct OptionsView: View {
             .padding()
         }
         .background(.accent.mix(with: .black, by: 0.6))
+        .onAppear() {
+            if let path = readUsrDefOptionString(key: "cxCompleteAppPath") {
+                console.log("loading paths for bottles")
+                bottles = getAllBottles(appDir: URL(fileURLWithPath: path))
+                console.log(bottles.debugDescription)
+            }
+        }
     }
 }
 

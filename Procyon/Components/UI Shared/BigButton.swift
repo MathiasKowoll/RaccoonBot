@@ -16,11 +16,12 @@ struct BigButton: View {
             Text(text)
                 .font(.system(size: 20, weight: .bold))
                 .padding(.horizontal, 10)
-                .foregroundStyle(.white)
-                .clipShape(Capsule())
+                .foregroundStyle(.black)
         }
-        .buttonStyle(.borderedProminent)
+        .background(.procyonSecondary)
+        .buttonStyle(.bordered)
         .controlSize(.large)
+        .clipShape(Capsule())
     }
 }
 

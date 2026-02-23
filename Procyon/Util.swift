@@ -5,6 +5,7 @@
 //  Created by Italo Mandara on 03/02/2026.
 //
 
+import CoreFoundation
 import Foundation
 import SwiftUI
 import UniformTypeIdentifiers
@@ -236,11 +237,12 @@ func parseACFToDict(from: String) -> [String:String] {
      parses an ACF file content String into a dictionary
      */
     var dictionary: [String:String] = [:]
-    let search1: Regex = /(("\w+")\n\{\n(.*\n)+\})+/
+    let search1: Regex = /(("\w+?")\n\{\n(.*?\n)+\})+/
     let search2: Regex = /(\t"(\w+?)"\t+"(.*?)")\n(?=\t"\w+")/
     
     let matches = from.matches(of: search1)
     for match in matches {
+//        print("Main key: \(match.2.description)")
         let values = match.0.matches(of: search2)
         for value in values {
             dictionary[value.2.description] = value.3.description
@@ -254,10 +256,6 @@ func mapDictToGamesMeta(from: [String:String]) -> GamesMeta {
      Incomplete it only maps appid and installdir
      */
     return GamesMeta(appid: from["appid"] ?? "unknown", installdir: from["installdir"] ?? "unknown", bytesDownloaded: from["BytesDownloaded"] ?? "0", BytesTodownload: from["BytesToDownload"] ?? "0")
-}
-
-func mapGamesACFMeta (from: URL) -> [SteamACFMeta] {
-    return []
 }
 
 //@MainActor
@@ -287,27 +285,74 @@ final class MountObserver {
     }
 }
 
-func getAllBottles(CXPatched: Bool = false) -> [URL] {
-//    let DEFAULT_BOTTLE_PATH = "Library/Application Support/CrossOver/Bottles/"
+func parseCXEnvVarString(_ string: String) -> (String, String){
+    // "KEY"="VALUE"
+    // e.g.: "CX_BOTTLE_PATH"="/Users/${USER}/CXPBottles"
+    let regex = /\"(\w+?)\"\=\"(.+?)\"/
+    var key = ""
+    var value = ""
+    do {
+        let match = try regex.firstMatch(in: string)
+        key = match?.1.description ?? ""
+        value = match?.2.description ?? ""
+    } catch {
+        print(error.localizedDescription)
+    }
+    return (key, value)
+}
+
+func getCXDefaultBottlesURL() -> URL {
+    let appID = "com.codeweavers.CrossOver" as CFString
+    let key = "BottleDir" as CFString
+    let bottlesPath = CFPreferencesCopyAppValue(key, appID)
+
+    return URL(filePath: bottlesPath as! String)
+}
+
+func isCXPatched(appDir: URL) -> Bool {
+    let f = FileManager.default
+    return f.fileExists(atPath: appDir.appendingPathComponent("Contents/cxplog.txt").path)
+}
+
+func getCXPatcherBottlesURL(appDir: URL)  throws -> URL {
     let f = FileManager.default
     let base = f.homeDirectoryForCurrentUser
-    let bottlePath: URL = base
-        .appendingPathComponent("Library", isDirectory: true)
-        .appendingPathComponent("Application Support", isDirectory: true)
-        .appendingPathComponent("CrossOver", isDirectory: true)
-        .appendingPathComponent("Bottles", isDirectory: true)
+    // /Contents/SharedSupport/CrossOver/etc/CrossOver.conf
+    let confPath: URL = appDir.appendingPathComponent("/Contents/SharedSupport/CrossOver/etc/CrossOver.conf")
+    let confFile = try String(contentsOf: confPath, encoding: .utf8)
+    var path = ""
+    for line in confFile.components(separatedBy: "\n") {
+        let (key, value) = parseCXEnvVarString(String(line))
+        if key == "CX_BOTTLE_PATH" {
+            path = value.contains("/Users/${USER}/") ? value.split(separator: "/").last?.base ?? "" : value
+        }
+    }
+    
     let bottlePathForCXP: URL = base.appendingPathComponent("CXPBottles", isDirectory: true)
+    return bottlePathForCXP
+}
+
+func getAllBottles(appDir: URL) -> [URL] {
+//    let DEFAULT_BOTTLE_PATH = "Library/Application Support/CrossOver/Bottles/"
+    let f = FileManager.default
+    
+    let bottlePath = getCXDefaultBottlesURL()
     
     console.warn(bottlePath.absoluteString)
     do {
+        let bottlePathForCXP = try getCXPatcherBottlesURL(appDir: appDir)
         var subfolders: [URL] = try f.contentsOfDirectory(at: bottlePath, includingPropertiesForKeys: [.isDirectoryKey], options: [])
-        if(CXPatched == true) {
+        if(isCXPatched(appDir: appDir)) {
+            console.log("app is patched with CXPatcher")
             do {
-                subfolders.append(contentsOf: try f.contentsOfDirectory(at: bottlePathForCXP, includingPropertiesForKeys: [.isDirectoryKey], options: []))
+                subfolders = try f.contentsOfDirectory(at: bottlePathForCXP, includingPropertiesForKeys: [.isDirectoryKey], options: [])
             } catch {
                 console.warn(error.localizedDescription)
                 console.warn("couldn't find the CXPatched bottles")
             }
+        } else {
+            console.log("app is normal crossover")
+            subfolders = try f.contentsOfDirectory(at: bottlePath, includingPropertiesForKeys: [.isDirectoryKey], options: [])
         }
         console.warn("subfolders \(subfolders.debugDescription)")
         let filtered = subfolders.filter { url in
@@ -402,13 +447,20 @@ func quitSteam(cxAppPath: String, bottleName: String) async throws {
     var elapsed: UInt64 = 0
     let targets = NSWorkspace.shared.runningApplications.filter { app in
         guard let url = app.executableURL else { return false }
-        return url.lastPathComponent.lowercased().hasSuffix(".exe")
+        return url.lastPathComponent.lowercased().hasSuffix(".exe") || url.lastPathComponent.lowercased().hasSuffix("wine")
+    }
+    let steamTargets = NSWorkspace.shared.runningApplications.filter { app in
+        guard let url = app.executableURL else { return false }
+        return url.lastPathComponent.lowercased().hasSuffix(".exe") && url.lastPathComponent.lowercased().contains("steam")
     }
     func allTerminated(_ apps: [NSRunningApplication]) -> Bool {
         apps.allSatisfy { $0.isTerminated }
     }
     try safeShell("\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \"C:\\Program Files (x86)\\Steam\\Steam.exe\" -shutdown")
-    try await Task.sleep(nanoseconds: 2_000_000_000)
+    while !allTerminated(steamTargets) && elapsed < absoluteTimeout {
+        try await Task.sleep(nanoseconds: pollInterval)
+        elapsed += pollInterval
+    }
     try safeShell("\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) wineserver -k")
     while !allTerminated(targets) && elapsed < absoluteTimeout {
         try await Task.sleep(nanoseconds: pollInterval)
@@ -647,3 +699,4 @@ func getMeta(_ gameMetaArray: [GamesMeta], byID: String) -> GamesMeta? {
      */
     return gameMetaArray.first(where: { $0.id == byID })
 }
+

@@ -20,6 +20,8 @@ enum OnOff: String {
     case on = "1"
 }
 
+typealias CXDrives = [String: URL]
+
 struct GameOptionsData: Codable {
     var cxGraphicsBackend: String
     var wineMSync: Bool

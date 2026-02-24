@@ -17,7 +17,6 @@ func parseACFToDict(from: String) -> [String:String] {
     
     let matches = from.matches(of: search1)
     for match in matches {
-//        print("Main key: \(match.2.description)")
         let values = match.0.matches(of: search2)
         for value in values {
             dictionary[value.2.description] = value.3.description

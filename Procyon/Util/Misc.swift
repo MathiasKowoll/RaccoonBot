@@ -225,7 +225,38 @@ func getInlineEnvs(from: GameOptions) -> String {
     return value
 }
 
+func getBottleDrives(bottleURL: URL) -> CXDrives {
+    let at = bottleURL.appendingPathComponent("dosdevices", isDirectory: true)
+    return getDrivesPaths(at: at)
+}
 
+func getDrivesPaths(at: URL) -> CXDrives {
+    let f = FileManager.default
+    do {
+        let simLinks = try f.contentsOfDirectory(at: at , includingPropertiesForKeys: nil, options: .skipsHiddenFiles)
+        let drives = try simLinks.reduce(into: [String: URL]()) { result, link in
+            let key = link.lastPathComponent.uppercased()
+            let value = try f.destinationOfSymbolicLink(atPath: link.path)
+            result[key] = URL(filePath: value)
+        }
+        
+        return drives
+    } catch {
+        console.error("getDrivesPaths failed")
+        console.error(error.localizedDescription)
+        return [:]
+    }
+}
 
-
-
+func getSteamLibraryFolders(from: URL) -> [URL] {
+    let drives = getBottleDrives(bottleURL: from)
+    let steamSettingsPath = from.appendingPathComponent("/drive_c/Program Files (x86)/Steam/config/libraryfolders.vdf")
+    do {
+        let steamSettingsFile = try String(contentsOfFile: steamSettingsPath.path, encoding: .utf8)
+        let parsed = parseVDFToDict(from: steamSettingsFile)
+        print(parsed.description)
+    } catch {
+        console.error(error.localizedDescription)
+    }
+    return []
+}

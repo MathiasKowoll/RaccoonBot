@@ -81,6 +81,7 @@ struct OptionsView: View {
                         }
                     }.onChange(of: appGlobals.selectedBottle) { oldValue, newValue in
                         if(newValue != "") {
+                            let steamLibrariesURLs = getSteamLibraryFolders(from: URL(string: newValue)!)
                             persistUsrDefOptionString(key: "selectedBottle", value: newValue)
                         }
                     }

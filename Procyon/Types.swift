@@ -5,7 +5,87 @@
 //  Created by Italo Mandara on 19/02/2026.
 //
 
-import Foundation
+internal import Foundation
+import Combine
+
+enum CXGraphicsBackend: String {
+    case dxmt = "dxmt"
+    case d3dmetal = "d3dmetal"
+    case wine = "wine"
+    case dxvk = "dxvk"
+}
+
+enum OnOff: String {
+    case off = "0"
+    case on = "1"
+}
+
+struct GameOptionsData: Codable {
+    var cxGraphicsBackend: String
+    var wineMSync: Bool
+    var mtlHudEnabled: Bool
+    var gameArguments: String
+    var dxmtPreferredMaxFrameRate: Double
+    var dxmtMetalFXSpatial: Bool
+    var dxmtMetalSpatialUpscaleFactor: Double
+    var advertiseAVX: Bool
+    var envVariables: String
+    
+    init(data: GameOptions) {
+        self.cxGraphicsBackend = data.cxGraphicsBackend
+        self.wineMSync = data.wineMSync
+        self.mtlHudEnabled = data.mtlHudEnabled
+        self.gameArguments = data.gameArguments
+        self.dxmtPreferredMaxFrameRate = data.dxmtPreferredMaxFrameRate
+        self.dxmtMetalFXSpatial = data.dxmtMetalFXSpatial
+        self.dxmtMetalSpatialUpscaleFactor = data.dxmtMetalSpatialUpscaleFactor
+        self.advertiseAVX = data.advertiseAVX
+        self.envVariables = data.envVariables
+    }
+}
+
+class GameOptions: ObservableObject {
+    @Published var cxGraphicsBackend: String
+    @Published var wineMSync: Bool
+    @Published var mtlHudEnabled: Bool
+    @Published var dxvk: String?
+    @Published var wineEsync: String?
+    @Published var d3dMEnableMetalFX: String?
+    @Published var d3dSupportDXR: String?
+    @Published var gameArguments: String
+    @Published var dxmtPreferredMaxFrameRate: Double
+    @Published var dxmtMetalFXSpatial: Bool
+    @Published var dxmtMetalSpatialUpscaleFactor: Double
+    @Published var advertiseAVX: Bool
+    @Published var envVariables: String
+    
+    init(cxGraphicsBackend: String = "d3dmetal", wineMSync: Bool = true, mtlHudEnabled: Bool = true, dxvk: String? = nil, wineEsync: String? = nil, d3dMEnableMetalFX: String? = nil, d3dSupportDXR: String? = nil, gameArguments: String = "", dxmtPreferredMaxFrameRate: Double = 0, dxmtMetalFXSpatial: Bool = false, dxmtMetalSpatialUpscaleFactor: Double = 1.0, advertiseAVX: Bool = true, envVariables: String = "") {
+        self.cxGraphicsBackend = cxGraphicsBackend
+        self.wineMSync = wineMSync
+        self.mtlHudEnabled = mtlHudEnabled
+        self.dxvk = dxvk
+        self.wineEsync = wineEsync
+        self.d3dMEnableMetalFX = d3dMEnableMetalFX
+        self.d3dSupportDXR = d3dSupportDXR
+        self.gameArguments = gameArguments
+        self.dxmtMetalFXSpatial = dxmtMetalFXSpatial
+        self.dxmtMetalSpatialUpscaleFactor = dxmtMetalSpatialUpscaleFactor
+        self.dxmtPreferredMaxFrameRate = dxmtPreferredMaxFrameRate
+        self.advertiseAVX = advertiseAVX
+        self.envVariables = envVariables
+    }
+    func set(data: GameOptionsData) {
+        self.cxGraphicsBackend = data.cxGraphicsBackend
+        self.wineMSync = data.wineMSync
+        self.mtlHudEnabled = data.mtlHudEnabled
+        self.gameArguments = data.gameArguments
+        self.dxmtMetalFXSpatial = data.dxmtMetalFXSpatial
+        self.dxmtMetalSpatialUpscaleFactor = data.dxmtMetalSpatialUpscaleFactor
+        self.dxmtPreferredMaxFrameRate = data.dxmtPreferredMaxFrameRate
+        self.advertiseAVX = data.advertiseAVX
+        self.envVariables = data.envVariables
+    }
+}
 
 class GamesMeta: SteamACFMeta {
     var gameURL: URL?

@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Events are used to dynamically update your game library as soon as drive is disconnected or become available</string>
+	<key>CFBundleIdentifier</key>
+	<string></string>
 	<key>API_HOST</key>
 	<string>$(API_HOST)</string>
 	<key>API_KEY</key>

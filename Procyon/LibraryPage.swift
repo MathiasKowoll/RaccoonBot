@@ -83,7 +83,7 @@ struct LibraryPage: View {
                             Image(.procyon).resizable()
                                 .scaledToFit()
                                 .frame(width: 80)
-                            Text("Building your library…")
+                            Text("Loading your library…")
                                 .foregroundStyle(.white)
                                 .padding(.top)
                             ProgressView(value: progress, total: 100)
@@ -128,7 +128,7 @@ struct LibraryPage: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .transition(.opacity)
         .onAppear() {
-            isLoading = true // fixes 
+            isLoading = true // fixes missing library issue
             mntObserver = MountObserver(
                 onMount: {
                     Task {
@@ -151,7 +151,7 @@ struct LibraryPage: View {
     
     @MainActor
     private func load() async {
-//        isLoading = true
+        isLoading = true
         defer { isLoading = false }
         progress = 0
         libraryPageGlobals.gamesMeta.removeAll()

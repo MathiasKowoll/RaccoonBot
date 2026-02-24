@@ -150,7 +150,12 @@ struct LibraryPage: View {
     @MainActor
     private func load() async {
         isLoading = true
-        defer { isLoading = false }
+        defer {
+            Task {
+                try await Task.sleep(nanoseconds: 1_000_000_000)
+                isLoading = false
+            }
+        }
         progress = 0
         libraryPageGlobals.gamesMeta.removeAll()
         do {

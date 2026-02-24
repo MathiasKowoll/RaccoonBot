@@ -56,66 +56,66 @@ struct LibraryPage: View {
     private var api = SteamAPI()
     
     var body: some View {
-        Group {
-//            VStack(alignment: .center) {
-                if(libraryPageGlobals.isLaunchingGame) {
-                    ProgressView(label: {
-                        Text("Launching \(libraryPageGlobals.selectedGame?.name ?? "'Unknown'")...")
-                    })
-                    .progressViewStyle(.circular)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .ignoresSafeArea()
-                    .background {
-                        if (libraryPageGlobals.selectedGame?.headerImage != nil){
-                            KFImage(URL(string: libraryPageGlobals.selectedGame!.headerImage))
-                                .placeholder {
-                                    ProgressView()
-                                }
-                                .resizable()
-                                .scaledToFill()
-                                .blur(radius: 10)
-                                .blendMode(.multiply)
-                        }
-                    }
-                } else if (isLoading) {
-                    ZStack{
-                        VStack(alignment: .center) {
-                            Image(.procyon).resizable()
-                                .scaledToFit()
-                                .frame(width: 80)
-                            Text("Loading your library…")
-                                .foregroundStyle(.white)
-                                .padding(.top)
-                            ProgressView(value: progress, total: 100)
-                                .progressViewStyle(.linear)
-                                .frame(width: 200, alignment: .center)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                } else if let errorMessage {
-                    Text("Error: \(errorMessage)")
-                        .lineLimit(1)
-                        .foregroundStyle(.red)
-                } else if (libraryPageGlobals.gamesMeta.isEmpty) {
-                    VStack {
-                        ContentUnavailableView {
-                            Label("No Libraries found", systemImage: "gamecontroller")
-                                .padding(.bottom)
-                        } description: {
-                            Text("No Steam libraries found.\nPlease add a Steam library folder.")
-                            Button {
-                                libraryPageGlobals.showOptions = true
-                            } label: {
-                                Label("Add Library", systemImage: "plus")
+        VStack {
+            if(libraryPageGlobals.isLaunchingGame) {
+                ProgressView(label: {
+                    Text("Launching \(libraryPageGlobals.selectedGame?.name ?? "'Unknown'")...")
+                })
+                .progressViewStyle(.circular)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea()
+                .background {
+                    if (libraryPageGlobals.selectedGame?.headerImage != nil){
+                        KFImage(URL(string: libraryPageGlobals.selectedGame!.headerImage))
+                            .placeholder {
+                                ProgressView()
                             }
-                        }
-                        .foregroundStyle(.white)
+                            .resizable()
+                            .scaledToFill()
+                            .blur(radius: 10)
+                            .blendMode(.softLight)
                     }
-                    .frame(maxWidth: .infinity)
-                } else {
-                    GamesList().padding(.bottom)
                 }
-//            } // end vstack
+            } else if let errorMessage {
+                Text("Error: \(errorMessage)")
+                    .lineLimit(1)
+                    .foregroundStyle(.red)
+            } else if (!isLoading && libraryPageGlobals.gamesMeta.isEmpty) {
+                VStack {
+                    ContentUnavailableView {
+                        Label("No Libraries found", systemImage: "gamecontroller")
+                            .padding(.bottom)
+                    } description: {
+                        Text("No Steam libraries found.\nPlease add a Steam library folder.")
+                        Button {
+                            libraryPageGlobals.showOptions = true
+                        } label: {
+                            Label("Add Library", systemImage: "plus")
+                        }
+                    }
+                    .foregroundStyle(.white)
+                }
+                .frame(maxWidth: .infinity)
+            } else if (!isLoading) {
+                GamesList().padding(.bottom)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .sheet(isPresented: $isLoading) {
+            VStack(alignment: .center) {
+                Image(.procyon).resizable()
+                    .scaledToFit()
+                    .frame(width: 80)
+                Text("Loading your library…")
+                    .foregroundStyle(.white)
+                    .padding(.top)
+                ProgressView(value: progress, total: 100)
+                    .progressViewStyle(.linear)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
+            .padding(40)
+            .frame(width: 300, height: 250)
+            .background(.accent.mix(with: .black, by: 0.6))
         }
         .sheet(isPresented: $libraryPageGlobals.showOptions) {
             OptionsView(deleteCache: api.deleteCache, load: load)
@@ -125,7 +125,6 @@ struct LibraryPage: View {
                 GameDetailView(game: $libraryPageGlobals.selectedGame)
             })
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .transition(.opacity)
         .onAppear() {
             isLoading = true // fixes missing library issue

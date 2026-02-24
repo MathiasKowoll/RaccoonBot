@@ -57,7 +57,7 @@ struct LibraryPage: View {
     
     var body: some View {
         Group {
-            VStack(alignment: .center) {
+//            VStack(alignment: .center) {
                 if(libraryPageGlobals.isLaunchingGame) {
                     ProgressView(label: {
                         Text("Launching \(libraryPageGlobals.selectedGame?.name ?? "'Unknown'")...")
@@ -101,11 +101,6 @@ struct LibraryPage: View {
                         ContentUnavailableView {
                             Label("No Libraries found", systemImage: "gamecontroller")
                                 .padding(.bottom)
-                            Button {
-                                libraryPageGlobals.showOptions = true
-                            } label: {
-                                Label("Add Library", systemImage: "plus")
-                            }
                         } description: {
                             Text("No Steam libraries found.\nPlease add a Steam library folder.")
                             Button {
@@ -120,42 +115,44 @@ struct LibraryPage: View {
                 } else {
                     GamesList().padding(.bottom)
                 }
-            }
-            .sheet(isPresented: $libraryPageGlobals.showOptions) {
-                OptionsView(deleteCache: api.deleteCache, load: load)
-            }
-            .sheet(isPresented: $libraryPageGlobals.showDetailView) {
-                Modal(showModal: $libraryPageGlobals.showDetailView, collapse: true, content:  {
-                    GameDetailView(game: $libraryPageGlobals.selectedGame)
-                })
-            }
-            .task { await load() }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .transition(.opacity)
-            .onAppear() {
-                mntObserver = MountObserver(
-                    onMount: {
-                        Task {
-                            await load()
-                        }
-                    },
-                    onUnmount: {
-                        Task {
-                            await load()
-                        }
-                    }
-                )
-            }
-            .onDisappear {
-                mntObserver = nil
-            }
+//            } // end vstack
         }
+        .sheet(isPresented: $libraryPageGlobals.showOptions) {
+            OptionsView(deleteCache: api.deleteCache, load: load)
+        }
+        .sheet(isPresented: $libraryPageGlobals.showDetailView) {
+            Modal(showModal: $libraryPageGlobals.showDetailView, collapse: true, content:  {
+                GameDetailView(game: $libraryPageGlobals.selectedGame)
+            })
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .transition(.opacity)
+        .onAppear() {
+            isLoading = true // fixes 
+            mntObserver = MountObserver(
+                onMount: {
+                    Task {
+                        await load()
+                    }
+                },
+                onUnmount: {
+                    Task {
+                        await load()
+                    }
+                }
+            )
+        }
+        .onDisappear {
+            mntObserver = nil
+        }
+        .task { await load() }
         .environmentObject(libraryPageGlobals)
     }
     
     @MainActor
     private func load() async {
-        isLoading = true
+//        isLoading = true
+        defer { isLoading = false }
         progress = 0
         libraryPageGlobals.gamesMeta.removeAll()
         do {
@@ -178,10 +175,6 @@ struct LibraryPage: View {
                 }
             }
         }
-        defer {
-            isLoading = false
-        }
-        
         do {
             libraryPageGlobals.games = try await api.fetchGamesInfo(meta: libraryPageGlobals.gamesMeta, setProgress: { self.progress = $0 })
             progress = 100

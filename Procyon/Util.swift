@@ -130,7 +130,7 @@ func addSteamFolderPaths(_ url: URL) {
     do {
         try persistFolderAccess(url: url)
     } catch {
-        console.warn("Failed to save steam folder")
+        console.error("Failed to save steam folder")
         console.error(error.localizedDescription)
     }
 }
@@ -353,8 +353,8 @@ func getAllBottles(appDir: URL) -> [URL] {
             do {
                 subfolders = try f.contentsOfDirectory(at: bottlePathForCXP, includingPropertiesForKeys: [.isDirectoryKey], options: [])
             } catch {
-                console.warn(error.localizedDescription)
-                console.warn("couldn't find the CXPatched bottles")
+                console.error(error.localizedDescription)
+                console.error("couldn't find the CXPatched bottles")
             }
         } else {
             console.log("app is normal crossover")
@@ -367,7 +367,7 @@ func getAllBottles(appDir: URL) -> [URL] {
         console.warn("filtered: \(filtered.debugDescription)")
         return filtered
     } catch {
-        console.warn(error.localizedDescription)
+        console.error(error.localizedDescription)
     }
     return []
 }

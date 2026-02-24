@@ -70,7 +70,7 @@ struct GameThumbnail: View {
                                             libraryPageGlobals.setLoader(state: false)
                                         }
                                     } catch {
-                                        console.warn(error.localizedDescription)
+                                        console.error(error.localizedDescription)
                                         libraryPageGlobals.setLoader(state: false)
                                     }
                                 }

@@ -55,7 +55,7 @@ final class SteamAPI {
             console.warn("Cache loaded")
         } catch {
             self.hasCache = false
-            console.warn("Cache is empty")
+            console.error("Cache is empty")
         }
     }
     
@@ -119,7 +119,7 @@ final class SteamAPI {
                     items.append(Game(from: gameInfo, id: meta.id, isNative: meta.isNative, downloadProgress: Double(downloadProgress)))
                 }
             } catch {
-                console.warn(error.localizedDescription)
+                console.error(error.localizedDescription)
             }
             // Update progress as percentage of total processed
             if total > 0 {

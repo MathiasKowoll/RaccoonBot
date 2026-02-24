@@ -13,6 +13,7 @@ import Combine
 import os
 
 let blacklist: [String] = ["228980"]
+let suiteName = "group.com.italomandara.procyon"
 
 func openFolderSelectorPanel(type: UTType = .folder) -> URL? {
     let panel = NSOpenPanel()
@@ -30,7 +31,7 @@ func persistFolderAccess(url: URL) throws {
     let bookmark = try url.bookmarkData(options: [.withSecurityScope],
                                         includingResourceValuesForKeys: nil,
                                         relativeTo: nil)
-    let groupDefaults = UserDefaults(suiteName: "group.com.italomandara.procyon")!
+    let groupDefaults = UserDefaults(suiteName: suiteName)!
     var bookmarks = groupDefaults.array(forKey: "steamLibraryBookmarks") as? [Data] ?? []
     bookmarks.append(bookmark)
     groupDefaults.set(bookmarks, forKey: "steamLibraryBookmarks")
@@ -43,12 +44,12 @@ func namespacedKey(_ namespace: String, _ key: String) -> String {
 func persistUsrDefData(key: String, data: Codable) {
     let encoder = JSONEncoder()
     guard let data = try? encoder.encode(data) else { return }
-    let groupDefaults = UserDefaults(suiteName: "group.com.italomandara.procyon")!
+    let groupDefaults = UserDefaults(suiteName: suiteName)!
     groupDefaults.set(data, forKey: key)
 }
 
 func readUsrDefData<T: Decodable>(key: String, type: T.Type = T.self) -> T? {
-    let groupDefaults = UserDefaults(suiteName: "group.com.italomandara.procyon")!
+    let groupDefaults = UserDefaults(suiteName: suiteName)!
     guard let data = groupDefaults.value(forKey: key) as? Data else {
         console.error("couldn't get data for \(key)")
         return nil
@@ -63,16 +64,16 @@ func readUsrDefData<T: Decodable>(key: String, type: T.Type = T.self) -> T? {
 
 
 func persistUsrDefOptionString(key: String, value: String) {
-    let groupDefaults = UserDefaults(suiteName: "group.com.italomandara.procyon")!
+    let groupDefaults = UserDefaults(suiteName: suiteName)!
     groupDefaults.set(value, forKey: key)
 }
 
 func readUsrDefOptionString(key: String) -> String? {
-    return UserDefaults(suiteName: "group.com.italomandara.procyon")!.value(forKey: key) as? String
+    return UserDefaults(suiteName: suiteName)!.value(forKey: key) as? String
 }
 
 func resolvePersistedFolders() -> [URL] {
-    let groupDefaults = UserDefaults(suiteName: "group.com.italomandara.procyon")!
+    let groupDefaults = UserDefaults(suiteName: suiteName)!
     let bookmarks = groupDefaults.array(forKey: "steamLibraryBookmarks") as? [Data] ?? []
     var urls: [URL] = []
     for data in bookmarks {
@@ -90,7 +91,7 @@ func resolvePersistedFolders() -> [URL] {
 
 func removePersistedFolderAccess(url: URL) {
     let key = "steamLibraryBookmarks"
-    let groupDefaults = UserDefaults(suiteName: "group.com.italomandara.procyon")!
+    let groupDefaults = UserDefaults(suiteName: suiteName)!
     let bookmarks = groupDefaults.array(forKey: key) as? [Data] ?? []
 
     let filtered: [Data] = bookmarks.filter { data in

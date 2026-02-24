@@ -97,7 +97,7 @@ struct LibraryPage: View {
                 }
                 .frame(maxWidth: .infinity)
             } else if (!isLoading) {
-                GamesList().padding(.bottom)
+                GamesList()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -125,7 +125,6 @@ struct LibraryPage: View {
                 GameDetailView(game: $libraryPageGlobals.selectedGame)
             })
         }
-        .transition(.opacity)
         .onAppear() {
             isLoading = true // fixes missing library issue
             mntObserver = MountObserver(

@@ -52,13 +52,12 @@ struct ContentView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .toolbarTitleDisplayMode(.inline)
             }
         }
+        .animation(.easeInOut, value: router.route)
         .preferredColorScheme(.dark)
         .environmentObject(router)
         .environmentObject(appGlobals)
-        .animation(.default, value: router.route)
         .background(
             ZStack {
                 LinearGradient(

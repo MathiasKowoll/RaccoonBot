@@ -25,6 +25,7 @@ struct GamesList: View {
                 }
             }
             .padding(.horizontal)
+            .padding(.bottom)
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {

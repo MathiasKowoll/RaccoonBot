@@ -9,7 +9,17 @@ import UniformTypeIdentifiers
 import Combine
 
 let blacklist: [String] = ["228980"]
-let debugEnabled: Bool = false
+let debugEnabled: Bool = {
+    let env = ProcessInfo.processInfo.environment["PROCYON_DEBUG"]?.lowercased()
+    switch env {
+    case "1", "true", "yes":
+        return true
+    case "0", "false", "no":
+        return false
+    default:
+        return false
+    }
+}()
 let useLogger: Bool = false
 
 func addSteamFolderPaths(_ url: URL) {
@@ -230,6 +240,7 @@ func getInlineEnvs(from: GameOptions) -> String {
     value += getDxmtConfigEnv(values:  dxmtMetalSpatialUpscaleFactor + dxmtPreferredMaxFrameRate)
     return value
 }
+
 
 
 

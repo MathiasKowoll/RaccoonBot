@@ -9,6 +9,8 @@ import UniformTypeIdentifiers
 import Combine
 
 let blacklist: [String] = ["228980"]
+let debugEnabled: Bool = false
+let useLogger: Bool = false
 
 func addSteamFolderPaths(_ url: URL) {
     do {
@@ -139,7 +141,12 @@ func getAllBottles(appDir: URL) -> [URL] {
             }
         } else {
             console.log("app is normal crossover")
-            subfolders = try f.contentsOfDirectory(at: bottlePath, includingPropertiesForKeys: [.isDirectoryKey], options: [])
+            do {
+                subfolders = try f.contentsOfDirectory(at: bottlePath, includingPropertiesForKeys: [.isDirectoryKey], options: [])
+            } catch {
+                console.error(error.localizedDescription)
+                console.error("couldn't find the CXPatched bottles in \(bottlePath.path)")
+            }
         }
         console.warn("subfolders \(subfolders.debugDescription)")
         let filtered = subfolders.filter { url in

@@ -12,25 +12,33 @@ let logger = Logger(subsystem: "CXPatcher", category: "util")
 
 class Console {
     var logMessages: [String] = []
-    var enableLogFile: Bool = false
+    var enableLogFile: Bool = debugEnabled == true
     let f = FileManager.default
     
     func log(_ msg: String) {
+        #if DEBUG
         print(msg)
+        #endif
         if enableLogFile == true {
             logMessages.append(msg)
         }
     }
     func warn(_ msg: String) {
+        #if DEBUG
         print(msg)
-        logger.notice("\(msg)")
+        #endif
+        if (useLogger) {
+            logger.notice("\(msg)")
+        }
         if enableLogFile == true {
             logMessages.append(msg)
         }
     }
     func error(_ msg: String) {
         let errorMsg: String = "ERROR: \(msg)"
-        logger.error("\(errorMsg)")
+        if (useLogger) {
+            logger.error("\(errorMsg)")
+        }
         console.warn(errorMsg)
         if enableLogFile == true {
             logMessages.append(msg)
@@ -39,7 +47,7 @@ class Console {
     func clear() {
         self.logMessages.removeAll()
     }
-    func saveLogs(to: URL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Procyon.log.txt")) {
+    func saveLogs(to: URL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0].appendingPathComponent("Procyon.log.txt")) {
         if f.fileExists(atPath: to.path) {
             do {
                 try f.removeItem(at: to)
@@ -58,3 +66,4 @@ class Console {
 }
 
 let console = Console()
+

@@ -86,7 +86,8 @@ struct OptionsView: View {
                         }
                     }
                 } else {
-                    Text("No bottles found for this app. Create a new bottle first")
+                    Text("No bottles found")
+                    Text("Create a new bottle first").font(.footnote)
                 }
                 HStack {
                     Button(action: { deleteCache() }) {
@@ -104,8 +105,27 @@ struct OptionsView: View {
                     }
                     .cornerRadius(20)
                 }
+                
+                if(debugEnabled == true) {
+                    Divider().padding(.top, 10)
+                    Text("Debug")
+                        .padding(.vertical, 5)
+                    HStack {
+                        Button(action: { console.enableLogFile = true }) {
+                            Label("Start Logging", systemImage: "ant")
+                        }
+                        .cornerRadius(20)
+                        Spacer()
+                        Button(action: {
+                            console.saveLogs()
+                        }) {
+                            Label("Download logs", systemImage: "square.and.arrow.down")
+                        }
+                        .cornerRadius(20)
+                    }
+                }
             }
-            .frame(width: 300, height: 320)
+            .frame(width: 300)
             .padding()
         }
         .background(.accent.mix(with: .black, by: 0.6))

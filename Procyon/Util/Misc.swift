@@ -125,12 +125,11 @@ func getAllBottles(appDir: URL) -> [URL] {
 //    let DEFAULT_BOTTLE_PATH = "Library/Application Support/CrossOver/Bottles/"
     let f = FileManager.default
     
-    let bottlePath = getCXDefaultBottlesURL()
-    
-    console.warn(bottlePath.absoluteString)
     do {
+        let bottlePath = getCXDefaultBottlesURL()
+        console.warn(bottlePath.absoluteString)
         let bottlePathForCXP = try getCXPatcherBottlesURL(appDir: appDir)
-        var subfolders: [URL] = try f.contentsOfDirectory(at: bottlePath, includingPropertiesForKeys: [.isDirectoryKey], options: [])
+        var subfolders: [URL] = try f.contentsOfDirectory(at: bottlePath, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles, .skipsPackageDescendants, .skipsSubdirectoryDescendants])
         if(isCXPatched(appDir: appDir)) {
             console.log("app is patched with CXPatcher")
             do {
@@ -142,7 +141,7 @@ func getAllBottles(appDir: URL) -> [URL] {
         } else {
             console.log("app is normal crossover")
             do {
-                subfolders = try f.contentsOfDirectory(at: bottlePath, includingPropertiesForKeys: [.isDirectoryKey], options: [])
+                subfolders = try f.contentsOfDirectory(at: bottlePath, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles, .skipsPackageDescendants, .skipsSubdirectoryDescendants])
             } catch {
                 console.error(error.localizedDescription)
                 console.error("couldn't find the CXPatched bottles in \(bottlePath.path)")

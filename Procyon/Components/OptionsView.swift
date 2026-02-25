@@ -69,6 +69,7 @@ struct OptionsView: View {
                         persistUsrDefOptionString(key: "cxAppPath", value: url.relativePath)
                         persistUsrDefOptionString(key: "cxCompleteAppPath", value: url.path)
                     }
+                    
                 }
                 if(!bottles.isEmpty) {
                     Picker("Select a bottle", selection: $appGlobals.selectedBottle) {

@@ -6,6 +6,8 @@
 //
 
 
+internal import Foundation
+
 func parseACFToDict(from: String) -> [String:String] {
     /**
      Incomplete shallow parser that the skips main property
@@ -25,26 +27,35 @@ func parseACFToDict(from: String) -> [String:String] {
     return dictionary
 }
 
-func parseVDFToDict(from: String) -> [String:Any] {
+func parseVDFToDict(from file: String) -> [String:Any] {
     /**
      more comprehensive parser (to replace the one above)
      parses an VDF file content String into a dictionary
      */
+    var parentDictionary: [String:Any] = [:]
     var dictionary: [String:Any] = [:]
-    let search1: Regex = /(("\w+?")\n\{\n(.*?\n)+\})+/.dotMatchesNewlines()
-//    let search2: Regex = /(\t"(\w+?)"\t+"(.*?)")\n(?=\t"\w+")/
     
-    let matches = from.matches(of: search1)
-    for match in matches {
-        print("Main key: \(match.2.description)")
-        print(match.3.description)
-//        if match.2 != "" {
-//            dictionary[match.2.description] = parseVDFToDict(from: match.3.description)
-//        }
-//        let values = match.0.matches(of: search2)
-//        for value in values {
-//            dictionary[match.2.description][value.2.description] = value.3.description
-//        }
+    func getTokens() -> [String] { // lexer
+        let regex: Regex = /".*?"|\{|\}/
+        return file.matches(of: regex)
+            .compactMap { $0.0.description }
+            .map { $0.replacingOccurrences(of: "\\", with: "/") }
+        + ["EOF"]
     }
+    
+    let tokens = getTokens()
+    
+    func parse(_ tokens: [String]) -> [String:Any] {
+        var dict: [String:Any] = [:]
+        let stringToken: Regex = /^STRING\((.*?)\)$/
+        for index in tokens.indices {
+            
+        }
+        return dict
+    }
+    
+    print(tokens)
+    
     return dictionary
 }
+

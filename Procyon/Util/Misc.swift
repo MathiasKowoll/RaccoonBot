@@ -154,7 +154,7 @@ func getAllBottles(appDir: URL) -> [URL] {
                 subfolders = try f.contentsOfDirectory(at: bottlePath, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles, .skipsPackageDescendants, .skipsSubdirectoryDescendants])
             } catch {
                 console.error(error.localizedDescription)
-                console.error("couldn't find the CXPatched bottles in \(bottlePath.path(percentEncoded: false))")
+                console.error("couldn't find the crossover bottles in \(bottlePath.path(percentEncoded: false))")
             }
         }
         console.warn("subfolders \(subfolders.debugDescription)")

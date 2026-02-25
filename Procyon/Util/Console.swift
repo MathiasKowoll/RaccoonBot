@@ -48,7 +48,7 @@ class Console {
         self.logMessages.removeAll()
     }
     func saveLogs(to: URL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0].appendingPathComponent("Procyon.log.txt")) {
-        if f.fileExists(atPath: to.path) {
+        if f.fileExists(atPath: to.path(percentEncoded: false)) {
             do {
                 try f.removeItem(at: to)
             } catch {

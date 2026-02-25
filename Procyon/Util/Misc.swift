@@ -105,7 +105,7 @@ func getCXDefaultBottlesURL() -> URL {
 
 func isCXPatched(appDir: URL) -> Bool {
     let f = FileManager.default
-    return f.fileExists(atPath: appDir.appendingPathComponent("Contents/cxplog.txt").path)
+    return f.fileExists(atPath: appDir.appendingPathComponent("Contents/cxplog.txt").path(percentEncoded: false))
 }
 
 func getCXPatcherBottlesURL(appDir: URL)  throws -> URL {
@@ -154,7 +154,7 @@ func getAllBottles(appDir: URL) -> [URL] {
                 subfolders = try f.contentsOfDirectory(at: bottlePath, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles, .skipsPackageDescendants, .skipsSubdirectoryDescendants])
             } catch {
                 console.error(error.localizedDescription)
-                console.error("couldn't find the CXPatched bottles in \(bottlePath.path)")
+                console.error("couldn't find the CXPatched bottles in \(bottlePath.path(percentEncoded: false))")
             }
         }
         console.warn("subfolders \(subfolders.debugDescription)")

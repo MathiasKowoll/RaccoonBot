@@ -18,7 +18,7 @@ struct GameDetailView: View {
     @StateObject var gameOptions = GameOptions()
     var gameFolder: String {
         let meta = getMeta(libraryPageGlobals.gamesMeta, byID: String(game!.id))!
-        return meta.libraryFolder.appendingPathComponent(meta.installdir).path
+        return meta.libraryFolder.appendingPathComponent(meta.installdir).path(percentEncoded: false)
     }
     
     var body: some View {

@@ -9,6 +9,7 @@ import UniformTypeIdentifiers
 import Combine
 
 let blacklist: [String] = ["228980"]
+let DEFAULT_BOTTLE_PATH = "Library/Application Support/CrossOver/Bottles/"
 let debugEnabled: Bool = {
     let env = ProcessInfo.processInfo.environment["PROCYON_DEBUG"]?.lowercased()
     switch env {
@@ -98,7 +99,12 @@ func getIsNative(fromURL: URL) -> Bool {
 func getCXDefaultBottlesURL() -> URL {
     let appID = "com.codeweavers.CrossOver" as CFString
     let key = "BottleDir" as CFString
-    let bottlesPath = CFPreferencesCopyAppValue(key, appID)
+    guard let bottlesPath = CFPreferencesCopyAppValue(key, appID) else {
+        console.error("CrossOver preference 'BottleDir' not found")
+        let fallback = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(DEFAULT_BOTTLE_PATH, isDirectory: true)
+        return fallback
+    }
 
     return URL(filePath: bottlesPath as! String)
 }
@@ -132,7 +138,6 @@ func getCXPatcherBottlesURL(appDir: URL)  throws -> URL {
 }
 
 func getAllBottles(appDir: URL) -> [URL] {
-//    let DEFAULT_BOTTLE_PATH = "Library/Application Support/CrossOver/Bottles/"
     let f = FileManager.default
     
     do {

@@ -9,7 +9,18 @@ import UniformTypeIdentifiers
 import Combine
 
 let blacklist: [String] = ["228980"]
-let debugEnabled: Bool = false
+let DEFAULT_BOTTLE_PATH = "Library/Application Support/CrossOver/Bottles/"
+let debugEnabled: Bool = {
+    let env = ProcessInfo.processInfo.environment["PROCYON_DEBUG"]?.lowercased()
+    switch env {
+    case "1", "true", "yes":
+        return true
+    case "0", "false", "no":
+        return false
+    default:
+        return false
+    }
+}()
 let useLogger: Bool = false
 
 func addSteamFolderPaths(_ url: URL) {
@@ -88,14 +99,19 @@ func getIsNative(fromURL: URL) -> Bool {
 func getCXDefaultBottlesURL() -> URL {
     let appID = "com.codeweavers.CrossOver" as CFString
     let key = "BottleDir" as CFString
-    let bottlesPath = CFPreferencesCopyAppValue(key, appID)
+    guard let bottlesPath = CFPreferencesCopyAppValue(key, appID) else {
+        console.error("CrossOver preference 'BottleDir' not found")
+        let fallback = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(DEFAULT_BOTTLE_PATH, isDirectory: true)
+        return fallback
+    }
 
     return URL(filePath: bottlesPath as! String)
 }
 
 func isCXPatched(appDir: URL) -> Bool {
     let f = FileManager.default
-    return f.fileExists(atPath: appDir.appendingPathComponent("Contents/cxplog.txt").path)
+    return f.fileExists(atPath: appDir.appendingPathComponent("Contents/cxplog.txt").path(percentEncoded: false))
 }
 
 func getCXPatcherBottlesURL(appDir: URL)  throws -> URL {
@@ -122,7 +138,6 @@ func getCXPatcherBottlesURL(appDir: URL)  throws -> URL {
 }
 
 func getAllBottles(appDir: URL) -> [URL] {
-//    let DEFAULT_BOTTLE_PATH = "Library/Application Support/CrossOver/Bottles/"
     let f = FileManager.default
     
     do {
@@ -144,7 +159,7 @@ func getAllBottles(appDir: URL) -> [URL] {
                 subfolders = try f.contentsOfDirectory(at: bottlePath, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles, .skipsPackageDescendants, .skipsSubdirectoryDescendants])
             } catch {
                 console.error(error.localizedDescription)
-                console.error("couldn't find the CXPatched bottles in \(bottlePath.path)")
+                console.error("couldn't find the crossover bottles in \(bottlePath.path(percentEncoded: false))")
             }
         }
         console.warn("subfolders \(subfolders.debugDescription)")

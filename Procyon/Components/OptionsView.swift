@@ -67,7 +67,7 @@ struct OptionsView: View {
                         bottles = getAllBottles(appDir: url)
                         appGlobals.cxAppPath = url.relativePath
                         persistUsrDefOptionString(key: "cxAppPath", value: url.relativePath)
-                        persistUsrDefOptionString(key: "cxCompleteAppPath", value: url.path)
+                        persistUsrDefOptionString(key: "cxCompleteAppPath", value: url.path(percentEncoded: false))
                     }
                     
                 }

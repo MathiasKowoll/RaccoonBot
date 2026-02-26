@@ -32,6 +32,7 @@ func parseVDFToDict(from file: String) -> [String:Any] {
      more comprehensive parser (to replace the one above)
      parses an VDF file content String into a dictionary
      */
+    // var dict: [String:Any] = [:]
     
     func getTokens() -> [String] { // lexer
         let regex: Regex = /".*?"|\{|\}/
@@ -52,45 +53,45 @@ func parseVDFToDict(from file: String) -> [String:Any] {
           let stringToken: Regex = /"(.*?)"$/
           return tokens[index].wholeMatch(of: stringToken)?.1.description
         }
-
+        func isStringToken(_ index: Int) -> Bool {
+          getStringToken(index) != nil
+        }
         func isLBrace(_ index: Int) -> Bool {
           return tokens[index] == "{"
         }
-
         func isRBrace(_ index: Int) -> Bool {
           return tokens[index] == "}"
         }
         
         for i in tokens.indices {
-            if(i % 2 == 0) {
-              if(i > 1 && getStringToken(i) != nil && isLBrace(i + 1)){ // skip parent object
+            if(i % 2 == 0) { // process the tokens in pairs
+              if(i > 1 && isStringToken(i) && isLBrace(i + 1) && openBrackets == 0){ //skip root key
                 key = getStringToken(i)!
                 openBrackets += 1
                 sliceStart = i
               }
               if (
                 (
-                  i + 1 < tokens.indices.count - 1) && // boundary
-                  getStringToken(i) != nil && // first is key
-                  getStringToken(i + 1) != nil && // second is value
-                  openBrackets == 0 // it's inside the parent object
+                  i + 1 <  tokens.indices.count - 1) &&
+                  isStringToken(i) &&
+                  isStringToken(i + 1) &&
+                  openBrackets == 0
                 ) {
                 let key = getStringToken(i)!
                 let value = getStringToken(i + 1)!
-                dict[key] = value // then put this property in the parent object
+                dict[key] = value
               }
             }
-            if(i < tokens.indices.count - 1  && isRBrace(i)) { // skip parent object
-              openBrackets -= 1 // track closure
-            }
-            if(openBrackets == 0 && key != nil) { // calculate the range for the child Object
-              sliceEnd = i + 1
-              let partial = Array(tokens[sliceStart..<sliceEnd]) // recursively parse the child object
-              dict[key!] = parse(partial)
+            if(openBrackets == 0 && key != nil) { // if the child object is closed
+              sliceEnd = i + 1 // update the range
+              dict[key!] = parse(Array(tokens[sliceStart..<sliceEnd])) // process the child obj (slice) recursively
               key = nil
+            } else if(i < tokens.indices.count - 1 && isRBrace(i)) { //skip root closing bracket
+              openBrackets -= 1
             }
+            print("\(i % 2 == 0 ? "e": "o").\(i))\(tokens[i]) sl\(sliceStart)-\(sliceEnd) key=\(key ?? "") ob=\(openBrackets)")
         }
         return dict
     }
-    return [tks[0]: parse(tks)] // because we skipped the partent object property key we do it now
+    return [tks[0]: parse(tks)]
 }

@@ -8,23 +8,24 @@
 
 internal import Foundation
 
-func parseACFToDict(from: String) -> [String:String] {
+func parseACFToDict(from file: String) -> [String:Any] {
     /**
      Incomplete shallow parser that the skips main property
      parses an ACF file content String into a dictionary
      */
-    var dictionary: [String:String] = [:]
-    let search1: Regex = /(("\w+?")\n\{\n(.*?\n)+\})+/
-    let search2: Regex = /(\t"(\w+?)"\t+"(.*?)")\n(?=\t"\w+")/
-    
-    let matches = from.matches(of: search1)
-    for match in matches {
-        let values = match.0.matches(of: search2)
-        for value in values {
-            dictionary[value.2.description] = value.3.description
-        }
-    }
-    return dictionary
+//    var dictionary: [String:String] = [:]
+//    let search1: Regex = /(("\w+?")\n\{\n(.*?\n)+\})+/
+//    let search2: Regex = /(\t"(\w+?)"\t+"(.*?)")\n(?=\t"\w+")/
+//    
+//    let matches = from.matches(of: search1)
+//    for match in matches {
+//        let values = match.0.matches(of: search2)
+//        for value in values {
+//            dictionary[value.2.description] = value.3.description
+//        }
+//    }
+//    return dictionary
+    return parseVDFToDict(from: file)
 }
 
 func parseVDFToDict(from file: String) -> [String:Any] {
@@ -43,18 +44,22 @@ func parseVDFToDict(from file: String) -> [String:Any] {
     
     let tks = getTokens()
     
+    func getStringToken(from token: String) -> String? {
+      let stringToken: Regex = /"(.*?)"$/
+      return token.wholeMatch(of: stringToken)?.1.description
+    }
+    
     func parse(_ tokens: [String]) -> [String: Any] {
         var dict: [String: Any] = [:]
         var openBrackets: Int = 0
         var sliceStart = 0
         var sliceEnd = 0
         var key: String? = nil
-        func getStringToken(_ index: Int) -> String? {
-          let stringToken: Regex = /"(.*?)"$/
-          return tokens[index].wholeMatch(of: stringToken)?.1.description
+        func getStringTokenForIndex(_ index: Int) -> String? {
+            return getStringToken(from: tokens[index])
         }
         func isStringToken(_ index: Int) -> Bool {
-          getStringToken(index) != nil
+          getStringTokenForIndex(index) != nil
         }
         func isLBrace(_ index: Int) -> Bool {
           return tokens[index] == "{"
@@ -66,7 +71,7 @@ func parseVDFToDict(from file: String) -> [String:Any] {
         for i in tokens.indices {
             if(i % 2 == 0) { // process the tokens in pairs
               if(i > 1 && isStringToken(i) && isLBrace(i + 1) && openBrackets == 0){ //skip root key
-                key = getStringToken(i)!
+                key = getStringTokenForIndex(i)!
                 openBrackets += 1
                 sliceStart = i
               }
@@ -77,8 +82,8 @@ func parseVDFToDict(from file: String) -> [String:Any] {
                   isStringToken(i + 1) &&
                   openBrackets == 0
                 ) {
-                let key = getStringToken(i)!
-                let value = getStringToken(i + 1)!
+                let key = getStringTokenForIndex(i)!
+                let value = getStringTokenForIndex(i + 1)!
                 dict[key] = value
               }
             }
@@ -93,5 +98,5 @@ func parseVDFToDict(from file: String) -> [String:Any] {
         }
         return dict
     }
-    return [tks[0]: parse(tks)]
+    return [getStringToken(from: tks[0])!: parse(tks)]
 }

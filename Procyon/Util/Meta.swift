@@ -18,7 +18,7 @@ func getGamesMeta(from: URL) throws -> [GamesMeta] {
         try urls.forEach { url in
             let file  = try readFile(at: url)
             let parsed = parseACFToDict(from: file)
-            let meta = mapDictToGamesMeta(from: parsed)
+            let meta = mapDictToGamesMeta(from: parsed["AppState"] as! [String: Any])
             meta.gameURL = from.appendingPathComponent("common").appendingPathComponent(meta.installdir)
             meta.isNative = meta.isDownloaded() ? getIsNative(fromURL: meta.gameURL!) : false
             meta.libraryFolder = from
@@ -35,9 +35,9 @@ func getMeta(_ gameMetaArray: [GamesMeta], byID: String) -> GamesMeta? {
     return gameMetaArray.first(where: { $0.id == byID })
 }
 
-func mapDictToGamesMeta(from: [String:String]) -> GamesMeta {
+func mapDictToGamesMeta(from: [String:Any]) -> GamesMeta {
     /**
      Incomplete it only maps appid and installdir
      */
-    return GamesMeta(appid: from["appid"] ?? "unknown", installdir: from["installdir"] ?? "unknown", bytesDownloaded: from["BytesDownloaded"] ?? "0", BytesTodownload: from["BytesToDownload"] ?? "0")
+    return GamesMeta(appid: from["appid"] as? String ?? "unknown", installdir: from["installdir"] as? String ?? "unknown", bytesDownloaded: from["BytesDownloaded"] as? String ?? "0", BytesTodownload: from["BytesToDownload"] as? String ?? "0")
 }

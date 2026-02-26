@@ -82,7 +82,18 @@ struct OptionsView: View {
                         }
                     }.onChange(of: appGlobals.selectedBottle) { oldValue, newValue in
                         if(newValue != "") {
+                            libraryPageGlobals.folders.removeAll()
+                            resetPersistedFolderAccess()
                             let steamLibrariesURLs = getSteamLibraryFolders(from: URL(string: newValue)!)
+                            steamLibrariesURLs.forEach { url in
+                                if libraryPageGlobals.folders.contains(url.absoluteString) {
+                                    console.log("\(url.absoluteString) folder exists!")
+                                    return
+                                }
+                                addSteamFolderPaths(url)
+                                libraryPageGlobals.folders.append(url.absoluteString)
+                            }
+                            Task { await load() }
                             persistUsrDefOptionString(key: "selectedBottle", value: newValue)
                         }
                     }

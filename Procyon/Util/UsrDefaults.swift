@@ -48,6 +48,13 @@ func removePersistedFolderAccess(url: URL) {
     groupDefaults.set(filtered, forKey: key)
 }
 
+func resetPersistedFolderAccess() {
+    let key = "steamLibraryBookmarks"
+    let groupDefaults = UserDefaults(suiteName: suiteName)!
+
+    groupDefaults.removeObject(forKey: key)
+}
+
 func persistFolderAccess(url: URL) throws {
     /**
      Since we're sandboxed we need to persist the permission to access the folders afterwards, when the apps reads the folders again

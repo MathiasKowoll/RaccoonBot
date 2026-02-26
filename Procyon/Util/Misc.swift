@@ -85,7 +85,7 @@ func getIDsFromFolder(dest: URL) throws -> [String] {
             .map {
                 extractAppIDRegex(from: $0.lastPathComponent)!
             }
-            .filter { !blacklist.contains($0) }
+//            .filter { !blacklist.contains($0) }
     } ?? []
 }
 
@@ -120,11 +120,28 @@ func safeShell(_ command: String) throws -> String {
 
 func getSteamLibraryFolders(from: URL) -> [URL] {
     let drives = getBottleDrives(bottleURL: from)
+    console.log("drives: \(String(describing: drives))")
     let steamSettingsPath = from.appendingPathComponent("/drive_c/Program Files (x86)/Steam/config/libraryfolders.vdf")
     do {
+        var steamLibraries: [URL] = []
         let steamSettingsFile = try String(contentsOfFile: steamSettingsPath.path, encoding: .utf8)
         let parsed = parseVDFToDict(from: steamSettingsFile)
-        print(parsed.description)
+        if let libraries = parsed["libraryfolders"] as? [String: Any] {
+            for (key, value) in libraries {
+                if let val = (value as? [String: Any]) {
+                    if let path = val["path"] as? String{
+                        print("Key: \(key), Value: \(path)")
+                        let driveAlias = String(path.split(separator: ":/")[0]) + ":"
+                        let partial = path.split(separator: ":")[1].replacingOccurrences(of: "//", with: "/")
+                        if let newPath = drives[driveAlias]?.appendingPathComponent(partial).appendingPathComponent("/steamapps") {
+                            print("newPath \(newPath)")
+                            steamLibraries.append(newPath)
+                        }
+                    }
+                }
+            }
+        }
+        return steamLibraries
     } catch {
         console.error(error.localizedDescription)
     }

@@ -17,7 +17,6 @@ func parseVDFToDict(from file: String) -> [String:Any] {
      more comprehensive parser (to replace the one above)
      parses an VDF file content String into a dictionary
      */
-    // var dict: [String:Any] = [:]
     
     func getTokens() -> [String] { // lexer
         let regex: Regex = /".*?"|\{|\}/

@@ -46,6 +46,11 @@ struct GameThumbnail: View {
                         if (item.genres != nil && item.genres!.count > 0){
                             AccentTag(item.genres!.first!.description)
                         }
+                        if (item.isNative == true) {
+                            Tag("Mac")
+                        } else {
+                            Tag("Pc")
+                        }
                         Spacer()
                         
                         if(item.downloadProgress == 100) {

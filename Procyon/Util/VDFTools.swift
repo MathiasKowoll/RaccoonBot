@@ -65,8 +65,7 @@ func parseVDFToDict(from file: String) -> [String:Any] {
                     sliceStart = i // begin to track the child object
                 }
                 if (
-                    (
-                        i + 1 < tokens.indices.count - 1) && // array boundary constraint
+                    (i < tokens.indices.count) && // array boundary constraint
                     isStringToken(i) && // key is a string token
                     isStringToken(i + 1) && // value is a string token
                     openBrackets == 0 // skip if inside a nested obj, will be processed recursively instead

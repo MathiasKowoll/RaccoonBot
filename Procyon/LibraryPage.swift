@@ -101,22 +101,6 @@ struct LibraryPage: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .sheet(isPresented: $isLoading) {
-            VStack(alignment: .center) {
-                Image(.procyon).resizable()
-                    .scaledToFit()
-                    .frame(width: 80)
-                Text("Loading your library…")
-                    .foregroundStyle(.white)
-                    .padding(.top)
-                ProgressView(value: progress, total: 100)
-                    .progressViewStyle(.linear)
-                    .frame(maxWidth: .infinity, alignment: .center)
-            }
-            .padding(40)
-            .frame(width: 300, height: 250)
-            .background(.accent.mix(with: .black, by: 0.6))
-        }
         .sheet(isPresented: $libraryPageGlobals.showOptions) {
             OptionsView(deleteCache: api.deleteCache, load: load)
         }
@@ -124,6 +108,32 @@ struct LibraryPage: View {
             Modal(showModal: $libraryPageGlobals.showDetailView, collapse: true, content:  {
                 GameDetailView(game: $libraryPageGlobals.selectedGame)
             })
+        }
+        .overlay {
+            if (isLoading) {
+                HStack(alignment: .bottom) {
+                    HStack(alignment: .center) {
+                        Image(.procyon).resizable()
+                            .scaledToFit()
+                            .frame(height: 50)
+                        VStack (alignment: .leading){
+                            Text("Loading your library…")
+                                .font(.footnote)
+                                .foregroundStyle(.white)
+                            ProgressView(value: progress, total: 100)
+                                .progressViewStyle(.linear)
+                                .frame(maxWidth: .infinity, maxHeight: 5)
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .frame(width: 220, height: 60)
+                    .background(.accent.mix(with: .black, by: 0.6))
+                    .cornerRadius(20)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                .padding()
+                .transition(.opacity)
+            }
         }
         .onAppear() {
             isLoading = true // fixes missing library issue

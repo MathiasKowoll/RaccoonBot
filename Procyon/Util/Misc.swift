@@ -120,22 +120,23 @@ let DEFAULT_STEAM_MAC_PATH = "/Library/Application Support/Steam/config/"
 let DEFAULT_STEAM_WINE_PATH = "/drive_c/Program Files (x86)/Steam/config/"
 
 func getSteamLibraryFolders(from: URL) -> [URL] {
+    let f = FileManager.default
     var steamLibraries: [URL] = []
     let drives = getBottleDrives(bottleURL: from)
     console.log("drives: \(String(describing: drives))")
     let steamSettingsPaths = [
         from.appendingPathComponent(DEFAULT_STEAM_WINE_PATH)
             .appendingPathComponent("libraryfolders.vdf"),
-        FileManager.default.homeDirectoryForCurrentUser
+        f.homeDirectoryForCurrentUser
             .appendingPathComponent(DEFAULT_STEAM_MAC_PATH)
             .appendingPathComponent("libraryfolders.vdf")
-    ]
+    ].filter{ f.fileExists(atPath: $0.path(percentEncoded: false)) }
     for steamSettingsPath in steamSettingsPaths {
         do {
             let steamSettingsFile = try String(contentsOfFile: steamSettingsPath.path(percentEncoded: false), encoding: .utf8)
             let parsed = parseVDFToDict(from: steamSettingsFile)
             if let libraries = parsed["libraryfolders"] as? [String: Any] {
-                for (key, value) in libraries {
+                for (_, value) in libraries {
                     if let val = (value as? [String: Any]) {
                         if let path = val["path"] as? String{
                             let driveAlias = String(path.split(separator: ":/")[0]) + ":"
@@ -143,12 +144,12 @@ func getSteamLibraryFolders(from: URL) -> [URL] {
                             if (splitPath.count > 1){
                                 let partial = splitPath[1].replacingOccurrences(of: "//", with: "/")
                                 if let newPath = drives[driveAlias]?.appendingPathComponent(partial).appendingPathComponent("/steamapps") {
-                                    console.log("newPath \(newPath)")
                                     steamLibraries.append(newPath)
+                                } else {
+                                    console.log("couldn't find mac Steam config")
                                 }
                             } else {
                                 let macNewPath = URL(fileURLWithPath: path).appendingPathComponent("/steamapps")
-                                console.log("mac newPath \(macNewPath)")
                                 steamLibraries.append(macNewPath)
                             }
                         }

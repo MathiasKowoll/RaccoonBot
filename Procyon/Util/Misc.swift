@@ -26,7 +26,7 @@ let useLogger: Bool = false
 func addSteamFolderPaths(_ url: URL) {
     do {
         if (try getIDsFromFolder(dest: url).isEmpty) {
-            console.warn("Folder is empty")
+            console.warn("\(url) Folder is empty")
             return
         }
     } catch {
@@ -81,9 +81,9 @@ func getIDsFromFolder(dest: URL) throws -> [String] {
         let f = FileManager.default
         let urls = try f.contentsOfDirectory(at: dest, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants, .skipsPackageDescendants])
         return urls
-            .filter { $0.pathExtension == "acf" }
+            .filter { $0.pathExtension == "acf"}
             .map {
-                extractAppIDRegex(from: $0.lastPathComponent)!
+                extractAppIDRegex(from: $0.lastPathComponent) ?? "0"
             }
 //            .filter { !blacklist.contains($0) }
     } ?? []
@@ -116,34 +116,59 @@ func safeShell(_ command: String) throws -> String {
     return "OK"
 }
 
-
+let DEFAULT_STEAM_MAC_PATH = "/Library/Application Support/Steam/config/"
+let DEFAULT_STEAM_WINE_PATH = "/drive_c/Program Files (x86)/Steam/config/"
 
 func getSteamLibraryFolders(from: URL) -> [URL] {
+    var steamLibraries: [URL] = []
     let drives = getBottleDrives(bottleURL: from)
     console.log("drives: \(String(describing: drives))")
-    let steamSettingsPath = from.appendingPathComponent("/drive_c/Program Files (x86)/Steam/config/libraryfolders.vdf")
-    do {
-        var steamLibraries: [URL] = []
-        let steamSettingsFile = try String(contentsOfFile: steamSettingsPath.path, encoding: .utf8)
-        let parsed = parseVDFToDict(from: steamSettingsFile)
-        if let libraries = parsed["libraryfolders"] as? [String: Any] {
-            for (key, value) in libraries {
-                if let val = (value as? [String: Any]) {
-                    if let path = val["path"] as? String{
-                        print("Key: \(key), Value: \(path)")
-                        let driveAlias = String(path.split(separator: ":/")[0]) + ":"
-                        let partial = path.split(separator: ":")[1].replacingOccurrences(of: "//", with: "/")
-                        if let newPath = drives[driveAlias]?.appendingPathComponent(partial).appendingPathComponent("/steamapps") {
-                            print("newPath \(newPath)")
-                            steamLibraries.append(newPath)
+    let steamSettingsPaths = [
+        from.appendingPathComponent(DEFAULT_STEAM_WINE_PATH)
+            .appendingPathComponent("libraryfolders.vdf"),
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(DEFAULT_STEAM_MAC_PATH)
+            .appendingPathComponent("libraryfolders.vdf")
+    ]
+    for steamSettingsPath in steamSettingsPaths {
+        do {
+            let steamSettingsFile = try String(contentsOfFile: steamSettingsPath.path(percentEncoded: false), encoding: .utf8)
+            let parsed = parseVDFToDict(from: steamSettingsFile)
+            if let libraries = parsed["libraryfolders"] as? [String: Any] {
+                for (key, value) in libraries {
+                    if let val = (value as? [String: Any]) {
+                        if let path = val["path"] as? String{
+                            let driveAlias = String(path.split(separator: ":/")[0]) + ":"
+                            let splitPath = path.split(separator: ":")
+                            if (splitPath.count > 1){
+                                let partial = splitPath[1].replacingOccurrences(of: "//", with: "/")
+                                if let newPath = drives[driveAlias]?.appendingPathComponent(partial).appendingPathComponent("/steamapps") {
+                                    console.log("newPath \(newPath)")
+                                    steamLibraries.append(newPath)
+                                }
+                            } else {
+                                let macNewPath = URL(fileURLWithPath: path).appendingPathComponent("/steamapps")
+                                console.log("mac newPath \(macNewPath)")
+                                steamLibraries.append(macNewPath)
+                            }
                         }
                     }
                 }
             }
+        } catch {
+            console.error(error.localizedDescription)
+            return []
         }
-        return steamLibraries
-    } catch {
-        console.error(error.localizedDescription)
     }
-    return []
+    console.log("all steam libraries \(steamLibraries.debugDescription)")
+    return steamLibraries
+}
+
+func validateAddSteamFolder(_ url: URL, to folders: inout [String]) {
+    if folders.contains(url.absoluteString) {
+        console.log("\(url.absoluteString) folder exists!")
+        return
+    }
+    addSteamFolderPaths(url)
+    folders.append(url.absoluteString)
 }

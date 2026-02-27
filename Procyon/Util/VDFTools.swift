@@ -16,6 +16,7 @@ func parseVDFToDict(from file: String) -> [String:Any] {
     /**
      more comprehensive parser (to replace the one above)
      parses an VDF file content String into a dictionary
+     TO DO: Refactor and made the parser logic less brittle
      */
     
     func getTokens() -> [String] { // lexer
@@ -60,19 +61,19 @@ func parseVDFToDict(from file: String) -> [String:Any] {
                     openBrackets == 0 // not nested in other child objects
                 ){
                     childObjKey = getStringTokenForIndex(i)! // assign the key for later use
-                    openBrackets += 1
-                    sliceStart = i
+                    openBrackets += 1 // begin to track the child object
+                    sliceStart = i // begin to track the child object
                 }
                 if (
                     (
-                        i + 1 <  tokens.indices.count - 1) && // array boundary constraint
+                        i + 1 < tokens.indices.count - 1) && // array boundary constraint
                     isStringToken(i) && // key is a string token
                     isStringToken(i + 1) && // value is a string token
                     openBrackets == 0 // skip if inside a nested obj, will be processed recursively instead
                 ) {
                     let key = getStringTokenForIndex(i)!
                     let value = getStringTokenForIndex(i + 1)!
-                    dict[key] = value
+                    dict[key] = value // update the parent objeect string values
                 }
             }
             if(openBrackets == 0 && childObjKey != nil) { // if the child object is closed and a key is assigned
@@ -80,7 +81,7 @@ func parseVDFToDict(from file: String) -> [String:Any] {
                 dict[childObjKey!] = parse(Array(tokens[sliceStart..<sliceEnd])) // process the child obj (slice) recursively
                 childObjKey = nil
             } else if(i < tokens.indices.count - 1 && isRBrace(i)) { //skip root closing bracket
-                openBrackets -= 1
+                openBrackets -= 1 // will continue until all the brackets are balanced (optimistic)
             }
         }
         return dict

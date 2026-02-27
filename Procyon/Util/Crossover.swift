@@ -148,7 +148,7 @@ func getDrivesPaths(at: URL) -> CXDrives {
         let simLinks = try f.contentsOfDirectory(at: at , includingPropertiesForKeys: nil, options: .skipsHiddenFiles)
         let drives = try simLinks.reduce(into: [String: URL]()) { result, link in
             let key = link.lastPathComponent.uppercased()
-            let value = try f.destinationOfSymbolicLink(atPath: link.path)
+            let value = try f.destinationOfSymbolicLink(atPath: link.path(percentEncoded: false))
             if (value.contains("drive_c")) {
                 result[key] = at.deletingLastPathComponent().appendingPathComponent("drive_c")
             } else {

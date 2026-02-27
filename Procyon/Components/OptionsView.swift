@@ -41,12 +41,7 @@ struct OptionsView: View {
                     .frame(height: 100)
                     Button(action: {
                         if let url = openFolderSelectorPanel() {
-                            if libraryPageGlobals.folders.contains(url.absoluteString) {
-                                console.log("\(url.absoluteString) folder exists!")
-                                return
-                            }
-                            addSteamFolderPaths(url)
-                            libraryPageGlobals.folders.append(url.absoluteString)
+                            validateAddSteamFolder(url, to: &libraryPageGlobals.folders)
                             Task { await load() }
                         }
                     }) {
@@ -86,12 +81,7 @@ struct OptionsView: View {
                             resetPersistedFolderAccess()
                             let steamLibrariesURLs = getSteamLibraryFolders(from: URL(string: newValue)!)
                             steamLibrariesURLs.forEach { url in
-                                if libraryPageGlobals.folders.contains(url.absoluteString) {
-                                    console.log("\(url.absoluteString) folder exists!")
-                                    return
-                                }
-                                addSteamFolderPaths(url)
-                                libraryPageGlobals.folders.append(url.absoluteString)
+                                validateAddSteamFolder(url, to: &libraryPageGlobals.folders)
                             }
                             Task { await load() }
                             persistUsrDefOptionString(key: "selectedBottle", value: newValue)

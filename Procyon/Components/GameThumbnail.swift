@@ -12,7 +12,13 @@ struct GameThumbnail: View {
     let item: Game
     @EnvironmentObject var appGlobals: AppGlobals
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
-    
+    var isDownloading: Bool {
+        item.downloadProgress < 100 &&
+        item.downloadProgress > -1
+    }
+    var isNotInstalled: Bool {
+        item.downloadProgress == -1
+    }
     var body: some View {
         
         Button(action: {
@@ -47,13 +53,13 @@ struct GameThumbnail: View {
                             AccentTag(item.genres!.first!.description)
                         }
                         if (item.isNative == true) {
-                            Tag("Mac")
+                            AccentTag("Mac")
                         } else {
-                            Tag("Pc")
+                            AccentTag("Pc")
                         }
                         Spacer()
                         
-                        if(item.downloadProgress == 100) {
+                        if(!isDownloading) {
                             Button {
                                 libraryPageGlobals.selectedGame = item
                                 libraryPageGlobals.setLoader(state: true)
@@ -98,7 +104,7 @@ struct GameThumbnail: View {
             .cornerRadius(30)
         }
         .buttonStyle(.plain)
-        .opacity(item.downloadProgress == 100 ? 1 : 0.25)
+        .opacity( isDownloading ? 0.25 : 1)
     }
 }
 

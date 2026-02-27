@@ -308,3 +308,38 @@ extension Game {
     )
     static let mock = Game(from: Game.steamMock, id: "example", isNative: true, downloadProgress: 100)
 }
+
+enum SortingOptions {
+    case name
+    case releaseDate
+}
+
+class LibraryPageGlobals: ObservableObject {
+    @Published var gamesMeta: [GamesMeta] = []
+    @Published var folders: [String] = []
+    @Published var showOptions: Bool = false
+    @Published var filter: String = ""
+    @Published var showDetailView = false
+    @Published var selectedGame: Game? = nil
+    @Published var isLaunchingGame: Bool = false
+    @Published var games: [Game] = []
+    @Published var sortBy: SortingOptions = SortingOptions.name
+    
+    var filteredGames: [Game] {
+        self.games.filter { item in
+            self.filter.isEmpty ||
+            item.name.lowercased().contains(self.filter.lowercased())
+        }.sorted { lhs, rhs in
+            switch self.sortBy {
+            case SortingOptions.name:
+                return lhs.name.lowercased() < rhs.name.lowercased()
+            case SortingOptions.releaseDate:
+                return lhs.releaseDate.date < rhs.releaseDate.date
+            }
+        }
+    }
+    
+    func setLoader(state: Bool) {
+        isLaunchingGame = state
+    }
+}

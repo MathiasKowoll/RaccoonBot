@@ -24,6 +24,7 @@ final class Router: ObservableObject {
 
 final class AppGlobals: ObservableObject {
     @Published var selectedBottle: String = ""
+    @Published var userID: String? = nil
     @Published var cxAppPath: String?
     
     init(selectedBottle: String? = "", cxAppPath: String? = nil) {

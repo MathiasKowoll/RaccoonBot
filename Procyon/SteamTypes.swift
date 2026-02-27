@@ -156,6 +156,38 @@ struct RatingBody: Codable {
     }
 }
 
+struct SteamOwnedGame: Codable {
+    let appID: Int
+    let playtimeForever: Int
+    let playtimeWindowsForever: Int
+    let playtimeMacForever: Int
+    let playtimeLinuxForever: Int
+    let playtimeDeckForever: Int
+    let rtimeLastPlayed: Int
+    let playtimeDisconnected: Int
+
+    enum CodingKeys: String, CodingKey {
+        case appID = "appid"
+        case playtimeForever = "playtime_forever"
+        case playtimeWindowsForever = "playtime_windows_forever"
+        case playtimeMacForever = "playtime_mac_forever"
+        case playtimeLinuxForever = "playtime_linux_forever"
+        case playtimeDeckForever = "playtime_deck_forever"
+        case rtimeLastPlayed = "rtime_last_played"
+        case playtimeDisconnected = "playtime_disconnected"
+    }
+}
+
+struct SteamOwnedGames: Codable {
+    let gameCount: Int
+    let games: [SteamOwnedGame]
+    
+    enum CodingKeys: String, CodingKey {
+        case gameCount = "game_count"
+        case games
+    }
+}
+
 struct SteamGame: Codable {
     let type: String
     let name: String

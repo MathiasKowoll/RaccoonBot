@@ -9,51 +9,16 @@ import SwiftUI
 import Combine
 import Kingfisher
 
-enum SortingOptions {
-    case name
-    case releaseDate
-}
-
-class LibraryPageGlobals: ObservableObject {
-    @Published var gamesMeta: [GamesMeta] = []
-    @Published var folders: [String] = []
-    @Published var showOptions: Bool = false
-    @Published var filter: String = ""
-    @Published var showDetailView = false
-    @Published var selectedGame: Game? = nil
-    @Published var isLaunchingGame: Bool = false
-    @Published var games: [Game] = []
-    @Published var sortBy: SortingOptions = SortingOptions.name
-    
-    var filteredGames: [Game] {
-        self.games.filter { item in
-            self.filter.isEmpty ||
-            item.name.lowercased().contains(self.filter.lowercased())
-        }.sorted { lhs, rhs in
-            switch self.sortBy {
-            case SortingOptions.name:
-                return lhs.name.lowercased() < rhs.name.lowercased()
-            case SortingOptions.releaseDate:
-                return lhs.releaseDate.date < rhs.releaseDate.date
-            }
-        }
-    }
-    
-    func setLoader(state: Bool) {
-        isLaunchingGame = state
-    }
-}
-
 struct LibraryPage: View {
     @StateObject var libraryPageGlobals = LibraryPageGlobals()
-//    @State private var items: [SteamGame] = []
+    @EnvironmentObject var appGlobals: AppGlobals
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var progress: Double = 0
     @State private var selectedGame: SteamGame? = nil
     @State private var mntObserver: MountObserver?
 
-    private var api = SteamAPI()
+    private var api = SteamAPI() // doesn't seem to get redeclared each time
     
     var body: some View {
         VStack {
@@ -137,6 +102,9 @@ struct LibraryPage: View {
         }
         .onAppear() {
             isLoading = true // fixes missing library issue
+            if(appGlobals.selectedBottle != ""){
+                appGlobals.userID = getSteamUserID(usingBottlePath: URL(string: appGlobals.selectedBottle)!)
+            }
             mntObserver = MountObserver(
                 onMount: {
                     Task {
@@ -189,10 +157,20 @@ struct LibraryPage: View {
             }
         }
         do {
+            if(appGlobals.userID != nil){
+                let ownedMeta = try await api
+                    .fetchOwnedGamesIDs(userID: appGlobals.userID!)
+                    .map{
+                        GamesMeta(appid: $0, installdir: "", bytesDownloaded: "-1", BytesTodownload: "0")
+                    }
+                    .filter { owned in
+                        !libraryPageGlobals.gamesMeta.contains(where: { $0.appid == owned.appid })
+                    }
+                libraryPageGlobals.gamesMeta.append(contentsOf: ownedMeta)
+            }
             libraryPageGlobals.games = try await api.fetchGamesInfo(meta: libraryPageGlobals.gamesMeta, setProgress: { self.progress = $0 })
             progress = 100
         } catch {
-            errorMessage = error.localizedDescription
             console.error(error.localizedDescription)
         }
     }

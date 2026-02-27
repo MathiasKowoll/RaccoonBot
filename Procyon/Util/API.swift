@@ -21,6 +21,14 @@ struct SteamGameResponse: Codable, Sendable {
     let data: [SteamGame]
 }
 
+struct SteamOwnedGamesResponse: Codable, Sendable {
+    let response: SteamOwnedGames
+}
+
+struct SteamOwnedGamesResponseData: Codable, Sendable {
+    let data: SteamOwnedGamesResponse
+}
+
 struct SteamGameResponseArray: Codable, Sendable {
     let data: [SteamGame]
 }
@@ -35,6 +43,7 @@ final class SteamAPI {
     var progress: Double = 0
     private var cacheBlacklist: [String] = blacklist
     private var cache: [String: SteamGame] = [:]
+    private var cacheOwnedIDs: [String] = []
     private var cacheIDS: [String] {
         if cache.count < 1 {
             return []
@@ -76,7 +85,7 @@ final class SteamAPI {
     func deleteCache() {
         try? FileManager.default.removeItem(at: cacheURL)
         self.cache.removeAll()
-        self.hasCache = true
+        self.hasCache = false
         console.warn("Cache deleted")
     }
     func fetchGameInfo(appID: String) async throws -> SteamGame? {
@@ -137,6 +146,25 @@ final class SteamAPI {
         }
 //        console.warn("\(items.map(\.steamAppID))")
         return items
+    }
+    func fetchOwnedGamesIDs(userID: String) async throws -> [String] {
+        if(cacheOwnedIDs.count > 0) {
+            return self.cacheOwnedIDs
+        }
+        let urlString = "\(baseAPIURL)/ownedGames/?userid=\(userID)"
+        let headers: HTTPHeaders = ["x-api-key": apiKey]
+
+        do {
+            let data = try await AF.request(urlString, method: .get, headers: headers)
+                .validate(statusCode: 200..<300)
+                .serializingData()
+                .value
+            
+            let root = try JSONDecoder().decode(SteamOwnedGamesResponseData.self, from: data)
+            let ids = root.data.response.games.map { String($0.appID) }
+            self.cacheOwnedIDs = ids
+            return ids
+        }
     }
 }
 

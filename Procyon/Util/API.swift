@@ -125,7 +125,7 @@ final class SteamAPI {
             let downloadProgress: Double = meta.isDownloaded() ? 100 : (bDownloaded / bToDownload) * 100
             do {
                 if let gameInfo = try await self.fetchGameInfo(appID: meta.appid) {
-                    items.append(Game(from: gameInfo, id: meta.id, isNative: meta.isNative, downloadProgress: Double(downloadProgress)))
+                    items.append(Game(from: gameInfo, id: meta.id, isNative: meta.isNative, downloadProgress: Double(downloadProgress), isInstalled: meta.installdir.isEmpty == false))
                 }
             } catch {
                 console.error(error.localizedDescription)
@@ -149,6 +149,7 @@ final class SteamAPI {
     }
     func fetchOwnedGamesIDs(userID: String) async throws -> [String] {
         if(cacheOwnedIDs.count > 0) {
+            console.log("Using cached user data")
             return self.cacheOwnedIDs
         }
         let urlString = "\(baseAPIURL)/ownedGames/?userid=\(userID)"

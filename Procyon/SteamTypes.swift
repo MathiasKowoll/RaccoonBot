@@ -285,7 +285,7 @@ class SteamACFMeta {
     var LauncherPath: String?
     var name: String?
     var StateFlags: String?
-    var installdir: String = ""
+    var installdir: String = "/"
     var LastUpdated: String?
     var LastPlayed: String?
     var SizeOnDisk: String?

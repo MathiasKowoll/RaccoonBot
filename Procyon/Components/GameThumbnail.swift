@@ -13,11 +13,7 @@ struct GameThumbnail: View {
     @EnvironmentObject var appGlobals: AppGlobals
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
     var isDownloading: Bool {
-        item.downloadProgress < 100 &&
-        item.downloadProgress > -1
-    }
-    var isNotInstalled: Bool {
-        item.downloadProgress == -1
+        item.downloadProgress < 100
     }
     var body: some View {
         
@@ -52,14 +48,16 @@ struct GameThumbnail: View {
                         if (item.genres != nil && item.genres!.count > 0){
                             AccentTag(item.genres!.first!.description)
                         }
-                        if (item.isNative == true) {
-                            AccentTag("Mac")
-                        } else {
-                            AccentTag("Pc")
+                        if (item.isInstalled) {
+                            if (item.isNative == true) {
+                                AccentTag("Mac")
+                            } else {
+                                AccentTag("Pc")
+                            }
                         }
                         Spacer()
                         
-                        if(!isDownloading) {
+                        if(!isDownloading && item.isInstalled) {
                             Button {
                                 libraryPageGlobals.selectedGame = item
                                 libraryPageGlobals.setLoader(state: true)
@@ -91,9 +89,11 @@ struct GameThumbnail: View {
                             .background(.procyonSecondary)
                             .cornerRadius(20)
                         } else {
-                            ProgressView(value: item.downloadProgress, total: 100,
-                                 label: { Text("Downloading...").font(.footnote)
-                            }).frame(height: 30)
+                            if(item.isInstalled) {
+                                ProgressView(value: item.downloadProgress, total: 100,
+                                     label: { Text("Downloading...").font(.footnote)
+                                }).frame(height: 30)
+                            }
                         }
                     }
                     .padding(.bottom, 8)
@@ -104,7 +104,7 @@ struct GameThumbnail: View {
             .cornerRadius(30)
         }
         .buttonStyle(.plain)
-        .opacity( isDownloading ? 0.25 : 1)
+        .opacity( isDownloading || !item.isInstalled ? 0.25 : 1)
     }
 }
 

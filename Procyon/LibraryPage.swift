@@ -102,9 +102,6 @@ struct LibraryPage: View {
         }
         .onAppear() {
             isLoading = true // fixes missing library issue
-            if(appGlobals.selectedBottle != ""){
-                appGlobals.userID = getSteamUserID(usingBottlePath: URL(string: appGlobals.selectedBottle)!)
-            }
             mntObserver = MountObserver(
                 onMount: {
                     Task {
@@ -161,7 +158,7 @@ struct LibraryPage: View {
                 let ownedMeta = try await api
                     .fetchOwnedGamesIDs(userID: appGlobals.userID!)
                     .map{
-                        GamesMeta(appid: $0, installdir: "", bytesDownloaded: "-1", BytesTodownload: "0")
+                        GamesMeta(appid: $0, installdir: "", bytesDownloaded: "0", BytesTodownload: "0")
                     }
                     .filter { owned in
                         !libraryPageGlobals.gamesMeta.contains(where: { $0.appid == owned.appid })

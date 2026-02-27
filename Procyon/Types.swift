@@ -95,7 +95,7 @@ class GamesMeta: SteamACFMeta {
     var isNative: Bool
     var id: String { libraryFolder.relativeString + appid }
     func isDownloaded() -> Bool {
-        (self.BytesToDownload == "0" || self.BytesToDownload == self.BytesDownloaded)
+        return (self.BytesToDownload == "0" || self.BytesToDownload == self.BytesDownloaded)
     }
     
     init(appid: String, installdir: String, gameURL: URL? = nil, isNative: Bool = false, libraryFolder: URL = URL(string: "/")!, bytesDownloaded: String, BytesTodownload: String) {
@@ -114,6 +114,7 @@ struct Game: Identifiable {
     var id: String
     var isNative: Bool
     var downloadProgress: Double
+    var isInstalled: Bool
     
     // taken from SteamGame
     let type: String
@@ -166,10 +167,11 @@ struct Game: Identifiable {
     let contentDescriptors: ContentDescriptors?
     let ratings: Ratings?
     
-    init(from: SteamGame, id: String, isNative: Bool, downloadProgress: Double) {
+    init(from: SteamGame, id: String, isNative: Bool, downloadProgress: Double, isInstalled: Bool) {
         self.id = id
         self.isNative = isNative
         self.downloadProgress = downloadProgress
+        self.isInstalled = isInstalled
         
         // SteamGame property
         self.type = from.type
@@ -306,7 +308,7 @@ extension Game {
             usk: RatingBody(rating: "12", requiredAge: "12", descriptors: "Violence")
         )
     )
-    static let mock = Game(from: Game.steamMock, id: "example", isNative: true, downloadProgress: 100)
+    static let mock = Game(from: Game.steamMock, id: "example", isNative: true, downloadProgress: 100, isInstalled: true)
 }
 
 enum SortingOptions {

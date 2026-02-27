@@ -96,7 +96,7 @@ struct LibraryPage: View {
                     .foregroundStyle(.white)
                 }
                 .frame(maxWidth: .infinity)
-            } else if (!isLoading) {
+            } else {
                 GamesList()
             }
         }

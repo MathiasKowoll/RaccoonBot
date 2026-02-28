@@ -308,3 +308,14 @@ extension Game {
     )
     static let mock = Game(from: Game.steamMock, id: "example", isNative: true, downloadProgress: 100)
 }
+
+final class AppGlobals: ObservableObject {
+    @Published var selectedBottle: String = ""
+    @Published var userID: String? = nil
+    @Published var cxAppPath: String?
+    
+    init(selectedBottle: String? = "", cxAppPath: String? = nil) {
+        self.selectedBottle = readUsrDefOptionString(key: "selectedBottle") ?? ""
+        self.cxAppPath = readUsrDefOptionString(key: "cxAppPath")
+    }
+}

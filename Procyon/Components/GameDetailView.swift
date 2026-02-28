@@ -95,6 +95,8 @@ struct GameDetailView: View {
                                     }
                                 }.padding(.bottom)
                             }
+                            
+// TO DO: add the following data
 //                            "ratings": {
 //                                "dejus": {
 //                                    "rating": "14",
@@ -111,6 +113,21 @@ struct GameDetailView: View {
 //                                    "descriptors": "Gewalt"
 //                                }
 //                            }
+//                            "dlc": [
+//                                1366500,
+//                                1612680,
+//                                1612700,
+//                                1612710,
+//                                1612720,
+//                                1621630,
+//                                1621631,
+//                                1621650,
+//                                1621651,
+//                                1621660,
+//                                1621661,
+//                                1621670
+//                            ],
+
                             HStack() {
                                 if(game!.pcRequirements != nil){
                                     VStack (alignment: .leading) {

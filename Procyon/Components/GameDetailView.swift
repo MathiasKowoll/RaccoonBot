@@ -48,7 +48,7 @@ struct GameDetailView: View {
                             .scaledToFit()
                     }
                     GameHeader(game: $game, showDetailView: $libraryPageGlobals.showDetailView)
-                        .padding()
+                        .padding(30)
                         .padding(.top, 40)
                         .background(
                             LinearGradient(
@@ -64,71 +64,80 @@ struct GameDetailView: View {
                         .padding(.bottom, game!.movies != nil ? 20 : 0)
                 }
                 VStack (alignment: .leading) {
-                    if (game!.genres != nil && game!.genres!.count > 0){
-                        Text("Genre:")
-                        HFlow(alignment: .center) {
-                            ForEach(game!.genres!, id: \.id) { genre in
-                                Tag(genre.description)
-                                    .padding(.vertical, 0.5)
+                    HStack (alignment: .top){
+                        VStack {
+                            Text(game!.detailedDescription)
+                        }.padding(.bottom).padding(.trailing, 20)
+                        Spacer()
+                        VStack(alignment: .leading) {
+                            if (game!.genres != nil && game!.genres!.count > 0){
+                                Text("Genre:")
+                                HFlow(alignment: .center) {
+                                    ForEach(game!.genres!, id: \.id) { genre in
+                                        Tag(genre.description)
+                                            .padding(.vertical, 0.5)
+                                    }
+                                }
+                                .padding(.bottom)
                             }
-                        }
-                        .padding(.bottom)
+                            
+                            if (game!.categories.count > 0){
+                                Text("Category:")
+                                HFlow(alignment: .center) {
+                                    ForEach(game!.categories, id: \.id) { category in
+                                        Tag(category.description)
+                                            .padding(.vertical, 0.5)
+                                    }
+                                }
+                                .padding(.bottom)
+                            }
+                        }.frame(width: 200)
                     }
                     
-                    if (game!.categories.count > 0){
-                        Text("Category:")
-                        HFlow(alignment: .center) {
-                            ForEach(game!.categories, id: \.id) { category in
-                                Tag(category.description)
-                                    .padding(.vertical, 0.5)
-                            }
+                    VStack (alignment: .leading) {
+                        if(game!.screenshots != nil && game!.screenshots!.count > 0) {
+                            Text("Screenshots:").font(.title2)
+                            LazyVGrid(columns: [
+                                GridItem(.flexible(maximum: .infinity)),
+                                GridItem(.flexible(maximum: .infinity)),
+                                GridItem(.flexible(maximum: .infinity))
+                            ]) {
+                                ForEach(game!.screenshots!, id: \.id) { screenshot in
+                                    KFImage(URL(string: screenshot.pathThumbnail))
+                                        .placeholder {
+                                            ProgressView()
+                                        }
+                                        .resizable()
+                                        .scaledToFit()
+                                    //                                    .frame(width: 180, height: 100)
+                                }
+                            }.padding(.top)
                         }
-                        .padding(.bottom)
-                    }
-                    Text(game!.detailedDescription)
-                        .padding(.bottom)
-                    
-                    if(game!.screenshots != nil && game!.screenshots!.count > 0) {
-                        Text("Screenshots:").font(.title2)
-                        LazyVGrid(columns: [
-                            GridItem(.flexible(maximum: .infinity)),
-                            GridItem(.flexible(maximum: .infinity)),
-                            GridItem(.flexible(maximum: .infinity))
-                        ]) {
-                            ForEach(game!.screenshots!, id: \.id) { screenshot in
-                                KFImage(URL(string: screenshot.pathThumbnail))
-                                    .placeholder {
-                                        ProgressView()
-                                    }
-                                    .resizable()
-                                    .scaledToFit()
-//                                    .frame(width: 180, height: 100)
+                        
+                        if (game!.movies != nil) {
+                            Text("Videos:").font(.title2)
+                            LazyVGrid(columns: [
+                                GridItem(.flexible(maximum: .infinity)),
+                                GridItem(.flexible(maximum: .infinity)),
+                                GridItem(.flexible(maximum: .infinity))
+                            ]) {
+                                ForEach(game!.movies!, id: \.id) { movie in
+                                    KFImage(URL(string: movie.thumbnail))
+                                        .placeholder {
+                                            ProgressView()
+                                        }
+                                        .resizable()
+                                        .scaledToFit()
+                                    //                                    .frame(width: 180, height: 100)
+                                }
                             }
-                        }.padding(.bottom)
-                    }
-                    if (game!.movies != nil) {
-                        Text("Videos:").font(.title2)
-                        LazyVGrid(columns: [
-                            GridItem(.flexible(maximum: .infinity)),
-                            GridItem(.flexible(maximum: .infinity)),
-                            GridItem(.flexible(maximum: .infinity))
-                        ]) {
-                            ForEach(game!.movies!, id: \.id) { movie in
-                                KFImage(URL(string: movie.thumbnail))
-                                    .placeholder {
-                                        ProgressView()
-                                    }
-                                    .resizable()
-                                    .scaledToFit()
-//                                    .frame(width: 180, height: 100)
-                            }
+                            .padding(.top)
                         }
-                        .padding(.bottom)
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, game!.movies == nil ? 20: -15)
-                .padding(.bottom, 20)
+                .padding(.horizontal, 30)
+                .padding(.top, game!.movies == nil ? 30: -5)
+                .padding(.bottom, 30)
             }
             .background(.accent.mix(with: .black, by: 0.6).opacity(0.9))
             .frame(width: windowWidth - 100)

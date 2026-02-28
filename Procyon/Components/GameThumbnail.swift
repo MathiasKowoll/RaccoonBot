@@ -61,7 +61,7 @@ struct GameThumbnail: View {
                             Button {
                                 libraryPageGlobals.selectedGame = item
                                 libraryPageGlobals.setLoader(state: true)
-
+                                
                                 Task {
                                     do {
                                         let gameOptKey = namespacedKey("GameOptions", String(item.steamAppID))
@@ -88,12 +88,18 @@ struct GameThumbnail: View {
                             }
                             .background(.procyonSecondary)
                             .cornerRadius(20)
+                        } else if(item.isInstalled) {
+                            ProgressView(value: item.downloadProgress, total: 100,
+                                         label: { Text("Downloading...").font(.footnote)
+                            }).frame(height: 30)
                         } else {
-                            if(item.isInstalled) {
-                                ProgressView(value: item.downloadProgress, total: 100,
-                                     label: { Text("Downloading...").font(.footnote)
-                                }).frame(height: 30)
+                            Button {
+                                // TO DO: Install script
                             }
+                            label: {
+                                Label("Install", systemImage: "square.and.arrow.down").foregroundStyle(.black)
+                            }
+                            .cornerRadius(20)
                         }
                     }
                     .padding(.bottom, 8)

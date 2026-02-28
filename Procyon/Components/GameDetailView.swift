@@ -81,81 +81,56 @@ struct GameDetailView: View {
                                 Text(game!.contentDescriptors!.notes!).padding(.bottom)
                             }
                             Text(game!.detailedDescription).padding(.bottom)
-                            let languages: [String] = (game!.supportedLanguages ?? "")
-                                .split(separator: ",")
-                                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                                .filter { !$0.isEmpty }
-
-                            if !languages.isEmpty {
-                                Text("Supported languages:")
-                                HFlow(alignment: .center) {
-                                    ForEach(Array(languages.enumerated()), id: \.offset) { pair in
-                                        Tag(pair.element)
-                                            .padding(.vertical, 0.5)
-                                    }
+                            // TO DO: add the following data
+                            //                            "ratings": {
+                            //                                "dejus": {
+                            //                                    "rating": "14",
+                            //                                    "descriptors": "Violência",
+                            //                                    "use_age_gate": "true",
+                            //                                    "required_age": "14"
+                            //                                },
+                            //                                "steam_germany": {
+                            //                                    "rating_generated": "1",
+                            //                                    "rating": "18",
+                            //                                    "required_age": "18",
+                            //                                    "banned": "0",
+                            //                                    "use_age_gate": "0",
+                            //                                    "descriptors": "Gewalt"
+                            //                                }
+                            //                            }
+                            //                            "dlc": [
+                            //                                1366500,
+                            //                                1612680,
+                            //                                1612700,
+                            //                                1612710,
+                            //                                1612720,
+                            //                                1621630,
+                            //                                1621631,
+                            //                                1621650,
+                            //                                1621651,
+                            //                                1621660,
+                            //                                1621661,
+                            //                                1621670
+                            //                            ],
+                            
+                            
+                            if(game!.pcRequirements != nil){
+                                VStack(alignment: .leading) {
+                                    Text("PC Requirements:").font(.title3).padding(.bottom, 5)
+                                    RequirementsWidget(requirements: game!.pcRequirements)
                                 }.padding(.bottom)
                             }
-                            
-// TO DO: add the following data
-//                            "ratings": {
-//                                "dejus": {
-//                                    "rating": "14",
-//                                    "descriptors": "Violência",
-//                                    "use_age_gate": "true",
-//                                    "required_age": "14"
-//                                },
-//                                "steam_germany": {
-//                                    "rating_generated": "1",
-//                                    "rating": "18",
-//                                    "required_age": "18",
-//                                    "banned": "0",
-//                                    "use_age_gate": "0",
-//                                    "descriptors": "Gewalt"
-//                                }
-//                            }
-//                            "dlc": [
-//                                1366500,
-//                                1612680,
-//                                1612700,
-//                                1612710,
-//                                1612720,
-//                                1621630,
-//                                1621631,
-//                                1621650,
-//                                1621651,
-//                                1621660,
-//                                1621661,
-//                                1621670
-//                            ],
-
-                            HStack() {
-                                if(game!.pcRequirements != nil){
-                                    VStack (alignment: .leading) {
-                                        Text("PC Requirements:").font(.title3).padding(.bottom, 5)
-                                        Text("Minimum: \n \(game!.pcRequirements!.minimum ?? "")").padding(.bottom)
-                                        if(game!.pcRequirements!.recommended != nil){
-                                            Text("Recommended: \n \(game!.pcRequirements!.recommended!)").padding(.bottom)
-                                        }
-                                    }
-                                }
-                                if(game!.macRequirements != nil){
-                                    VStack (alignment: .leading) {
-                                        Text("Mac Requirements:").font(.title3).padding(.bottom, 5)
-                                        Text("Minimum: \n \(game!.macRequirements!.minimum ?? "")").padding(.bottom)
-                                        if(game!.macRequirements!.recommended != nil){
-                                            Text("Recommended: \n \(game!.macRequirements!.recommended!)").padding(.bottom)
-                                        }
-                                    }
-                                }
-                                if(game!.linuxRequirements != nil){
-                                    VStack (alignment: .leading) {
-                                        Text("Linux Requirements:").font(.title3).padding(.bottom, 5)
-                                        Text("Minimum: \n \(game!.linuxRequirements!.minimum ?? "")").padding(.bottom)
-                                        if(game!.linuxRequirements!.recommended != nil){
-                                            Text("Recommended: \n \(game!.linuxRequirements!.recommended!)").padding(.bottom)
-                                        }
-                                    }
-                                }
+                            if(game!.macRequirements != nil){
+                                VStack(alignment: .leading) {
+                                    Text("Mac Requirements:").font(.title3).padding(.bottom, 5)
+                                    RequirementsWidget(requirements:game!.macRequirements)
+                                }.padding(.bottom)
+                            }
+                            if(game!.linuxRequirements != nil){
+                                VStack(alignment: .leading) {
+                                    Text("Linux Requirements:").font(.title3).padding(.bottom, 5)
+                                    RequirementsWidget(requirements:game!.linuxRequirements)
+                                }.padding(.bottom)
                             }
                         }.padding(.bottom).padding(.trailing, 20)
                         Spacer()
@@ -180,6 +155,21 @@ struct GameDetailView: View {
                                     }
                                 }
                                 .padding(.bottom)
+                            }
+                            
+                            let languages: [String] = (game!.supportedLanguages ?? "")
+                                .split(separator: ",")
+                                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                                .filter { !$0.isEmpty }
+
+                            if !languages.isEmpty {
+                                Text("Supported languages:")
+                                HFlow(alignment: .center) {
+                                    ForEach(Array(languages.enumerated()), id: \.offset) { pair in
+                                        AccentTag(pair.element)
+                                            .padding(.vertical, 0.5)
+                                    }
+                                }.padding(.bottom)
                             }
                         }.frame(width: 200)
                     }

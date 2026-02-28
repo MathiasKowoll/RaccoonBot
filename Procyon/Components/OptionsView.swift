@@ -101,17 +101,7 @@ struct OptionsView: View {
                         Label("Delete cache", systemImage: "trash")
                     }
                     .cornerRadius(20)
-                    Spacer()
-                    Button(action: {
-                        api.deleteOwnedGamesIDsCache()
-                        Task {
-                            await load()
-                        }
-                        libraryPageGlobals.showOptions = false
-                    }) {
-                        Label("Delete Owned games cache", systemImage: "trash")
-                    }
-                    .cornerRadius(20)
+//                    Spacer()
                 }
                 
                 if(debugEnabled == true) {
@@ -136,7 +126,6 @@ struct OptionsView: View {
             .frame(width: 300)
             .padding()
         }
-        .background(.accent.mix(with: .black, by: 0.6))
         .onAppear() {
             if let path = readUsrDefOptionString(key: "cxCompleteAppPath") {
                 console.log("loading paths for bottles")

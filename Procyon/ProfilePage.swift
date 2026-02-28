@@ -27,6 +27,14 @@ struct ProfilePage: View {
                     Image(.procyon).resizable()
                         .scaledToFit()
                         .frame(height: 50)
+                        .padding(.bottom)
+                    Button(action: {
+                        api.deleteOwnedGamesIDsCache()
+                        showOptions = false
+                    }) {
+                        Label("Delete Owned games cache", systemImage: "trash")
+                    }
+                    .cornerRadius(20)
                 }
                 .frame(width: 300, height: 300)
                 .padding()

@@ -90,7 +90,7 @@ struct LibraryPage: View {
                     }
                     .padding(.horizontal, 10)
                     .frame(width: 220, height: 60)
-                    .background(.accent.mix(with: .black, by: 0.6).opacity(0.8))
+                    .background(.accent.mix(with: .black, by: 0.6).opacity(0.9))
                     .cornerRadius(20)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
@@ -125,7 +125,6 @@ struct LibraryPage: View {
         isLoading = true
         defer {
             Task {
-                try await Task.sleep(nanoseconds: 1_000_000_000)
                 isLoading = false
             }
         }

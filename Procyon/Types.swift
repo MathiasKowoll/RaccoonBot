@@ -345,3 +345,14 @@ class LibraryPageGlobals: ObservableObject {
         isLaunchingGame = state
     }
 }
+
+final class AppGlobals: ObservableObject {
+    @Published var selectedBottle: String = ""
+    @Published var userID: String? = nil
+    @Published var cxAppPath: String?
+    
+    init(selectedBottle: String? = "", cxAppPath: String? = nil) {
+        self.selectedBottle = readUsrDefOptionString(key: "selectedBottle") ?? ""
+        self.cxAppPath = readUsrDefOptionString(key: "cxAppPath")
+    }
+}

@@ -39,11 +39,11 @@ struct GamesList: View {
             ToolbarItemGroup(placement: .secondaryAction) {
                 HStack{
                     Button("Library") {
-                        router.go(to: .library)
+                        router.go(to: .libraryPage)
                     }.controlSize(.small)
                     Divider()
                     Button("Profile") {
-                        router.go(to: .profile)
+                        router.go(to: .profilePage)
                     }.controlSize(.small)
                 }.padding(.horizontal)
             }

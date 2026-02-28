@@ -9,12 +9,12 @@ import SwiftUI
 import Combine
 
 enum AppRoute {
-    case library
-    case profile
+    case libraryPage
+    case profilePage
 }
 
 final class Router: ObservableObject {
-    @Published var route: AppRoute = .library
+    @Published var route: AppRoute = .libraryPage
 
     // Convenience helpers if you like
     func go(to newRoute: AppRoute) {
@@ -22,6 +22,7 @@ final class Router: ObservableObject {
     }
 }
 
+<<<<<<< Updated upstream
 final class AppGlobals: ObservableObject {
     @Published var selectedBottle: String = ""
     @Published var userID: String? = nil
@@ -33,6 +34,8 @@ final class AppGlobals: ObservableObject {
     }
 }
 
+=======
+>>>>>>> Stashed changes
 struct ContentView: View {
     @StateObject var router = Router()
     @StateObject var appGlobals = AppGlobals(
@@ -43,8 +46,9 @@ struct ContentView: View {
     var body: some View {
         Group {
             switch(router.route){
-            case .library:
+            case .libraryPage:
                 LibraryPage()
+<<<<<<< Updated upstream
             case .profile:
                 VStack() {
                     Text("Profile Page")
@@ -54,6 +58,10 @@ struct ContentView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+=======
+            case .profilePage:
+                ProfilePage()
+>>>>>>> Stashed changes
             }
         }
         .animation(.easeInOut, value: router.route)

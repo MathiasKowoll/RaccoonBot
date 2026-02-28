@@ -22,20 +22,7 @@ final class Router: ObservableObject {
     }
 }
 
-<<<<<<< Updated upstream
-final class AppGlobals: ObservableObject {
-    @Published var selectedBottle: String = ""
-    @Published var userID: String? = nil
-    @Published var cxAppPath: String?
-    
-    init(selectedBottle: String? = "", cxAppPath: String? = nil) {
-        self.selectedBottle = readUsrDefOptionString(key: "selectedBottle") ?? ""
-        self.cxAppPath = readUsrDefOptionString(key: "cxAppPath")
-    }
-}
 
-=======
->>>>>>> Stashed changes
 struct ContentView: View {
     @StateObject var router = Router()
     @StateObject var appGlobals = AppGlobals(
@@ -48,20 +35,8 @@ struct ContentView: View {
             switch(router.route){
             case .libraryPage:
                 LibraryPage()
-<<<<<<< Updated upstream
-            case .profile:
-                VStack() {
-                    Text("Profile Page")
-                    Text("User ID: \(appGlobals.userID ?? "...")").padding(.vertical)
-                    Button("Go to Library") {
-                        router.go(to: .library)
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-=======
             case .profilePage:
                 ProfilePage()
->>>>>>> Stashed changes
             }
         }
         .animation(.easeInOut, value: router.route)

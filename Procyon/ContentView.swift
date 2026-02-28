@@ -22,7 +22,6 @@ final class Router: ObservableObject {
     }
 }
 
-
 struct ContentView: View {
     @StateObject var router = Router()
     @StateObject var appGlobals = AppGlobals(

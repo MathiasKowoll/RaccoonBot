@@ -68,7 +68,7 @@ final class SteamAPI {
         } catch {
             console.error("Cache is empty, coulnd't read the file")
         }
-        do {
+        do { // TO DO: Edge case - Track changes in the User ID and invalidate cache
             let data = try Data(contentsOf: cacheOwnedGamesIDsURL)
             let decoded = try JSONDecoder().decode([String].self, from: data)
             self.cacheOwnedGamesIDs = decoded

@@ -11,6 +11,7 @@ import CoreData
 let windowWidth: CGFloat = 1024
 let windowHeight: CGFloat = 750
 let appWindowResizable: Bool = false
+var api = SteamAPI()
 
 @main
 struct ProcyonApp: App {

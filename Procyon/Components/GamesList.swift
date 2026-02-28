@@ -16,6 +16,7 @@ let columns = [
 struct GamesList: View {
     @EnvironmentObject var router: Router
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
+    var load: () async -> Void
     
     var body: some View {
         ScrollView {
@@ -28,7 +29,7 @@ struct GamesList: View {
             .padding(.bottom)
         }
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItemGroup(placement: .primaryAction) {
                 Button {
                     libraryPageGlobals.showOptions = true
                 } label: {
@@ -45,6 +46,14 @@ struct GamesList: View {
                         router.go(to: .profile)
                     }.controlSize(.small)
                 }.padding(.horizontal)
+            }
+            ToolbarItemGroup(placement: .secondaryAction) {
+                Button {
+                    api.deleteOwnedGamesIDsCache()
+                    Task { await load() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
             }
             ToolbarItemGroup(placement: .principal) {
                 HStack {

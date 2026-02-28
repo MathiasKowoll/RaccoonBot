@@ -24,6 +24,7 @@ final class Router: ObservableObject {
 
 final class AppGlobals: ObservableObject {
     @Published var selectedBottle: String = ""
+    @Published var userID: String? = nil
     @Published var cxAppPath: String?
     
     init(selectedBottle: String? = "", cxAppPath: String? = nil) {
@@ -47,6 +48,7 @@ struct ContentView: View {
             case .profile:
                 VStack() {
                     Text("Profile Page")
+                    Text("User ID: \(appGlobals.userID ?? "...")").padding(.vertical)
                     Button("Go to Library") {
                         router.go(to: .library)
                     }
@@ -70,6 +72,11 @@ struct ContentView: View {
                 ).ignoresSafeArea()
             }
         )
+        .onAppear() {
+            if(appGlobals.selectedBottle != ""){
+                appGlobals.userID = getSteamUserID(usingBottlePath: URL(string: appGlobals.selectedBottle)!)
+            }
+        }
     }
 }
 

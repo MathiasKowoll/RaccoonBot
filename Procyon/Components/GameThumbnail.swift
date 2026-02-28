@@ -12,7 +12,9 @@ struct GameThumbnail: View {
     let item: Game
     @EnvironmentObject var appGlobals: AppGlobals
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
-    
+    var isDownloading: Bool {
+        item.downloadProgress < 100
+    }
     var body: some View {
         
         Button(action: {
@@ -46,14 +48,16 @@ struct GameThumbnail: View {
                         if (item.genres != nil && item.genres!.count > 0){
                             AccentTag(item.genres!.first!.description)
                         }
-                        if (item.isNative == true) {
-                            Tag("Mac")
-                        } else {
-                            Tag("Pc")
+                        if (item.isInstalled) {
+                            if (item.isNative == true) {
+                                AccentTag("Mac")
+                            } else {
+                                AccentTag("Pc")
+                            }
                         }
                         Spacer()
                         
-                        if(item.downloadProgress == 100) {
+                        if(!isDownloading && item.isInstalled) {
                             Button {
                                 libraryPageGlobals.selectedGame = item
                                 libraryPageGlobals.setLoader(state: true)
@@ -85,20 +89,22 @@ struct GameThumbnail: View {
                             .background(.procyonSecondary)
                             .cornerRadius(20)
                         } else {
-                            ProgressView(value: item.downloadProgress, total: 100,
-                                 label: { Text("Downloading...").font(.footnote)
-                            }).frame(height: 30)
+                            if(item.isInstalled) {
+                                ProgressView(value: item.downloadProgress, total: 100,
+                                     label: { Text("Downloading...").font(.footnote)
+                                }).frame(height: 30)
+                            }
                         }
                     }
                     .padding(.bottom, 8)
                 }.foregroundStyle(.white)
                     .padding(.horizontal)
                 }
-            .background(.black.opacity(0.5))
+            .background(.accent.mix(with: .black, by: 0.6).opacity(0.8))
             .cornerRadius(30)
         }
         .buttonStyle(.plain)
-        .opacity(item.downloadProgress == 100 ? 1 : 0.25)
+        .opacity( isDownloading || !item.isInstalled ? 0.5 : 1)
     }
 }
 

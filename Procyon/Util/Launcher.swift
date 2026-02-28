@@ -106,6 +106,8 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, op
 }
 
 func launchNativeGame(id: String, cxAppPath: String, selectedBottle: String, options: GameOptions? = nil) async throws {
+    let bottleName = URL(string: selectedBottle)?.lastPathComponent ?? ""
+    try await closeWineActivities(cxAppPath: cxAppPath, bottleName: bottleName)
     let arguments = options != nil ? " " + options!.gameArguments : ""
     let command = "\(getInlineEnvs(from: options!)) /Applications/Steam.app/Contents/MacOS/steam_osx -nochatui -nofriendsui -silent -applaunch \(String(id))" + arguments
     console.warn(command)

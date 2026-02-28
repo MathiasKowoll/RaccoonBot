@@ -21,6 +21,14 @@ struct SteamGameResponse: Codable, Sendable {
     let data: [SteamGame]
 }
 
+struct SteamOwnedGamesResponse: Codable, Sendable {
+    let response: SteamOwnedGames
+}
+
+struct SteamOwnedGamesResponseData: Codable, Sendable {
+    let data: SteamOwnedGamesResponse
+}
+
 struct SteamGameResponseArray: Codable, Sendable {
     let data: [SteamGame]
 }
@@ -31,10 +39,10 @@ enum APIError: Error {
 }
 
 final class SteamAPI {
-    var hasCache: Bool = false
     var progress: Double = 0
     private var cacheBlacklist: [String] = blacklist
     private var cache: [String: SteamGame] = [:]
+    private var cacheOwnedGamesIDs: [String] = []
     private var cacheIDS: [String] {
         if cache.count < 1 {
             return []
@@ -43,32 +51,57 @@ final class SteamAPI {
     }
     private var cacheURL: URL {
         let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-        return dir.appendingPathComponent("SteamCache.plist")
+        return dir.appendingPathComponent("ProcyonSteamCache.plist")
+    }
+    private var cacheOwnedGamesIDsURL: URL {
+        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        return dir.appendingPathComponent("ProcyonSteamOwnedGamesIDsCache.plist")
     }
 
     private func loadCache() {
+        console.log("Loading caches...")
         do {
             let data = try Data(contentsOf: cacheURL)
             let decoded = try JSONDecoder().decode([String: SteamGame].self, from: data)
             self.cache = decoded
-            self.hasCache = true
             console.warn("Cache loaded")
         } catch {
-            self.hasCache = false
-            console.error("Cache is empty")
+            console.error("Cache is empty, coulnd't read the file")
+        }
+        do { // TO DO: Edge case - Track changes in the User ID and invalidate cache
+            let data = try Data(contentsOf: cacheOwnedGamesIDsURL)
+            let decoded = try JSONDecoder().decode([String].self, from: data)
+            self.cacheOwnedGamesIDs = decoded
+            console.warn("ID Cache loaded")
+        } catch {
+            console.error("ID Cache is empty, coulnd't read the file")
         }
     }
     
     init() {
-        loadCache()
+        self.loadCache()
+        if(self.cache.isEmpty){
+            console.warn("Cache is empty")
+        }
+        if(self.cacheOwnedGamesIDs.isEmpty){
+            console.warn("ID Cache is empty")
+        }
     }
     
     private func saveCache() {
         do {
             let encoded = try JSONEncoder().encode(self.cache)
             try encoded.write(to: self.cacheURL, options: [.atomic])
-            self.hasCache = true
             console.warn("Cache saved")
+        } catch {
+            console.error(error.localizedDescription)
+        }
+    }
+    private func saveOwnedGamesIDsCache() {
+        do {
+            let encoded = try JSONEncoder().encode(self.cacheOwnedGamesIDs)
+            try encoded.write(to: self.cacheOwnedGamesIDsURL, options: [.atomic])
+            console.warn("IDs Cache saved")
         } catch {
             console.error(error.localizedDescription)
         }
@@ -76,14 +109,19 @@ final class SteamAPI {
     func deleteCache() {
         try? FileManager.default.removeItem(at: cacheURL)
         self.cache.removeAll()
-        self.hasCache = true
         console.warn("Cache deleted")
+    }
+    func deleteOwnedGamesIDsCache() {
+        try? FileManager.default.removeItem(at: cacheOwnedGamesIDsURL)
+        self.cache.removeAll()
+        console.warn("IDs Cache deleted")
     }
     func fetchGameInfo(appID: String) async throws -> SteamGame? {
         if self.cacheBlacklist.contains(appID) {
             return nil
         }
-        if let cached = cache[appID] {
+        if let cached = self.cache[appID] {
+            console.cache(appID)
             return cached
         }
         
@@ -116,7 +154,7 @@ final class SteamAPI {
             let downloadProgress: Double = meta.isDownloaded() ? 100 : (bDownloaded / bToDownload) * 100
             do {
                 if let gameInfo = try await self.fetchGameInfo(appID: meta.appid) {
-                    items.append(Game(from: gameInfo, id: meta.id, isNative: meta.isNative, downloadProgress: Double(downloadProgress)))
+                    items.append(Game(from: gameInfo, id: meta.id, isNative: meta.isNative, downloadProgress: Double(downloadProgress), isInstalled: meta.installdir.isEmpty == false))
                 }
             } catch {
                 console.error(error.localizedDescription)
@@ -127,7 +165,6 @@ final class SteamAPI {
                 let percent = (Double(processed) / Double(total)) * 100.0
                 self.progress = percent
                 setProgress(self.progress)
-//                console.warn(self.progress)
             }
         }
         // Ensure progress is 100% at completion when there were items to process
@@ -135,8 +172,29 @@ final class SteamAPI {
             self.progress = 100
             setProgress(self.progress)
         }
-//        console.warn("\(items.map(\.steamAppID))")
+        console.cacheRelease("The following game's data was cached:")
         return items
+    }
+    func fetchOwnedGamesIDs(userID: String) async throws -> [String] {
+        if(self.cacheOwnedGamesIDs.count > 0) {
+            console.log("Using cached user data")
+            return self.cacheOwnedGamesIDs
+        }
+        let urlString = "\(baseAPIURL)/ownedGames/?userid=\(userID)"
+        let headers: HTTPHeaders = ["x-api-key": apiKey]
+
+        do {
+            let data = try await AF.request(urlString, method: .get, headers: headers)
+                .validate(statusCode: 200..<300)
+                .serializingData()
+                .value
+            
+            let root = try JSONDecoder().decode(SteamOwnedGamesResponseData.self, from: data)
+            let ids = root.data.response.games.map { String($0.appID) }
+            self.cacheOwnedGamesIDs = ids
+            self.saveOwnedGamesIDsCache()
+            return ids
+        }
     }
 }
 

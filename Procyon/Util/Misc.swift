@@ -119,6 +119,15 @@ func safeShell(_ command: String) throws -> String {
 let DEFAULT_STEAM_MAC_PATH = "/Library/Application Support/Steam/config/"
 let DEFAULT_STEAM_WINE_PATH = "/drive_c/Program Files (x86)/Steam/config/"
 
+func getSteamUserID (usingBottlePath: URL) -> String? {
+    let steamLoginUsersPath = usingBottlePath.appendingPathComponent(DEFAULT_STEAM_WINE_PATH)
+        .appendingPathComponent("loginusers.vdf")
+    guard let steamSettingsFile = try? String(contentsOfFile: steamLoginUsersPath.path(percentEncoded: false), encoding: .utf8) else { return nil }
+    let parsed = parseVDFToDict(from: steamSettingsFile)
+    let users = parsed["users"] as? [String: Any]
+    return users?.keys.first?.description
+}
+
 func getSteamLibraryFolders(from: URL) -> [URL] {
     let f = FileManager.default
     var steamLibraries: [URL] = []

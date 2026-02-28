@@ -9,12 +9,12 @@ import SwiftUI
 import Combine
 
 enum AppRoute {
-    case library
-    case profile
+    case libraryPage
+    case profilePage
 }
 
 final class Router: ObservableObject {
-    @Published var route: AppRoute = .library
+    @Published var route: AppRoute = .libraryPage
 
     // Convenience helpers if you like
     func go(to newRoute: AppRoute) {
@@ -22,8 +22,10 @@ final class Router: ObservableObject {
     }
 }
 
+<<<<<<< Updated upstream
 final class AppGlobals: ObservableObject {
     @Published var selectedBottle: String = ""
+    @Published var userID: String? = nil
     @Published var cxAppPath: String?
     
     init(selectedBottle: String? = "", cxAppPath: String? = nil) {
@@ -32,6 +34,8 @@ final class AppGlobals: ObservableObject {
     }
 }
 
+=======
+>>>>>>> Stashed changes
 struct ContentView: View {
     @StateObject var router = Router()
     @StateObject var appGlobals = AppGlobals(
@@ -42,16 +46,22 @@ struct ContentView: View {
     var body: some View {
         Group {
             switch(router.route){
-            case .library:
+            case .libraryPage:
                 LibraryPage()
+<<<<<<< Updated upstream
             case .profile:
                 VStack() {
                     Text("Profile Page")
+                    Text("User ID: \(appGlobals.userID ?? "...")").padding(.vertical)
                     Button("Go to Library") {
                         router.go(to: .library)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+=======
+            case .profilePage:
+                ProfilePage()
+>>>>>>> Stashed changes
             }
         }
         .animation(.easeInOut, value: router.route)
@@ -70,6 +80,11 @@ struct ContentView: View {
                 ).ignoresSafeArea()
             }
         )
+        .onAppear() {
+            if(appGlobals.selectedBottle != ""){
+                appGlobals.userID = getSteamUserID(usingBottlePath: URL(string: appGlobals.selectedBottle)!)
+            }
+        }
     }
 }
 

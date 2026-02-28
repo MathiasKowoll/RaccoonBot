@@ -12,7 +12,6 @@ struct OptionsView: View {
     @State var bottles: [URL] = []
     @EnvironmentObject var appGlobals: AppGlobals
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
-    var deleteCache: () -> Void
     var load: () async -> Void
     var body: some View {
         Modal(
@@ -92,18 +91,25 @@ struct OptionsView: View {
                     Text("Create a new bottle first").font(.footnote)
                 }
                 HStack {
-                    Button(action: { deleteCache() }) {
-                        Label("Delete cache", systemImage: "trash")
-                    }
-                    .cornerRadius(20)
-                    Spacer()
                     Button(action: {
+                        api.deleteCache()
                         Task {
                             await load()
                         }
                         libraryPageGlobals.showOptions = false
                     }) {
-                        Label("Reload Libraries", systemImage: "arrow.clockwise")
+                        Label("Delete cache", systemImage: "trash")
+                    }
+                    .cornerRadius(20)
+                    Spacer()
+                    Button(action: {
+                        api.deleteOwnedGamesIDsCache()
+                        Task {
+                            await load()
+                        }
+                        libraryPageGlobals.showOptions = false
+                    }) {
+                        Label("Delete Owned games cache", systemImage: "trash")
                     }
                     .cornerRadius(20)
                 }
@@ -143,7 +149,6 @@ struct OptionsView: View {
 
 #Preview {
     OptionsView(
-        deleteCache: { },
         load: { },
     )
 }

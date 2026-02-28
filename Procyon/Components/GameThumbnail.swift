@@ -100,11 +100,11 @@ struct GameThumbnail: View {
                 }.foregroundStyle(.white)
                     .padding(.horizontal)
                 }
-            .background(.black.opacity(0.5))
+            .background(.accent.mix(with: .black, by: 0.6).opacity(0.8))
             .cornerRadius(30)
         }
         .buttonStyle(.plain)
-        .opacity( isDownloading || !item.isInstalled ? 0.25 : 1)
+        .opacity( isDownloading || !item.isInstalled ? 0.5 : 1)
     }
 }
 

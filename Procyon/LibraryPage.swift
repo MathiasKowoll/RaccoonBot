@@ -17,8 +17,6 @@ struct LibraryPage: View {
     @State private var progress: Double = 0
     @State private var selectedGame: SteamGame? = nil
     @State private var mntObserver: MountObserver?
-
-    private var api = SteamAPI() // doesn't seem to get redeclared each time
     
     var body: some View {
         VStack {
@@ -62,12 +60,12 @@ struct LibraryPage: View {
                 }
                 .frame(maxWidth: .infinity)
             } else {
-                GamesList()
+                GamesList(load: load)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .sheet(isPresented: $libraryPageGlobals.showOptions) {
-            OptionsView(deleteCache: api.deleteCache, load: load)
+            OptionsView(load: load)
         }
         .sheet(isPresented: $libraryPageGlobals.showDetailView) {
             Modal(showModal: $libraryPageGlobals.showDetailView, collapse: true, content:  {
@@ -92,7 +90,7 @@ struct LibraryPage: View {
                     }
                     .padding(.horizontal, 10)
                     .frame(width: 220, height: 60)
-                    .background(.accent.mix(with: .black, by: 0.6))
+                    .background(.accent.mix(with: .black, by: 0.6).opacity(0.8))
                     .cornerRadius(20)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)

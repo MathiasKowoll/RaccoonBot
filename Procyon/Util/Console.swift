@@ -12,36 +12,58 @@ let logger = Logger(subsystem: "CXPatcher", category: "util")
 
 class Console {
     var logMessages: [String] = []
+    var items: [String] = []
     var enableLogFile: Bool = debugEnabled == true
     let f = FileManager.default
     
-    func log(_ msg: String) {
+    func cache(_ item: String) {
+        self.items.append(item)
+    }
+    
+    func cacheRelease(_ msg: String, function: StaticString = #function) {
+        let message: String = "[\(function)] \(msg) \(self.items.joined(separator: ","))"
+        
         #if DEBUG
-        print(msg)
+        print(message)
         #endif
         if enableLogFile == true {
-            logMessages.append(msg)
+            logMessages.append(message)
+        }
+        self.items.removeAll()
+    }
+    
+    func log(_ msg: String, function: StaticString = #function) {
+        let message: String = "[\(function)] \(msg)"
+        
+        #if DEBUG
+        print(message)
+        #endif
+        if enableLogFile == true {
+            logMessages.append(message)
         }
     }
-    func warn(_ msg: String) {
+    func warn(_ msg: String, function: StaticString = #function) {
+        let message: String = "[\(function)] \(msg)"
+        
         #if DEBUG
-        print(msg)
+        print(message)
         #endif
         if (useLogger) {
-            logger.notice("\(msg)")
+            logger.notice("\(message)")
         }
         if enableLogFile == true {
-            logMessages.append(msg)
+            logMessages.append(message)
         }
     }
-    func error(_ msg: String) {
-        let errorMsg: String = "ERROR: \(msg)"
+    func error(_ msg: String, function: StaticString = #function) {
+        let message: String = "[\(function)] \(msg)"
+        
+        let errorMsg: String = "ERROR: \(message)"
         if (useLogger) {
             logger.error("\(errorMsg)")
         }
-        console.warn(errorMsg)
         if enableLogFile == true {
-            logMessages.append(msg)
+            logMessages.append(message)
         }
     }
     func clear() {

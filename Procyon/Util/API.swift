@@ -47,6 +47,7 @@ final class SteamAPI {
         "43160",
         "1530910"
     ]
+    private var cacheProfileData: UserInfo? = nil
     private var cache: [String: SteamGame] = [:]
     private var cacheOwnedGamesIDs: [String] = []
     private var cacheBlacklistURL: URL {
@@ -66,6 +67,10 @@ final class SteamAPI {
     private var cacheOwnedGamesIDsURL: URL {
         let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
         return dir.appendingPathComponent("ProcyonSteamOwnedGamesIDsCache.plist")
+    }
+    private var profileDataCacheURL: URL {
+        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        return dir.appendingPathComponent("ProcyonSteamProfileDataCache.plist")
     }
 
     private func loadCache() {
@@ -136,6 +141,31 @@ final class SteamAPI {
         try? FileManager.default.removeItem(at: cacheBlacklistURL)
         self.cacheBlacklist.removeAll()
         console.warn("Blacklist Cache deleted")
+    }
+    func loadProfileDataCache() {
+        do {
+            let data = try Data(contentsOf: profileDataCacheURL)
+            let decoded = try JSONDecoder().decode(UserInfo.self, from: data)
+            self.cacheProfileData = decoded
+            console.warn("Profile Data Cache loaded")
+        } catch {
+            console.error("Profile Data Cache is empty, couldn't read the file")
+        }
+    }
+    func saveProfileDataCache() {
+        do {
+            let encoded = try JSONEncoder().encode(self.cacheProfileData)
+            try encoded.write(to: self.profileDataCacheURL, options: [.atomic])
+            console.warn("Profile Data Cache saved")
+        } catch {
+            console.error(error.localizedDescription)
+        }
+    }
+    func deleteProfileDataCache() {
+        try? FileManager.default.removeItem(at: profileDataCacheURL)
+        // Reset to a minimal empty instance; if you prefer optional, make cacheProfileData optional instead.
+        // Here we keep the type consistent by not mutating cacheProfileData.
+        console.warn("Profile Data Cache deleted")
     }
     private func saveCache() {
         do {
@@ -245,6 +275,27 @@ final class SteamAPI {
             self.cacheOwnedGamesIDs = ids
             self.saveOwnedGamesIDsCache()
             return ids.filter { !self.cacheBlacklist.contains($0) }
+        }
+    }
+    func fetchProfileDetails(userID: String) async throws -> UserInfo {
+        if(self.cacheProfileData != nil) {
+            console.log("Using cached user data")
+            return self.cacheProfileData!
+        }
+        let urlString = "\(baseAPIURL)/raw/?userid=\(userID)"
+        let headers: HTTPHeaders = ["x-api-key": apiKey]
+
+        do {
+            let data = try await AF.request(urlString, method: .get, headers: headers)
+                .validate(statusCode: 200..<300)
+                .serializingData()
+                .value
+            
+            let root = try JSONDecoder().decode(UserInfoResponse.self, from: data)
+            let profileData = root.data
+            self.cacheProfileData = profileData[0]
+            self.saveProfileDataCache()
+            return profileData[0]
         }
     }
 }

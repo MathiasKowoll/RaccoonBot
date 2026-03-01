@@ -306,3 +306,45 @@ class SteamACFMeta {
     var UserConfig: [String: String]?
     var MountedConfig: [String: String]?
 }
+
+struct UserInfo: Codable {
+    let steamID: String
+    let communityVisibilityState: Int
+    let profileState: Int
+    let personaName: String
+    let profileURL: String
+    let avatar: String
+    let avatarMedium: String
+    let avatarFull: String
+    let avatarHash: String
+    let lastLogOff: Int
+    let personaState: Int
+    let primaryClanID: String
+    let timeCreated: Int
+    let personaStateFlags: Int
+    let locCountryCode: String?
+    let locStateCode: String?
+
+    enum CodingKeys: String, CodingKey {
+        case steamID = "steamid"
+        case communityVisibilityState = "communityvisibilitystate"
+        case profileState = "profilestate"
+        case personaName = "personaname"
+        case profileURL = "profileurl"
+        case avatar
+        case avatarMedium = "avatarmedium"
+        case avatarFull = "avatarfull"
+        case avatarHash = "avatarhash"
+        case lastLogOff = "lastlogoff"
+        case personaState = "personastate"
+        case primaryClanID = "primaryclanid"
+        case timeCreated = "timecreated"
+        case personaStateFlags = "personastateflags"
+        case locCountryCode = "loccountrycode"
+        case locStateCode = "locstatecode"
+    }
+}
+
+struct UserInfoResponse: Codable {
+    let data: [UserInfo]
+}

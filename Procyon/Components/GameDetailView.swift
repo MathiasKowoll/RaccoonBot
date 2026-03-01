@@ -93,7 +93,7 @@ struct GameDetailView: View {
                         }.padding(.bottom).padding(.trailing, 20)
                         Spacer()
                         VStack(alignment: .leading) {
-                            Text("Release date: \(game!.releaseDate.date)")
+                            Text("Release date: \(game!.releaseDate.date)").padding(.bottom)
                             
                             HStack{
                                 if (game!.isFree == true){

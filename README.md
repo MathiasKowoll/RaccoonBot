@@ -1,4 +1,4 @@
-<img width="80" height="80" alt="Logo-iOS-Default-1024x1024@1x" src="https://github.com/user-attachments/assets/dcb1e587-09a1-420e-9f2c-b3eb7774df2d" />
+<img width="80" height="80" alt="Logo-iOS-Default-1024x1024@1x" src="https://github.com/user-attachments/assets/0efef770-6c63-4f4c-93de-881f6cd68443" />
 
 # Procyon
 

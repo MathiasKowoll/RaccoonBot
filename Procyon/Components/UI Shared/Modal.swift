@@ -23,7 +23,7 @@ struct Modal<Content: View>: View {
             content
         }
         .overlay(alignment: .topTrailing) {
-            CloseModalButton(show: $showModal)
+            CloseModalButton(show: $showModal).padding(collapse == true ? 5 : 0)
         }.padding(.horizontal, collapse == true ? 0 : 5)
     }
 }

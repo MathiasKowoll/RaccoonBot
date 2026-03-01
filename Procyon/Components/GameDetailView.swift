@@ -66,74 +66,12 @@ struct GameDetailView: View {
                 VStack (alignment: .leading) {
                     HStack (alignment: .top){
                         VStack(alignment: .leading) {
-                            if(game!.legalNotice != nil){
-                                Text(game!.legalNotice!).font(.footnote).padding(.bottom)
-                            }
-                            HStack{
-                                if (game!.isFree == true){
-                                    AccentTag("Free to Play").padding(.bottom)
-                                }
-                                if (game!.requiredAge != "0"){
-                                    AccentTag("Age: \(game!.requiredAge)+").padding(.bottom)
-                                }
-                            }
+                            Text(game!.detailedDescription).padding(.bottom)
+                            
                             if(game!.contentDescriptors?.notes != nil){
                                 Text(game!.contentDescriptors!.notes!).padding(.bottom)
                             }
-                            Text(game!.detailedDescription).padding(.bottom)
-                            // TO DO: add the following data
-                            //                            "ratings": {
-                            //                                "dejus": {
-                            //                                    "rating": "14",
-                            //                                    "descriptors": "Violência",
-                            //                                    "use_age_gate": "true",
-                            //                                    "required_age": "14"
-                            //                                },
-                            //                                "steam_germany": {
-                            //                                    "rating_generated": "1",
-                            //                                    "rating": "18",
-                            //                                    "required_age": "18",
-                            //                                    "banned": "0",
-                            //                                    "use_age_gate": "0",
-                            //                                    "descriptors": "Gewalt"
-                            //                                }
-                            //                            }
-                            //                            "dlc": [
-                            //                                1366500,
-                            //                                1612680,
-                            //                                1612700,
-                            //                                1612710,
-                            //                                1612720,
-                            //                                1621630,
-                            //                                1621631,
-                            //                                1621650,
-                            //                                1621651,
-                            //                                1621660,
-                            //                                1621661,
-                            //                                1621670
-                            //                            ],
                             
-//                            "price_overview": {
-//                                "currency": "USD",
-//                                "initial": 1999,
-//                                "final": 399,
-//                                "discount_percent": 80,
-//                                "initial_formatted": "$19.99",
-//                                "final_formatted": "$3.99"
-//                            },
-                            
-//                            "recommendations": {
-//                                "total": 439
-//                            },
-                            
-//                            "release_date": {
-//                                "coming_soon": false,
-//                                "date": "Dec 5, 2019"
-//                            },
-//                            "support_info": {
-//                                "url": "www.rawfury.com",
-//                                "email": "support@rawfury.com"
-//                            },
                             if(game!.pcRequirements != nil){
                                 VStack(alignment: .leading) {
                                     Text("PC Requirements:").font(.title3).padding(.bottom, 5)
@@ -155,6 +93,17 @@ struct GameDetailView: View {
                         }.padding(.bottom).padding(.trailing, 20)
                         Spacer()
                         VStack(alignment: .leading) {
+                            Text("Release date: \(game!.releaseDate.date)")
+                            
+                            HStack{
+                                if (game!.isFree == true){
+                                    AccentTag("Free to Play").padding(.bottom)
+                                }
+                                if (game!.requiredAge != "0"){
+                                    AccentTag("Age: \(game!.requiredAge)+").padding(.bottom)
+                                }
+                            }
+                            
                             if (game!.genres != nil && game!.genres!.count > 0){
                                 Text("Genre:")
                                 HFlow(alignment: .center) {
@@ -190,6 +139,21 @@ struct GameDetailView: View {
                                             .padding(.vertical, 0.5)
                                     }
                                 }.padding(.bottom)
+                            }
+                            
+                            if(game!.legalNotice != nil){
+                                Text(game!.legalNotice!).font(.footnote).padding(.bottom, 5)
+                            }
+                            if(game!.supportInfo != nil) {
+                                VStack(alignment: .leading) {
+                                    Text("Support:").padding(.bottom, 2)
+                                    if(game!.supportInfo!.url != nil && !game!.supportInfo!.url!.isEmpty){
+                                        Text("Website: \(game!.supportInfo!.url!)").font(Font.footnote.italic()).padding(.bottom, 2)
+                                    }
+                                    if(game!.supportInfo!.email != nil && !game!.supportInfo!.email!.isEmpty){
+                                        Text("Email: \(game!.supportInfo!.email!)").font(Font.footnote.italic()).padding(.bottom, 2)
+                                    }
+                                }.padding(.bottom, 5)
                             }
                         }.frame(width: 200)
                     }

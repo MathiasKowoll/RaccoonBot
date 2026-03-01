@@ -93,6 +93,7 @@ struct OptionsView: View {
                 HStack {
                     Button(action: {
                         api.deleteCache()
+                        api.deleteCacheBlacklist()
                         Task {
                             await load()
                         }

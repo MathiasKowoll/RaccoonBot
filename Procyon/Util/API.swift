@@ -40,9 +40,19 @@ enum APIError: Error {
 
 final class SteamAPI {
     var progress: Double = 0
-    private var cacheBlacklist: [String] = blacklist
+    private var cacheBlacklist: [String] = [
+        "228980", // Steamworks
+        "41010",
+        "42690",
+        "43160",
+        "1530910"
+    ]
     private var cache: [String: SteamGame] = [:]
     private var cacheOwnedGamesIDs: [String] = []
+    private var cacheBlacklistURL: URL {
+        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        return dir.appendingPathComponent("ProcyonSteamCacheBlacklist.plist")
+    }
     private var cacheIDS: [String] {
         if cache.count < 1 {
             return []
@@ -60,6 +70,24 @@ final class SteamAPI {
 
     private func loadCache() {
         console.log("Loading caches...")
+        self.loadGameCache()
+        self.loadIDCache()
+        self.loadBlacklist()
+    }
+    
+    init() {
+        self.loadCache()
+        if(self.cache.isEmpty){
+            console.warn("Cache is empty")
+        }
+        if(self.cacheOwnedGamesIDs.isEmpty){
+            console.warn("ID Cache is empty")
+        }
+        if(self.cacheBlacklist.isEmpty){
+            console.warn("Blacklist Cache is empty")
+        }
+    }
+    private func loadGameCache() {
         do {
             let data = try Data(contentsOf: cacheURL)
             let decoded = try JSONDecoder().decode([String: SteamGame].self, from: data)
@@ -70,6 +98,20 @@ final class SteamAPI {
         } catch {
             console.error("Cache is empty, coulnd't read the file")
         }
+    }
+    private func loadBlacklist() {
+        do {
+            let data = try Data(contentsOf: cacheBlacklistURL)
+            let decoded = try JSONDecoder().decode([String].self, from: data)
+            self.cacheBlacklist = decoded
+            if(self.cacheBlacklist.isEmpty == false){
+                console.warn("Blacklist Cache loaded")
+            }
+        } catch {
+            console.error("Blacklist Cache is empty, coulnd't read the file")
+        }
+    }
+    private func loadIDCache() {
         do { // TO DO: Edge case - Track changes in the User ID and invalidate cache
             let data = try Data(contentsOf: cacheOwnedGamesIDsURL)
             let decoded = try JSONDecoder().decode([String].self, from: data)
@@ -81,17 +123,20 @@ final class SteamAPI {
             console.error("ID Cache is empty, coulnd't read the file")
         }
     }
-    
-    init() {
-        self.loadCache()
-        if(self.cache.isEmpty){
-            console.warn("Cache is empty")
-        }
-        if(self.cacheOwnedGamesIDs.isEmpty){
-            console.warn("ID Cache is empty")
+    private func saveBlacklist() {
+        do {
+            let encoded = try JSONEncoder().encode(self.cacheBlacklist)
+            try encoded.write(to: self.cacheBlacklistURL, options: [.atomic])
+            console.warn("Blacklist cache saved")
+        } catch {
+            console.error(error.localizedDescription)
         }
     }
-    
+    func deleteCacheBlacklist() {
+        try? FileManager.default.removeItem(at: cacheBlacklistURL)
+        self.cacheBlacklist.removeAll()
+        console.warn("Blacklist Cache deleted")
+    }
     private func saveCache() {
         do {
             let encoded = try JSONEncoder().encode(self.cache)
@@ -122,30 +167,32 @@ final class SteamAPI {
     }
     func fetchGameInfo(appID: String) async throws -> SteamGame? {
         if self.cacheBlacklist.contains(appID) {
+            console.log("skipping \(appID) as it's blacklisted")
             return nil
         }
         if (self.cache[appID] != nil) {
-            console.cache(appID)
+            console.cache(appID, key: "gameCache")
             return self.cache[appID]
         }
         console.log("fetching \(appID) from the api")
         let urlString = "\(baseAPIURL)?appid=\(appID)"
         let headers: HTTPHeaders = ["x-api-key": apiKey]
-        do {
-            let data = try await AF.request(urlString, method: .get, headers: headers)
-                .validate(statusCode: 200..<300)
-                .serializingData()
-                .value
-            
-            let root = try JSONDecoder().decode(SteamGameResponse.self, from: data)
-            
-            cache[appID] = root.data[0]
-            saveCache()
-            return root.data[0]
-        } catch {
-            console.error(error.localizedDescription)
+        
+        let data = try await AF.request(urlString, method: .get, headers: headers)
+            .validate(statusCode: 200..<300)
+            .serializingData()
+            .value
+        let root = try JSONDecoder().decode(SteamGameResponse.self, from: data)
+        
+        if(root.data.isEmpty) {
+            console.warn("Game with id: \(appID) not found, blacklisting")
+            self.cacheBlacklist.append(appID)
             return nil
         }
+        cache[appID] = root.data[0]
+        saveCache()
+        return root.data[0]
+        
     }
     func fetchGamesInfo(meta: [GamesMeta], setProgress: @escaping (Double) -> Void = { _ in }) async throws -> [Game] {
         var items: [Game] = []
@@ -158,12 +205,9 @@ final class SteamAPI {
             let bDownloaded = Double(meta.BytesDownloaded ?? "0")!
             let bToDownload = Double(meta.BytesToDownload ?? "0")!
             let downloadProgress: Double = meta.isDownloaded() ? 100 : (bDownloaded / bToDownload) * 100
-            do {
-                if let gameInfo = try await self.fetchGameInfo(appID: meta.appid) {
-                    items.append(Game(from: gameInfo, id: meta.id, isNative: meta.isNative, downloadProgress: Double(downloadProgress), isInstalled: meta.installdir.isEmpty == false))
-                }
-            } catch {
-                console.error(error.localizedDescription)
+            
+            if let gameInfo = try await self.fetchGameInfo(appID: meta.appid) {
+                items.append(Game(from: gameInfo, id: meta.id, isNative: meta.isNative, downloadProgress: Double(downloadProgress), isInstalled: meta.installdir.isEmpty == false))
             }
             // Update progress as percentage of total processed
             if total > 0 {
@@ -178,7 +222,8 @@ final class SteamAPI {
             self.progress = 100
             setProgress(self.progress)
         }
-        console.cacheRelease("The following game's data cache was used")
+        console.cacheRelease("The following game's data cache was used", key: "gameCache")
+        self.saveBlacklist()
         return items
     }
     func fetchOwnedGamesIDs(userID: String) async throws -> [String] {
@@ -199,7 +244,7 @@ final class SteamAPI {
             let ids = root.data.response.games.map { String($0.appID) }
             self.cacheOwnedGamesIDs = ids
             self.saveOwnedGamesIDsCache()
-            return ids
+            return ids.filter { !self.cacheBlacklist.contains($0) }
         }
     }
 }

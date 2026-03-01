@@ -8,8 +8,6 @@
 import UniformTypeIdentifiers
 import Combine
 
-let blacklist: [String] = ["228980","41010","42690","43160","1530910","3601350"]
-
 let DEFAULT_BOTTLE_PATH = "Library/Application Support/CrossOver/Bottles/"
 let debugEnabled: Bool = {
     let env = ProcessInfo.processInfo.environment["PROCYON_DEBUG"]?.lowercased()

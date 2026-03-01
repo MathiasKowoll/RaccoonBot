@@ -197,8 +197,8 @@ struct Game: Identifiable {
         self.linuxRequirements = from.linuxRequirements
         
         self.legalNotice = from.legalNotice
-        self.developers = from.developers
-        self.publishers = from.publishers
+        self.developers = from.developers ?? []
+        self.publishers = from.publishers ?? []
         
         self.priceOverview = from.priceOverview
         self.packages = from.packages
@@ -207,7 +207,7 @@ struct Game: Identifiable {
         self.platforms = from.platforms
         self.metacritic = from.metacritic
         
-        self.categories = from.categories
+        self.categories = from.categories ?? []
         self.genres = from.genres
         
         self.screenshots = from.screenshots

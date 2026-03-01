@@ -12,16 +12,19 @@ let logger = Logger(subsystem: "CXPatcher", category: "util")
 
 class Console {
     var logMessages: [String] = []
-    var items: [String] = []
+    var items: [String: [String]] = [:]
     var enableLogFile: Bool = debugEnabled == true
     let f = FileManager.default
     
-    func cache(_ item: String) {
-        self.items.append(item)
+    func cache(_ item: String, key: String) {
+        if self.items[key] == nil {
+            self.items[key] = []
+        }
+        self.items[key]?.append(item)
     }
     
-    func cacheRelease(_ msg: String, function: StaticString = #function) {
-        let message: String = "[\(function)] \(msg) \(self.items.joined(separator: ","))"
+    func cacheRelease(_ msg: String, key: String, function: StaticString = #function) {
+        let message: String = "[\(function)] \(msg) \(self.items[key]?.joined(separator: ",") ?? "no msg")"
         
         #if DEBUG
         print(message)

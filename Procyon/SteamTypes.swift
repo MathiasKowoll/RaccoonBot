@@ -212,8 +212,8 @@ struct SteamGame: Codable {
     let linuxRequirements: Requirements?
 
     let legalNotice: String?
-    let developers: [String]
-    let publishers: [String]
+    let developers: [String]?
+    let publishers: [String]?
 
     let priceOverview: PriceOverview?
     let packages: [Int]?
@@ -222,7 +222,7 @@ struct SteamGame: Codable {
     let platforms: Platforms
     let metacritic: Metacritic?
 
-    let categories: [Category]
+    let categories: [Category]?
     let genres: [Genre]?
 
     let screenshots: [Screenshot]?

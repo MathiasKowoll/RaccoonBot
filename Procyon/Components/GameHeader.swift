@@ -31,7 +31,7 @@ struct GameHeader: View {
                 Text(developers).font(.footnote)
                 Text(publishers).font(.footnote)
             }
-            if(game!.downloadProgress == 100) {
+            if(game!.downloadProgress == 100 && game!.isInstalled) {
                 BigButton(text: "Play", action: {
                     libraryPageGlobals.setLoader(state: true)
                     Task {
@@ -58,40 +58,45 @@ struct GameHeader: View {
             Spacer()
             HStack(alignment: .center) {
                 HStack{
-                    Button {
-                        showGameOptions = true
-                    } label: {
-                        Image(systemName: "gear")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 20)
-                        .foregroundStyle(.white)
-                    }.buttonStyle(.plain)
-                    Button {
-                        let meta = getMeta(libraryPageGlobals.gamesMeta, byID: String(game!.id))!
-                        showFolder(url: meta.gameURL!)
-                    } label: {
-                        Image(systemName: "folder.fill")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 20)
-                        .foregroundStyle(.white)
-                    }.buttonStyle(.plain)
+                    if(game!.downloadProgress == 100 && game!.isInstalled) {
+                        Button {
+                            showGameOptions = true
+                        } label: {
+                            Image(systemName: "gear")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 20)
+                                .foregroundStyle(.white)
+                        }.buttonStyle(.plain)
+                    }
+                    
+                    if (game!.downloadProgress == 100 && game!.isInstalled) {
+                        Button {
+                            let meta = getMeta(libraryPageGlobals.gamesMeta, byID: String(game!.id))!
+                            showFolder(url: meta.gameURL!)
+                        } label: {
+                            Image(systemName: "folder.fill")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 20)
+                                .foregroundStyle(.white)
+                        }.buttonStyle(.plain)
+                    }
                     if(game!.isNative == true) {
                         Image(systemName: "apple.logo")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 20)
-                        .foregroundStyle(.white)
-
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 20)
+                            .foregroundStyle(.white)
+                        
                     }
                     if(game!.controllerSupport == "full") {
                         Image(systemName: "gamecontroller.circle.fill")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 20)
-                        .foregroundStyle(.white)
-
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 20)
+                            .foregroundStyle(.white)
+                        
                     }
                 }
                 HStack(alignment: .center){

@@ -64,7 +64,9 @@ final class SteamAPI {
             let data = try Data(contentsOf: cacheURL)
             let decoded = try JSONDecoder().decode([String: SteamGame].self, from: data)
             self.cache = decoded
-            console.warn("Cache loaded")
+            if (self.cache.isEmpty == false){
+                console.warn("Cache loaded")
+            }
         } catch {
             console.error("Cache is empty, coulnd't read the file")
         }
@@ -72,7 +74,9 @@ final class SteamAPI {
             let data = try Data(contentsOf: cacheOwnedGamesIDsURL)
             let decoded = try JSONDecoder().decode([String].self, from: data)
             self.cacheOwnedGamesIDs = decoded
-            console.warn("ID Cache loaded")
+            if(self.cacheOwnedGamesIDs.isEmpty == false){
+                console.warn("ID Cache loaded")
+            }
         } catch {
             console.error("ID Cache is empty, coulnd't read the file")
         }
@@ -120,14 +124,13 @@ final class SteamAPI {
         if self.cacheBlacklist.contains(appID) {
             return nil
         }
-        if let cached = self.cache[appID] {
+        if (self.cache[appID] != nil) {
             console.cache(appID)
-            return cached
+            return self.cache[appID]
         }
-        
+        console.log("fetching \(appID) from the api")
         let urlString = "\(baseAPIURL)?appid=\(appID)"
         let headers: HTTPHeaders = ["x-api-key": apiKey]
-
         do {
             let data = try await AF.request(urlString, method: .get, headers: headers)
                 .validate(statusCode: 200..<300)
@@ -139,6 +142,9 @@ final class SteamAPI {
             cache[appID] = root.data[0]
             saveCache()
             return root.data[0]
+        } catch {
+            console.error(error.localizedDescription)
+            return nil
         }
     }
     func fetchGamesInfo(meta: [GamesMeta], setProgress: @escaping (Double) -> Void = { _ in }) async throws -> [Game] {
@@ -172,7 +178,7 @@ final class SteamAPI {
             self.progress = 100
             setProgress(self.progress)
         }
-        console.cacheRelease("The following game's data was cached:")
+        console.cacheRelease("The following game's data cache was used")
         return items
     }
     func fetchOwnedGamesIDs(userID: String) async throws -> [String] {

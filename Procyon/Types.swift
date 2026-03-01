@@ -314,6 +314,8 @@ extension Game {
 enum SortingOptions {
     case name
     case releaseDate
+    case publisher
+    case developer
 }
 
 class LibraryPageGlobals: ObservableObject {
@@ -337,6 +339,10 @@ class LibraryPageGlobals: ObservableObject {
                 return lhs.name.lowercased() < rhs.name.lowercased()
             case SortingOptions.releaseDate:
                 return lhs.releaseDate.date < rhs.releaseDate.date
+            case SortingOptions.publisher:
+                return lhs.publishers[0].lowercased() < rhs.publishers[0].lowercased()
+            case SortingOptions.developer:
+                return lhs.developers[0].lowercased() < rhs.developers[0].lowercased()
             }
         }
     }

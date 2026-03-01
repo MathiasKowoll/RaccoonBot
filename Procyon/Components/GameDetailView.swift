@@ -113,7 +113,27 @@ struct GameDetailView: View {
                             //                                1621670
                             //                            ],
                             
+//                            "price_overview": {
+//                                "currency": "USD",
+//                                "initial": 1999,
+//                                "final": 399,
+//                                "discount_percent": 80,
+//                                "initial_formatted": "$19.99",
+//                                "final_formatted": "$3.99"
+//                            },
                             
+//                            "recommendations": {
+//                                "total": 439
+//                            },
+                            
+//                            "release_date": {
+//                                "coming_soon": false,
+//                                "date": "Dec 5, 2019"
+//                            },
+//                            "support_info": {
+//                                "url": "www.rawfury.com",
+//                                "email": "support@rawfury.com"
+//                            },
                             if(game!.pcRequirements != nil){
                                 VStack(alignment: .leading) {
                                     Text("PC Requirements:").font(.title3).padding(.bottom, 5)

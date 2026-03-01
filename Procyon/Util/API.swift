@@ -78,6 +78,7 @@ final class SteamAPI {
         self.loadGameCache()
         self.loadIDCache()
         self.loadBlacklist()
+        self.loadProfileDataCache()
     }
     
     init() {
@@ -277,7 +278,7 @@ final class SteamAPI {
             return ids.filter { !self.cacheBlacklist.contains($0) }
         }
     }
-    func fetchProfileDetails(userID: String) async throws -> UserInfo {
+    func fetchProfileDetails(userID: String) async throws -> UserInfo? {
         if(self.cacheProfileData != nil) {
             console.log("Using cached user data")
             return self.cacheProfileData!
@@ -296,6 +297,9 @@ final class SteamAPI {
             self.cacheProfileData = profileData[0]
             self.saveProfileDataCache()
             return profileData[0]
+        } catch {
+            print(error)
+            return nil
         }
     }
 }

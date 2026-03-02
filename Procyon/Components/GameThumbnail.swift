@@ -110,7 +110,6 @@ struct GameThumbnail: View {
             .cornerRadius(30)
         }
         .buttonStyle(.plain)
-        .opacity( isDownloading || !item.isInstalled ? 0.5 : 1)
     }
 }
 

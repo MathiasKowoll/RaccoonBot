@@ -100,14 +100,17 @@ struct LibraryPage: View {
         }
         .onAppear() {
             isLoading = true // fixes missing library issue
+            Task(priority: .background) {
+                await load()
+            }
             mntObserver = MountObserver(
                 onMount: {
-                    Task {
+                    Task(priority: .background) {
                         await load()
                     }
                 },
                 onUnmount: {
-                    Task {
+                    Task(priority: .background) {
                         await load()
                     }
                 }
@@ -116,7 +119,6 @@ struct LibraryPage: View {
         .onDisappear {
             mntObserver = nil
         }
-        .task { await load() }
         .environmentObject(libraryPageGlobals)
     }
     
@@ -130,23 +132,21 @@ struct LibraryPage: View {
         }
         progress = 0
         libraryPageGlobals.gamesMeta.removeAll()
-        do {
-            libraryPageGlobals.folders = getSteamFolderPaths()
-            if libraryPageGlobals.folders.isEmpty {
-                console.warn("There are no folders to scan.")
-            } else {
-                for folder in libraryPageGlobals.folders {
-                    let folderURL = URL(string: folder)!
-                    if (!libraryPageGlobals.gamesMeta.filter { $0.libraryFolder == folderURL }.isEmpty) {
-                        return // in memory cache just in case you disconnect/reconnect an external drive that has been scanned already
-                    }
-                    do {
-                        let foldergamesMeta = try getGamesMeta(from: folderURL)
-//                        console.log("found \(foldergamesMeta.count) games in the current folder")
-                        libraryPageGlobals.gamesMeta.append(contentsOf: foldergamesMeta)
-                    } catch {
-                        console.error(error.localizedDescription)
-                    }
+        libraryPageGlobals.folders = getSteamFolderPaths()
+        if libraryPageGlobals.folders.isEmpty {
+            console.warn("There are no folders to scan.")
+        } else {
+            for folder in libraryPageGlobals.folders {
+                let folderURL = URL(string: folder)!
+                if (!libraryPageGlobals.gamesMeta.filter { $0.libraryFolder == folderURL }.isEmpty) {
+                    console.log("skipping gamesMeta processing")
+                    return // in memory cache just in case you disconnect/reconnect an external drive that has been scanned already
+                }
+                do {
+                    let foldergamesMeta = try getGamesMeta(from: folderURL)
+                    libraryPageGlobals.gamesMeta.append(contentsOf: foldergamesMeta)
+                } catch {
+                    console.error(error.localizedDescription)
                 }
             }
         }
@@ -162,6 +162,11 @@ struct LibraryPage: View {
                     }
                 libraryPageGlobals.gamesMeta.append(contentsOf: ownedMeta)
             }
+        } catch {
+            console.error(error.localizedDescription)
+        }
+        
+        do {
             libraryPageGlobals.games = try await api.fetchGamesInfo(meta: libraryPageGlobals.gamesMeta, setProgress: { self.progress = $0 })
             progress = 100
         } catch {

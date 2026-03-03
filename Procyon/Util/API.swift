@@ -164,6 +164,7 @@ final class SteamAPI {
     }
     func deleteProfileDataCache() {
         try? FileManager.default.removeItem(at: profileDataCacheURL)
+        self.cacheProfileData = nil
         // Reset to a minimal empty instance; if you prefer optional, make cacheProfileData optional instead.
         // Here we keep the type consistent by not mutating cacheProfileData.
         console.warn("Profile Data Cache deleted")
@@ -283,7 +284,7 @@ final class SteamAPI {
             console.log("Using cached user data")
             return self.cacheProfileData!
         }
-        let urlString = "\(baseAPIURL)/raw/?userid=\(userID)"
+        let urlString = "\(baseAPIURL)/profile/?userid=\(userID)"
         let headers: HTTPHeaders = ["x-api-key": apiKey]
 
         do {

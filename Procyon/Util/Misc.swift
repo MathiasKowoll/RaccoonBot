@@ -181,3 +181,11 @@ func validateAddSteamFolder(_ url: URL, to folders: inout [String]) {
     addSteamFolderPaths(url)
     folders.append(url.absoluteString)
 }
+
+func mapPersonaState(_ state: Int) -> String {
+    let states = ["Offline", "Online", "Busy", "Away", "Snooze", "looking to trade", "looking to play"]
+    if (0..<states.count).contains(state){
+        return states[state]
+    }
+    return "Unknown"
+}

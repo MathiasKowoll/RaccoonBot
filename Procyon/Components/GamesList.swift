@@ -16,7 +16,8 @@ let columns = [
 struct GamesList: View {
     @EnvironmentObject var router: Router
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
-    var load: () async -> Void
+    @State private var showProfile: Bool = false
+    var load: @Sendable () async -> Void
     
     var body: some View {
         ScrollView {
@@ -30,22 +31,15 @@ struct GamesList: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                Button {
-                    libraryPageGlobals.showOptions = true
-                } label: {
-                    Image(systemName: "gear")
-                }
-            }
-            ToolbarItemGroup(placement: .secondaryAction) {
-                HStack{
-                    Button("Library") {
-                        router.go(to: .libraryPage)
-                    }.controlSize(.small)
+                HStack {
+                    ProfileWidget()
                     Divider()
-                    Button("Profile") {
-                        router.go(to: .profilePage)
-                    }.controlSize(.small)
-                }.padding(.horizontal)
+                    Button {
+                        libraryPageGlobals.showOptions = true
+                    } label: {
+                        Image(systemName: "gear")
+                    }
+                }
             }
             ToolbarItemGroup(placement: .secondaryAction) {
                 Button {

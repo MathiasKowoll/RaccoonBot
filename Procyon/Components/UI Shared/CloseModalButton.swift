@@ -16,6 +16,7 @@ struct CloseModalButton: View {
         } label: {
             Image(systemName: "xmark").foregroundStyle(.black)
         }
+        .frame(maxWidth: 20, maxHeight: 20)
         .background(.white.opacity(0.5))
         .clipShape(Circle())
         .padding(.vertical)

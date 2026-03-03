@@ -100,7 +100,7 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, op
 
     console.warn("attempting to run steam.exe on game id \(id)")
     let arguments = options != nil ? " " + options!.gameArguments : ""
-    let command = "\(getInlineEnvs(from: options!)) \(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \"C:\\Program Files (x86)\\Steam\\Steam.exe\" -nochatui -nofriendsui -silent -no-browser +open steam://run/\(String(id))" + arguments
+    let command = "\(getInlineEnvs(from: options!)) \(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \"C:\\Program Files (x86)\\Steam\\Steam.exe\" -nochatui -nofriendsui -silent -no-browser -no-cef-sandbox -skipinitialbootstrap -applaunch \(String(id))" + arguments
     console.warn(command)
     try safeShell(command)
 }
@@ -109,7 +109,7 @@ func launchNativeGame(id: String, cxAppPath: String, selectedBottle: String, opt
     let bottleName = URL(string: selectedBottle)?.lastPathComponent ?? ""
     try await closeWineActivities(cxAppPath: cxAppPath, bottleName: bottleName)
     let arguments = options != nil ? " " + options!.gameArguments : ""
-    let command = "\(getInlineEnvs(from: options!)) /Applications/Steam.app/Contents/MacOS/steam_osx -nochatui -nofriendsui -silent -no-browser +open steam://run/\(String(id))" + arguments
+    let command = "\(getInlineEnvs(from: options!)) /Applications/Steam.app/Contents/MacOS/steam_osx -nochatui -nofriendsui -silent -no-browser -applaunch \(String(id))" + arguments
     console.warn(command)
     try safeShell(command)
 }

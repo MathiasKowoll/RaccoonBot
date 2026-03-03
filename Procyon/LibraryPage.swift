@@ -19,107 +19,115 @@ struct LibraryPage: View {
     @State private var mntObserver: MountObserver?
     
     var body: some View {
-        VStack {
+        ZStack {
             if(libraryPageGlobals.isLaunchingGame) {
-                ProgressView(label: {
-                    Text("Launching \(libraryPageGlobals.selectedGame?.name ?? "'Unknown'")...")
-                })
-                .progressViewStyle(.circular)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .ignoresSafeArea()
-                .background {
-                    if (libraryPageGlobals.selectedGame?.headerImage != nil){
-                        KFImage(URL(string: libraryPageGlobals.selectedGame!.headerImage))
-                            .placeholder {
-                                ProgressView()
-                            }
-                            .resizable()
-                            .scaledToFill()
-                            .blur(radius: 10)
-                            .blendMode(.softLight)
-                    }
-                }
-            } else if let errorMessage {
-                Text("Error: \(errorMessage)")
-                    .lineLimit(1)
-                    .foregroundStyle(.red)
-            } else if (!isLoading && libraryPageGlobals.gamesMeta.isEmpty) {
                 VStack {
-                    ContentUnavailableView {
-                        Label("No Libraries found", systemImage: "gamecontroller")
-                            .padding(.bottom)
-                    } description: {
-                        Text("No Steam libraries found.\nPlease add a Steam library folder.")
-                        Button {
-                            libraryPageGlobals.showOptions = true
-                        } label: {
-                            Label("Add Library", systemImage: "plus")
+                    ProgressView(label: {
+                        Text("Launching \(libraryPageGlobals.selectedGame?.name ?? "'Unknown'")...")
+                    })
+                    .progressViewStyle(.circular)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .ignoresSafeArea()
+                    .background {
+                        if (libraryPageGlobals.selectedGame?.headerImage != nil){
+                            KFImage(URL(string: libraryPageGlobals.selectedGame!.headerImage))
+                                .placeholder {
+                                    ProgressView()
+                                }
+                                .resizable()
+                                .scaledToFill()
+                                .blur(radius: 10)
+                                .opacity(0.2)
                         }
                     }
-                    .foregroundStyle(.white)
                 }
-                .frame(maxWidth: .infinity)
-            } else {
-                GamesList(load: load)
+                .background(.black)
+                .frame(maxWidth: .infinity, maxHeight: .infinity).zIndex(10)
             }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .sheet(isPresented: $libraryPageGlobals.showOptions) {
-            OptionsView(load: load)
-        }
-        .sheet(isPresented: $libraryPageGlobals.showDetailView) {
-            Modal(showModal: $libraryPageGlobals.showDetailView, collapse: true, content:  {
-                GameDetailView(game: $libraryPageGlobals.selectedGame)
-            })
-        }
-        .overlay {
-            if (isLoading) {
-                HStack(alignment: .bottom) {
-                    HStack(alignment: .center) {
-                        Image(.procyon).resizable()
-                            .scaledToFit()
-                            .frame(height: 50)
-                        VStack (alignment: .leading){
-                            Text("Loading your library…")
-                                .font(.footnote)
-                                .foregroundStyle(.white)
-                            ProgressView(value: progress, total: 100)
-                                .progressViewStyle(.linear)
-                                .frame(maxWidth: .infinity, maxHeight: 5)
+            
+            VStack {
+                if (errorMessage != nil) {
+                    Text("Error: \(errorMessage!)")
+                        .lineLimit(1)
+                        .foregroundStyle(.red)
+                } else if (!isLoading && libraryPageGlobals.gamesMeta.isEmpty) {
+                    VStack {
+                        ContentUnavailableView {
+                            Label("No Libraries found", systemImage: "gamecontroller")
+                                .padding(.bottom)
+                        } description: {
+                            Text("No Steam libraries found.\nPlease add a Steam library folder.")
+                            Button {
+                                libraryPageGlobals.showOptions = true
+                            } label: {
+                                Label("Add Library", systemImage: "plus")
+                            }
+                        }
+                        .foregroundStyle(.white)
+                    }
+                    .frame(maxWidth: .infinity)
+                } else {
+                    GamesList(load: load)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .sheet(isPresented: $libraryPageGlobals.showOptions) {
+                OptionsView(load: load)
+            }
+            .sheet(isPresented: $libraryPageGlobals.showDetailView) {
+                Modal(showModal: $libraryPageGlobals.showDetailView, collapse: true, content:  {
+                    GameDetailView(game: $libraryPageGlobals.selectedGame)
+                })
+            }
+            .overlay {
+                if (isLoading) {
+                    HStack(alignment: .bottom) {
+                        HStack(alignment: .center) {
+                            Image(.procyon).resizable()
+                                .scaledToFit()
+                                .frame(height: 50)
+                            VStack (alignment: .leading){
+                                Text("Loading your library…")
+                                    .font(.footnote)
+                                    .foregroundStyle(.white)
+                                ProgressView(value: progress, total: 100)
+                                    .progressViewStyle(.linear)
+                                    .frame(maxWidth: .infinity, maxHeight: 5)
+                            }
+                        }
+                        .padding(.horizontal, 10)
+                        .frame(width: 220, height: 60)
+                        .background(.accent.mix(with: .black, by: 0.6).opacity(0.9))
+                        .cornerRadius(20)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .padding()
+                    .transition(.opacity)
+                }
+            }
+            .onAppear() {
+                isLoading = true // fixes missing library issue
+                Task(priority: .background) {
+                    await load()
+                }
+                mntObserver = MountObserver(
+                    onMount: {
+                        Task(priority: .background) {
+                            await load()
+                        }
+                    },
+                    onUnmount: {
+                        Task(priority: .background) {
+                            await load()
                         }
                     }
-                    .padding(.horizontal, 10)
-                    .frame(width: 220, height: 60)
-                    .background(.accent.mix(with: .black, by: 0.6).opacity(0.9))
-                    .cornerRadius(20)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                .padding()
-                .transition(.opacity)
+                )
             }
-        }
-        .onAppear() {
-            isLoading = true // fixes missing library issue
-            Task(priority: .background) {
-                await load()
+            .onDisappear {
+                mntObserver = nil
             }
-            mntObserver = MountObserver(
-                onMount: {
-                    Task(priority: .background) {
-                        await load()
-                    }
-                },
-                onUnmount: {
-                    Task(priority: .background) {
-                        await load()
-                    }
-                }
-            )
+            .environmentObject(libraryPageGlobals)
         }
-        .onDisappear {
-            mntObserver = nil
-        }
-        .environmentObject(libraryPageGlobals)
     }
     
     @MainActor

@@ -14,6 +14,7 @@ struct GameDetailView: View {
     @Binding var game: Game?
     @State private var player = AVPlayer()
     @State private var isMuted: Bool = true
+    
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
     @StateObject var gameOptions = GameOptions()
     var gameFolder: String {

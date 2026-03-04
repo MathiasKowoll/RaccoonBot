@@ -39,6 +39,8 @@ struct GameOptionsView: View {
                                 Toggle("MSync", isOn: $gameOptions.wineMSync)
                                 Toggle("Metal HUD", isOn: $gameOptions.mtlHudEnabled)
                                 Toggle("Advertise AVX", isOn: $gameOptions.advertiseAVX)
+                                Toggle("Enable SDL", isOn: $gameOptions.sdlEnabled).disabled(true)
+                                Toggle("Disable Hidraw", isOn: $gameOptions.hidrawDisabled).disabled(true)
                             }
                         }
                     }

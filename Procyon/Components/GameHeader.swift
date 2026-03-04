@@ -36,7 +36,6 @@ struct GameHeader: View {
                     libraryPageGlobals.setLoader(state: true)
                     Task {
                         do {
-                            
                             if(game!.isNative) {
                                 try await launchNativeGame(id: String(game!.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions)
                             } else {

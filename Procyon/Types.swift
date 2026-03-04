@@ -32,6 +32,8 @@ struct GameOptionsData: Codable {
     var dxmtMetalSpatialUpscaleFactor: Double
     var advertiseAVX: Bool
     var envVariables: String
+    var sdlEnabled: Bool
+    var hidrawDisabled: Bool
     
     init(data: GameOptions) {
         self.cxGraphicsBackend = data.cxGraphicsBackend
@@ -43,6 +45,8 @@ struct GameOptionsData: Codable {
         self.dxmtMetalSpatialUpscaleFactor = data.dxmtMetalSpatialUpscaleFactor
         self.advertiseAVX = data.advertiseAVX
         self.envVariables = data.envVariables
+        self.sdlEnabled = data.sdlEnabled
+        self.hidrawDisabled = data.hidrawDisabled
     }
 }
 
@@ -60,8 +64,10 @@ class GameOptions: ObservableObject {
     @Published var dxmtMetalSpatialUpscaleFactor: Double
     @Published var advertiseAVX: Bool
     @Published var envVariables: String
+    @Published var sdlEnabled: Bool
+    @Published var hidrawDisabled: Bool
     
-    init(cxGraphicsBackend: String = "d3dmetal", wineMSync: Bool = true, mtlHudEnabled: Bool = false, dxvk: String? = nil, wineEsync: String? = nil, d3dMEnableMetalFX: String? = nil, d3dSupportDXR: String? = nil, gameArguments: String = "", dxmtPreferredMaxFrameRate: Double = 0, dxmtMetalFXSpatial: Bool = false, dxmtMetalSpatialUpscaleFactor: Double = 1.0, advertiseAVX: Bool = true, envVariables: String = "") {
+    init(cxGraphicsBackend: String = "d3dmetal", wineMSync: Bool = true, mtlHudEnabled: Bool = false, dxvk: String? = nil, wineEsync: String? = nil, d3dMEnableMetalFX: String? = nil, d3dSupportDXR: String? = nil, gameArguments: String = "", dxmtPreferredMaxFrameRate: Double = 0, dxmtMetalFXSpatial: Bool = false, dxmtMetalSpatialUpscaleFactor: Double = 1.0, advertiseAVX: Bool = true, envVariables: String = "", sdlEnabled: Bool = true, hidrawDisabled: Bool = false) {
         self.cxGraphicsBackend = cxGraphicsBackend
         self.wineMSync = wineMSync
         self.mtlHudEnabled = mtlHudEnabled
@@ -75,6 +81,8 @@ class GameOptions: ObservableObject {
         self.dxmtPreferredMaxFrameRate = dxmtPreferredMaxFrameRate
         self.advertiseAVX = advertiseAVX
         self.envVariables = envVariables
+        self.sdlEnabled = sdlEnabled
+        self.hidrawDisabled = hidrawDisabled
     }
     func set(data: GameOptionsData) {
         self.cxGraphicsBackend = data.cxGraphicsBackend
@@ -86,6 +94,8 @@ class GameOptions: ObservableObject {
         self.dxmtPreferredMaxFrameRate = data.dxmtPreferredMaxFrameRate
         self.advertiseAVX = data.advertiseAVX
         self.envVariables = data.envVariables
+        self.sdlEnabled = data.sdlEnabled
+        self.hidrawDisabled = data.hidrawDisabled
     }
 }
 
@@ -290,7 +300,7 @@ extension Game {
             Screenshot(id: 2, pathThumbnail: "https://placehold.co/600x400/orange/white", pathFull: "https://placehold.co/600x400/orange/white")
         ],
         movies: [
-            Movie(id: 10, name: "Trailer", thumbnail: "https://example.com/trailer_thumb.jpg", dashH264: "https://video.akamai.steamstatic.com/store_trailers/440/129304/a9d97ffaf28cac468369400c12abe442a7b688b2/1749861261/dash_h264.mpd", hlsH264: "https://video.akamai.steamstatic.com/store_trailers/440/129304/a9d97ffaf28cac468369400c12abe442a7b688b2/1749861261/hls_264_master.m3u8", highlight: true)
+            Movie(id: 10, name: "Trailer", thumbnail: "https://example.com/trailer_thumb.jpg", dashH264: "https://video.akamai.steamstatic.com/store_trailers/440/129304/a9d97ffaf28cac468369400c12abe442a7b688b2/1749861261/dash_h264.mpd", hlsH264: "https://video.akamai.steamstatic.com/store_trailers/440/129304/a9d97ffaf28cac468369400c12abe4427b688b2/1749861261/hls_264_master.m3u8", highlight: true)
         ],
         recommendations: Recommendations(total: 12345),
         achievements: Achievements(
@@ -362,3 +372,4 @@ final class AppGlobals: ObservableObject {
         self.cxAppPath = readUsrDefOptionString(key: "cxAppPath")
     }
 }
+

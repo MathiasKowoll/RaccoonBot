@@ -56,34 +56,12 @@ func closeWineActivities(cxAppPath: String, bottleName: String) async throws {
     }
 }
 
-func quitSteam(cxAppPath: String, bottleName: String) async throws {
-    let absoluteTimeout: UInt64 = 2_000_000_000
-    let pollInterval: UInt64 = 200_000_000
-    var elapsed: UInt64 = 0
-    let targets = NSWorkspace.shared.runningApplications.filter { app in
-        guard let url = app.executableURL else { return false }
-        return url.lastPathComponent.lowercased().hasSuffix(".exe") || url.lastPathComponent.lowercased().hasSuffix("wine")
-    }
-    let steamTargets = NSWorkspace.shared.runningApplications.filter { app in
-        guard let url = app.executableURL else { return false }
-        return url.lastPathComponent.lowercased().hasSuffix(".exe") && url.lastPathComponent.lowercased().contains("steam")
-    }
-    func allTerminated(_ apps: [NSRunningApplication]) -> Bool {
-        apps.allSatisfy { $0.isTerminated }
-    }
+func quitSteam(cxAppPath: String, bottleName: String) async throws -> Void {
     try safeShell("\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \"C:\\Program Files (x86)\\Steam\\Steam.exe\" -shutdown")
-    while !allTerminated(steamTargets) && elapsed < absoluteTimeout {
-        try await Task.sleep(nanoseconds: pollInterval)
-        elapsed += pollInterval
-    }
     try safeShell("\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) wineserver -k")
-    while !allTerminated(targets) && elapsed < absoluteTimeout {
-        try await Task.sleep(nanoseconds: pollInterval)
-        elapsed += pollInterval
-    }
 }
 
-func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, options: GameOptions? = nil) async throws {
+func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, options: GameOptions? = nil) async throws -> Void {
     if(options != nil){
         let optionsDictionary = [
             "CX_GRAPHICS_BACKEND": options!.cxGraphicsBackend,
@@ -102,6 +80,13 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, op
     let arguments = options != nil ? " " + options!.gameArguments : ""
     let command = "\(getInlineEnvs(from: options!)) \(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \"C:\\Program Files (x86)\\Steam\\Steam.exe\" -nochatui -nofriendsui -silent -no-browser -no-cef-sandbox -skipinitialbootstrap -applaunch \(String(id))" + arguments
     console.warn(command)
+    try safeShell(command)
+}
+
+func setReg (cxAppPath: String, selectedBottle: String, options: GameOptions? = nil, key: String, value: String) throws -> Void {
+    // wine reg add "HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\winebus" /v "Enable SDL" /t REG_DWORD /d 1 /f
+    let bottleName = URL(string: selectedBottle)?.lastPathComponent ?? ""
+    let command = "\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) reg add \"HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Services\\winebus\\\" /v \"\(key)\" /t REG_DWORD /d \(value) /f"
     try safeShell(command)
 }
 

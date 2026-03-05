@@ -32,7 +32,7 @@ struct ProfileWidget: View {
                             .mask(Circle())
                             .padding(5)
                         Text(p.personaName).lineLimit(1)
-                    }.frame(maxWidth: 120, alignment: .init(horizontal: .leading, vertical: .center))
+                    }.frame(maxWidth: 150, alignment: .init(horizontal: .leading, vertical: .center))
                 }
                 .buttonStyle(.plain)
             }

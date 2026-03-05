@@ -239,7 +239,7 @@ final class SteamAPI {
             let downloadProgress: Double = meta.isDownloaded() ? 100 : (bDownloaded / bToDownload) * 100
             
             if let gameInfo = try await self.fetchGameInfo(appID: meta.appid) {
-                items.append(Game(from: gameInfo, id: meta.id, isNative: meta.isNative, downloadProgress: Double(downloadProgress), isInstalled: meta.installdir.isEmpty == false))
+                items.append(Game(from: gameInfo, id: meta.id, isNative: meta.isNative, downloadProgress: Double(downloadProgress), isInstalled: meta.installdir.isEmpty == false, appNames: []))
             }
             // Update progress as percentage of total processed
             if total > 0 {
@@ -299,7 +299,7 @@ final class SteamAPI {
             self.saveProfileDataCache()
             return profileData[0]
         } catch {
-            print(error)
+            console.error(error.localizedDescription)
             return nil
         }
     }

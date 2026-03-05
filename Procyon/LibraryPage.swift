@@ -37,7 +37,7 @@ struct LibraryPage: View {
                                 .resizable()
                                 .scaledToFill()
                                 .blur(radius: 10)
-                                .opacity(0.2)
+                                .opacity(0.4)
                         }
                     }
                 }
@@ -159,7 +159,7 @@ struct LibraryPage: View {
             }
         }
         do {
-            if(appGlobals.userID != nil){
+            if(appGlobals.userID != nil) {
                 let ownedMeta = try await api
                     .fetchOwnedGamesIDs(userID: appGlobals.userID!)
                     .map{

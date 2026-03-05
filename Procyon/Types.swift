@@ -103,20 +103,23 @@ class GamesMeta: SteamACFMeta {
     var gameURL: URL?
     var libraryFolder: URL
     var isNative: Bool
+    var appNames: [String]
     var id: String { libraryFolder.relativeString + appid }
     func isDownloaded() -> Bool {
         return (self.BytesToDownload == "0" || self.BytesToDownload == self.BytesDownloaded)
     }
     
-    init(appid: String, installdir: String, gameURL: URL? = nil, isNative: Bool = false, libraryFolder: URL = URL(string: "/")!, bytesDownloaded: String, BytesTodownload: String) {
+    init(appid: String, installdir: String, gameURL: URL? = nil, isNative: Bool = false, libraryFolder: URL = URL(string: "/")!, bytesDownloaded: String, BytesTodownload: String, appNames: [String] = []) {
         self.gameURL = gameURL
         self.isNative = isNative
         self.libraryFolder = libraryFolder
+        self.appNames = appNames
         super.init()
         self.appid = appid
         self.installdir = installdir
         self.BytesDownloaded = bytesDownloaded
         self.BytesToDownload = BytesTodownload
+        self.appNames = appNames
     }
 }
 
@@ -125,6 +128,7 @@ struct Game: Identifiable {
     var isNative: Bool
     var downloadProgress: Double
     var isInstalled: Bool
+    var appNames: [String] = []
     
     // taken from SteamGame
     let type: String
@@ -177,11 +181,12 @@ struct Game: Identifiable {
     let contentDescriptors: ContentDescriptors?
     let ratings: Ratings?
     
-    init(from: SteamGame, id: String, isNative: Bool, downloadProgress: Double, isInstalled: Bool) {
+    init(from: SteamGame, id: String, isNative: Bool, downloadProgress: Double, isInstalled: Bool, appNames: [String]) {
         self.id = id
         self.isNative = isNative
         self.downloadProgress = downloadProgress
         self.isInstalled = isInstalled
+        self.appNames = appNames
         
         // SteamGame property
         self.type = from.type
@@ -318,7 +323,7 @@ extension Game {
             usk: RatingBody(rating: "12", requiredAge: "12", descriptors: "Violence")
         )
     )
-    static let mock = Game(from: Game.steamMock, id: "example", isNative: true, downloadProgress: 100, isInstalled: true)
+    static let mock = Game(from: Game.steamMock, id: "example", isNative: true, downloadProgress: 100, isInstalled: true, appNames: ["test.exe"])
 }
 
 enum SortingOptions {
@@ -338,6 +343,7 @@ class LibraryPageGlobals: ObservableObject {
     @Published var isLaunchingGame: Bool = false
     @Published var games: [Game] = []
     @Published var sortBy: SortingOptions = SortingOptions.name
+    @Published var playingID: String?
     
     var filteredGames: [Game] {
         self.games.filter { item in
@@ -359,6 +365,10 @@ class LibraryPageGlobals: ObservableObject {
     
     func setLoader(state: Bool) {
         isLaunchingGame = state
+    }
+    
+    func setPlayingID( _ id: String?) {
+        playingID = id
     }
 }
 

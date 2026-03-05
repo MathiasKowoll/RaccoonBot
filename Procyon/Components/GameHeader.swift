@@ -14,6 +14,10 @@ struct GameHeader: View {
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
     @EnvironmentObject var gameOptions: GameOptions
     @State private var showGameOptions: Bool = false
+    var isPlaying: Bool {
+        libraryPageGlobals.playingID == game!.id
+    }
+    @State private var tObserver: TerminationObserver?
     
     var developers: String {
         "Developer: \(game!.developers.joined(separator: ", "))"
@@ -32,25 +36,8 @@ struct GameHeader: View {
                 Text(publishers).font(.footnote)
             }
             if(game!.downloadProgress == 100 && game!.isInstalled) {
-                BigButton(text: "Play", action: {
-                    libraryPageGlobals.setLoader(state: true)
-                    Task {
-                        do {
-                            if(game!.isNative) {
-                                try await launchNativeGame(id: String(game!.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions)
-                            } else {
-                                try await launchWindowsGame(id: String(game!.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions)
-                            }
-                            
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
-                                libraryPageGlobals.setLoader(state: false)
-                            }
-                        } catch {
-                            libraryPageGlobals.setLoader(state: false)
-                            console.error("Error launching game: \(error)")
-                        }
-                        showDetailView = false
-                    }
+                BigButton(text: isPlaying ? "Stop" : "Play", action: {
+                    playGame()
                 })
                 .padding(.leading, 24)
             }
@@ -134,6 +121,34 @@ struct GameHeader: View {
             Modal(showModal: $showGameOptions) {
                 GameOptionsView(game: $game)
             }
+        }
+    }
+    
+    func playGame() {
+        libraryPageGlobals.setLoader(state: true)
+        Task {
+            do {
+                Task(priority: .background) {
+                    tObserver = try await getGameTracker(appNames: game!.appNames, cxAppPath: appGlobals.cxAppPath!, bottleName: appGlobals.selectedBottle, onLoad: {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            libraryPageGlobals.setLoader(state: false)
+                        }
+                        libraryPageGlobals.playingID = game!.id
+                    }, onTerminate: {
+                        libraryPageGlobals.playingID = nil
+                        tObserver = nil
+                    })
+                }
+                if(game!.isNative) {
+                    try await launchNativeGame(id: String(game!.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions)
+                } else {
+                    try await launchWindowsGame(id: String(game!.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions)
+                }
+            } catch {
+                libraryPageGlobals.setLoader(state: false)
+                console.error("Error launching game: \(error)")
+            }
+            showDetailView = false
         }
     }
 }

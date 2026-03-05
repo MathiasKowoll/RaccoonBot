@@ -189,3 +189,40 @@ func mapPersonaState(_ state: Int) -> String {
     }
     return "Unknown"
 }
+
+func getAppNames(isNative: Bool, gameURL: URL?) -> [String] {
+    let ext = isNative ? "app" : "exe"
+    let f = FileManager.default
+    var results: [String] = []
+    if(gameURL == nil) {
+        return []
+    }
+    guard let enumerator = f.enumerator(at: gameURL!, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles, .skipsPackageDescendants]) else {
+        return []
+    }
+    for case let fileURL as URL in enumerator  {
+        if(fileURL.pathExtension == ext) {
+            results.append(fileURL.lastPathComponent)
+        }
+    }
+    return results
+}
+
+func getGameTracker(appNames: [String], cxAppPath: String, bottleName: String, onLoad: @escaping () -> Void, onTerminate: @escaping () -> Void) async throws -> TerminationObserver {
+    let tOb = TerminationObserver(then: { output in
+        let terminatedAppName = output.userInfo?[AnyHashable("NSApplicationName")] as? String ?? "unknown"
+        if (appNames.contains(terminatedAppName)) {
+            Task {
+                try await quitSteam(cxAppPath: cxAppPath, bottleName: bottleName)
+                try await closeWineActivities()
+                onTerminate()
+            }
+        }
+    })
+    try await trackPlaying(apps: appNames, then: {
+        onLoad()
+    })
+    return tOb
+}
+
+    

@@ -21,6 +21,7 @@ func getGamesMeta(from: URL) throws -> [GamesMeta] {
             let meta = mapDictToGamesMeta(from: parsed["AppState"] as! [String: Any])
             meta.gameURL = from.appendingPathComponent("common").appendingPathComponent(meta.installdir)
             meta.isNative = meta.isDownloaded() ? getIsNative(fromURL: meta.gameURL!) : false
+            meta.appNames = []
             meta.libraryFolder = from
             array.append(meta)
         }

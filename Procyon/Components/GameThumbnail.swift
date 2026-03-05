@@ -9,17 +9,28 @@ import SwiftUI
 import Kingfisher
 
 struct GameThumbnail: View {
-    let item: Game
+    var item: Game
     @EnvironmentObject var appGlobals: AppGlobals
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
+    @State private var tObserver: TerminationObserver?
+    var isPlaying: Bool {
+        libraryPageGlobals.playingID == item.id
+    }
     var isDownloading: Bool {
         item.downloadProgress < 100
     }
+    var updatedItem: Game {
+        let meta = libraryPageGlobals.gamesMeta.first(where: { $0.id == item.id })!
+        var newItem = item
+        newItem.appNames = getAppNames(isNative: meta.isNative, gameURL: meta.gameURL)
+        return newItem
+    }
+    
     var body: some View {
+
         
         Button(action: {
-            libraryPageGlobals.showDetailView =  true
-            libraryPageGlobals.selectedGame = item
+            openDetailPage()
         }) {
             VStack(alignment: .leading, spacing: 6) {
                 ZStack(alignment: .topTrailing){
@@ -59,32 +70,9 @@ struct GameThumbnail: View {
                         
                         if(!isDownloading && item.isInstalled) {
                             Button {
-                                libraryPageGlobals.selectedGame = item
-                                libraryPageGlobals.setLoader(state: true)
-                                
-                                Task {
-                                    do {
-                                        let gameOptKey = namespacedKey("GameOptions", String(item.steamAppID))
-                                        let gameOptions: GameOptions = GameOptions()
-                                        if let gameOptionsData: GameOptionsData = readUsrDefData(key: gameOptKey) {
-                                            let gameOptions: GameOptions = GameOptions()
-                                            gameOptions.set(data: gameOptionsData)
-                                        }
-                                        if(item.isNative) {
-                                            try await launchNativeGame(id: String(item.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions)
-                                        } else {
-                                            try await launchWindowsGame(id: String(item.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions)
-                                        }
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
-                                            libraryPageGlobals.setLoader(state: false)
-                                        }
-                                    } catch {
-                                        console.error(error.localizedDescription)
-                                        libraryPageGlobals.setLoader(state: false)
-                                    }
-                                }
+                                PlayGame()
                             } label: {
-                                Label("Play", systemImage: "play.fill").foregroundStyle(.black)
+                                Label(isPlaying ? "Stop" :"Play", systemImage: isPlaying ? "stop.fill" : "play.fill").foregroundStyle(.black)
                             }
                             .background(.procyonSecondary)
                             .cornerRadius(20)
@@ -110,6 +98,48 @@ struct GameThumbnail: View {
             .cornerRadius(30)
         }
         .buttonStyle(.plain)
+    }
+    
+    func PlayGame () {
+        libraryPageGlobals.selectedGame = updatedItem
+        libraryPageGlobals.setLoader(state: true)
+        if (isPlaying) {
+            return
+        }
+        Task {
+            do {
+                let gameOptKey = namespacedKey("GameOptions", String(item.steamAppID))
+                let gameOptions: GameOptions = GameOptions()
+                if let gameOptionsData: GameOptionsData = readUsrDefData(key: gameOptKey) {
+                    let gameOptions: GameOptions = GameOptions()
+                    gameOptions.set(data: gameOptionsData)
+                }
+                Task(priority: .background) {
+                    tObserver = try await getGameTracker(appNames: updatedItem.appNames, cxAppPath: appGlobals.cxAppPath!, bottleName: appGlobals.selectedBottle, onLoad: {
+                        libraryPageGlobals.playingID = item.id
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            libraryPageGlobals.setLoader(state: false)
+                        }
+                    }, onTerminate: {
+                        libraryPageGlobals.playingID = nil
+                        tObserver = nil
+                    })
+                }
+                if(item.isNative) {
+                    try await launchNativeGame(id: String(item.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions)
+                } else {
+                    try await launchWindowsGame(id: String(item.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions)
+                }
+            } catch {
+                console.error(error.localizedDescription)
+                libraryPageGlobals.setLoader(state: false)
+            }
+        }
+    }
+    
+    func openDetailPage() {
+        libraryPageGlobals.selectedGame = updatedItem
+        libraryPageGlobals.showDetailView =  true
     }
 }
 

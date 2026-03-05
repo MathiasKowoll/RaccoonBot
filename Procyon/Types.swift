@@ -45,8 +45,8 @@ struct GameOptionsData: Codable {
         self.dxmtMetalSpatialUpscaleFactor = data.dxmtMetalSpatialUpscaleFactor
         self.advertiseAVX = data.advertiseAVX
         self.envVariables = data.envVariables
-        self.sdlEnabled = data.sdlEnabled
-        self.hidrawDisabled = data.hidrawDisabled
+        self.sdlEnabled = data.enableSDL
+        self.hidrawDisabled = data.disableHidraw
     }
 }
 
@@ -64,8 +64,8 @@ class GameOptions: ObservableObject {
     @Published var dxmtMetalSpatialUpscaleFactor: Double
     @Published var advertiseAVX: Bool
     @Published var envVariables: String
-    @Published var sdlEnabled: Bool
-    @Published var hidrawDisabled: Bool
+    @Published var enableSDL: Bool
+    @Published var disableHidraw: Bool
     
     init(cxGraphicsBackend: String = "d3dmetal", wineMSync: Bool = true, mtlHudEnabled: Bool = false, dxvk: String? = nil, wineEsync: String? = nil, d3dMEnableMetalFX: String? = nil, d3dSupportDXR: String? = nil, gameArguments: String = "", dxmtPreferredMaxFrameRate: Double = 0, dxmtMetalFXSpatial: Bool = false, dxmtMetalSpatialUpscaleFactor: Double = 1.0, advertiseAVX: Bool = true, envVariables: String = "", sdlEnabled: Bool = true, hidrawDisabled: Bool = false) {
         self.cxGraphicsBackend = cxGraphicsBackend
@@ -81,8 +81,8 @@ class GameOptions: ObservableObject {
         self.dxmtPreferredMaxFrameRate = dxmtPreferredMaxFrameRate
         self.advertiseAVX = advertiseAVX
         self.envVariables = envVariables
-        self.sdlEnabled = sdlEnabled
-        self.hidrawDisabled = hidrawDisabled
+        self.enableSDL = sdlEnabled
+        self.disableHidraw = hidrawDisabled
     }
     func set(data: GameOptionsData) {
         self.cxGraphicsBackend = data.cxGraphicsBackend
@@ -94,8 +94,8 @@ class GameOptions: ObservableObject {
         self.dxmtPreferredMaxFrameRate = data.dxmtPreferredMaxFrameRate
         self.advertiseAVX = data.advertiseAVX
         self.envVariables = data.envVariables
-        self.sdlEnabled = data.sdlEnabled
-        self.hidrawDisabled = data.hidrawDisabled
+        self.enableSDL = data.sdlEnabled
+        self.disableHidraw = data.hidrawDisabled
     }
 }
 

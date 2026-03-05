@@ -39,8 +39,8 @@ struct GameOptionsView: View {
                                 Toggle("MSync", isOn: $gameOptions.wineMSync)
                                 Toggle("Metal HUD", isOn: $gameOptions.mtlHudEnabled)
                                 Toggle("Advertise AVX", isOn: $gameOptions.advertiseAVX)
-                                Toggle("Enable SDL", isOn: $gameOptions.sdlEnabled).disabled(true)
-                                Toggle("Disable Hidraw", isOn: $gameOptions.hidrawDisabled).disabled(true)
+                                Toggle("Enable SDL", isOn: $gameOptions.enableSDL)
+                                Toggle("Disable Hidraw", isOn: $gameOptions.disableHidraw)
                             }
                         }
                     }
@@ -83,12 +83,12 @@ struct GameOptionsView: View {
                             console.log("saving")
                             persistUsrDefData(key: gameOptKey, data: GameOptionsData(data: gameOptions))
                         }.buttonStyle(.borderedProminent)
-                        Button("Undo") {
-                            console.log("resetting")
-                            if let data: GameOptionsData = readUsrDefData(key: gameOptKey) {
-                                self.gameOptions.set(data: data)
-                            }
-                        }
+//                        Button("Undo") {
+//                            console.log("resetting")
+//                            if let data: GameOptionsData = readUsrDefData(key: gameOptKey) {
+//                                self.gameOptions.set(data: data)
+//                            }
+//                        }
                         Button("Reset") {
                             console.log("resetting")
                             gameOptions.set(data: GameOptionsData(data: GameOptions()))

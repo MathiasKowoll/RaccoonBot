@@ -20,6 +20,8 @@ func closeWineActivities(cxAppPath: String, bottleName: String) async throws {
         guard let url = app.executableURL else { return false }
         return url.lastPathComponent.lowercased().hasSuffix(".exe")
     }
+    
+    try await quitSteam(cxAppPath: cxAppPath, bottleName: bottleName) // try to close steam properly first
 
     // Send terminate to all matching apps
     for app in targets {
@@ -68,8 +70,16 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, op
             "WINEMSYNC": options!.wineMSync ? "1" : "0",
             "MTL_HUD_ENABLED": options!.mtlHudEnabled ? "1" : "0"
         ]
+        let regOptionsDictionary = [
+            "DisableHidraw":options!.disableHidraw ? "1" : "0",
+            "Enable SDL": options!.enableSDL ? "1" : "0"
+        ]
         console.warn("applying config changes to the bottle \(selectedBottle)...")
         try editCXBottleConfigFile(selectedBottle: selectedBottle, options: optionsDictionary)
+        try regOptionsDictionary.keys.forEach { key in
+            let value = regOptionsDictionary[key]!
+            try setReg(cxAppPath: cxAppPath, selectedBottle: selectedBottle, key: key, value: value)
+        }
     }
     let bottleName = URL(string: selectedBottle)?.lastPathComponent ?? ""
     console.warn("restarting bottle...")
@@ -83,7 +93,7 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, op
     try safeShell(command)
 }
 
-func setReg (cxAppPath: String, selectedBottle: String, options: GameOptions? = nil, key: String, value: String) throws -> Void {
+func setReg (cxAppPath: String, selectedBottle: String, key: String, value: String) throws -> Void {
     // wine reg add "HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\winebus" /v "Enable SDL" /t REG_DWORD /d 1 /f
     let bottleName = URL(string: selectedBottle)?.lastPathComponent ?? ""
     let command = "\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) reg add \"HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Services\\winebus\\\" /v \"\(key)\" /t REG_DWORD /d \(value) /f"

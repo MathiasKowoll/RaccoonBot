@@ -24,7 +24,7 @@ class Console {
     }
     
     func cacheRelease(_ msg: String, key: String, function: StaticString = #function) {
-        let message: String = "[\(function)] \(msg) \(self.items[key]?.joined(separator: ",") ?? "no msg")"
+        let message: String = "[\(function)] deferred: \(msg) \(self.items[key]?.joined(separator: ",") ?? "no msg")"
         
         #if DEBUG
         print(message)
@@ -36,7 +36,7 @@ class Console {
     }
     
     func log(_ msg: String, function: StaticString = #function) {
-        let message: String = "[\(function)] \(msg)"
+        let message: String = "[\(function)] info: \(msg)"
         
         #if DEBUG
         print(message)
@@ -46,7 +46,7 @@ class Console {
         }
     }
     func warn(_ msg: String, function: StaticString = #function) {
-        let message: String = "[\(function)] \(msg)"
+        let message: String = "[\(function)] warning: \(msg)"
         
         #if DEBUG
         print(message)
@@ -59,7 +59,7 @@ class Console {
         }
     }
     func error(_ msg: String, function: StaticString = #function) {
-        let message: String = "[\(function)] \(msg)"
+        let message: String = "[\(function)] error: \(msg)"
         
         let errorMsg: String = "ERROR: \(message)"
         if (useLogger) {

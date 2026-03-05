@@ -31,8 +31,8 @@ struct ProfileWidget: View {
                             .scaledToFit()
                             .mask(Circle())
                             .padding(5)
-                        Text(p.personaName)
-                    }.frame(maxWidth: 100, alignment: .init(horizontal: .leading, vertical: .center))
+                        Text(p.personaName).lineLimit(1)
+                    }.frame(maxWidth: 120, alignment: .init(horizontal: .leading, vertical: .center))
                 }
                 .buttonStyle(.plain)
             }
@@ -45,7 +45,7 @@ struct ProfileWidget: View {
                             ProgressView("Loading profile…")
                         }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                     } else if let p = profileData {
-                        let lastLogOff = Date(timeIntervalSince1970: Double(p.lastLogOff)).formatted()
+                        let lastLogOff = p.lastLogOff == nil ? "empty" : Date(timeIntervalSince1970: Double(p.lastLogOff!)).formatted()
                         let timeCreated = Date(timeIntervalSince1970: Double(p.timeCreated)).formatted()
                         
                         VStack(alignment: .leading, spacing: 8) {

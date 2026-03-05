@@ -317,7 +317,7 @@ struct UserInfo: Codable {
     let avatarMedium: String
     let avatarFull: String
     let avatarHash: String
-    let lastLogOff: Int
+    let lastLogOff: Int?
     let personaState: Int
     let primaryClanID: String
     let timeCreated: Int

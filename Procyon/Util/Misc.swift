@@ -211,18 +211,25 @@ func getAppNames(isNative: Bool, gameURL: URL?) -> [String] {
 func getGameTracker(appNames: [String], cxAppPath: String, bottleName: String, onLoad: @escaping () -> Void, onTerminate: @escaping () -> Void, isNative: Bool) async throws -> TerminationObserver {
     let tOb = TerminationObserver(then: { output in
         let terminatedAppName = (output.userInfo?[AnyHashable("NSApplicationPath")] as? String ?? "unknown").split(separator: "/").last?.description ?? "unknown"
+        console.log("will check if \(terminatedAppName) is in our list...")
         if (appNames.contains(terminatedAppName)) {
+            console.log("\(appNames) contains \(terminatedAppName), closing steam...")
             Task {
                 try await quitSteam(cxAppPath: cxAppPath, bottleName: bottleName, isNative: isNative)
                 if (!isNative) {
                     try await closeWineActivities()
                 }
                 onTerminate()
+                console.log("onTerminate() was called")
             }
         }
     })
     try await trackPlaying(apps: appNames, then: {
+        console.log("found game \(appNames.joined(separator: ", ")), loading...")
         onLoad()
+    }, onTimeout: {
+        console.log("\(appNames.joined(separator: ", ")), timeout...")
+        onTerminate()
     }, isNative: isNative)
     return tOb
 }

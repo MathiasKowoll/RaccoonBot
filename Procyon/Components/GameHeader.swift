@@ -130,11 +130,12 @@ struct GameHeader: View {
             do {
                 Task(priority: .background) {
                     tObserver = try await getGameTracker(appNames: game!.appNames, cxAppPath: appGlobals.cxAppPath!, bottleName: appGlobals.selectedBottle, onLoad: {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
                             libraryPageGlobals.setLoader(state: false)
                         }
                         libraryPageGlobals.playingID = game!.id
                     }, onTerminate: {
+                        libraryPageGlobals.setLoader(state: false) // if doesn't get loaded i need to close the loader
                         libraryPageGlobals.playingID = nil
                         tObserver = nil
                     }, isNative: game!.isNative)

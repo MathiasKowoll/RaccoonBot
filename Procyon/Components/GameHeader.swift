@@ -130,14 +130,14 @@ struct GameHeader: View {
             do {
                 Task(priority: .background) {
                     tObserver = try await getGameTracker(appNames: game!.appNames, cxAppPath: appGlobals.cxAppPath!, bottleName: appGlobals.selectedBottle, onLoad: {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
                             libraryPageGlobals.setLoader(state: false)
                         }
                         libraryPageGlobals.playingID = game!.id
                     }, onTerminate: {
                         libraryPageGlobals.playingID = nil
                         tObserver = nil
-                    })
+                    }, isNative: game!.isNative)
                 }
                 if(game!.isNative) {
                     try await launchNativeGame(id: String(game!.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions)

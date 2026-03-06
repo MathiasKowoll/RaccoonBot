@@ -56,35 +56,51 @@ func closeWineActivities() async throws {
     }
 }
 
-func trackPlaying(apps: [String], then: @escaping () -> Void) async throws -> Void {
-    let pollInterval: UInt64 = 200_000_000
+func trackPlaying(apps: [String], then: @escaping () -> Void, isNative: Bool) async throws -> Void {
+    let pollInterval: UInt64 = 500_000_000
     let gracePeriod: UInt64 = 30_000_000_000
     var elapsed: UInt64 = 0
-    var targets = NSWorkspace.shared.runningApplications.filter { app in
+    var targets = isNative ? NSWorkspace.shared.runningApplications : NSWorkspace.shared.runningApplications.filter { app in
         guard let url = app.executableURL else { return false }
         return url.lastPathComponent.lowercased().hasSuffix(".exe")
     }
     
+    var nativeApps: [String] {
+        apps + apps.map { $0.replacingOccurrences(of: ".app", with: "") }
+    }
+    
     while (elapsed < gracePeriod) {
         try await Task.sleep(nanoseconds: pollInterval)
-        let newTargets = NSWorkspace.shared.runningApplications.filter { app in
+        let newTargets = isNative ? NSWorkspace.shared.runningApplications : NSWorkspace.shared.runningApplications.filter { app in
             guard let url = app.executableURL else { return false }
             return url.lastPathComponent.lowercased().hasSuffix(".exe") && !targets.contains(where: { $0.processIdentifier == app.processIdentifier })
         }
         if(newTargets.count > 0){
+            console.log("tracking \(apps.joined(separator: ", "))")
             console.log(newTargets.map{ $0.executableURL?.lastPathComponent ?? "unknown" }.joined(separator: ", "))
         }
         targets.append(contentsOf: newTargets)
-        if(newTargets.contains { Set(apps).contains($0.executableURL?.lastPathComponent) }) {
+        if(newTargets.contains { Set(isNative ? nativeApps : apps).contains($0.executableURL?.lastPathComponent) }) {
             then()
+            break
         }
         elapsed += pollInterval
     }
     
 }
 
-func quitSteam(cxAppPath: String, bottleName: String) async throws -> Void {
-    try safeShell("\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \"C:\\Program Files (x86)\\Steam\\Steam.exe\" -shutdown")
+func quitSteam(cxAppPath: String, bottleName: String, isNative: Bool) async throws -> Void {
+    if(isNative) {
+        let steamBundleID = "com.valvesoftware.steam"
+        if let steamApp = NSRunningApplication.runningApplications(withBundleIdentifier: steamBundleID).first {
+            steamApp.terminate() // polite request to quit
+        }
+    } else {
+        try safeShell("\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \"C:\\Program Files (x86)\\Steam\\Steam.exe\" -shutdown")
+    }
+}
+
+func quitWine(cxAppPath: String, bottleName: String) async throws -> Void {
     try safeShell("\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) wineserver -k")
 }
 
@@ -108,8 +124,6 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, op
     }
     let bottleName = URL(string: selectedBottle)?.lastPathComponent ?? ""
     console.warn("restarting bottle...")
-//    try await closeWineActivities()
-//    try await quitSteam(cxAppPath: cxAppPath, bottleName: bottleName)
 
     console.warn("attempting to run steam.exe on game id \(id)")
     let arguments = options != nil ? " " + options!.gameArguments : ""

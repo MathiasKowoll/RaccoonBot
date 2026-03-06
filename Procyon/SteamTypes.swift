@@ -158,13 +158,13 @@ struct RatingBody: Codable {
 
 struct SteamOwnedGame: Codable {
     let appID: Int
-    let playtimeForever: Int
-    let playtimeWindowsForever: Int
-    let playtimeMacForever: Int
-    let playtimeLinuxForever: Int
-    let playtimeDeckForever: Int
-    let rtimeLastPlayed: Int
-    let playtimeDisconnected: Int
+    let playtimeForever: Int?
+    let playtimeWindowsForever: Int?
+    let playtimeMacForever: Int?
+    let playtimeLinuxForever: Int?
+    let playtimeDeckForever: Int?
+    let rtimeLastPlayed: Int?
+    let playtimeDisconnected: Int?
 
     enum CodingKeys: String, CodingKey {
         case appID = "appid"

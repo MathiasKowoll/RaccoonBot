@@ -123,7 +123,7 @@ struct GameThumbnail: View {
                     }, onTerminate: {
                         libraryPageGlobals.playingID = nil
                         tObserver = nil
-                    })
+                    }, isNative: item.isNative)
                 }
                 if(item.isNative) {
                     try await launchNativeGame(id: String(item.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions)

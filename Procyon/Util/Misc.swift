@@ -208,20 +208,22 @@ func getAppNames(isNative: Bool, gameURL: URL?) -> [String] {
     return results
 }
 
-func getGameTracker(appNames: [String], cxAppPath: String, bottleName: String, onLoad: @escaping () -> Void, onTerminate: @escaping () -> Void) async throws -> TerminationObserver {
+func getGameTracker(appNames: [String], cxAppPath: String, bottleName: String, onLoad: @escaping () -> Void, onTerminate: @escaping () -> Void, isNative: Bool) async throws -> TerminationObserver {
     let tOb = TerminationObserver(then: { output in
-        let terminatedAppName = output.userInfo?[AnyHashable("NSApplicationName")] as? String ?? "unknown"
+        let terminatedAppName = (output.userInfo?[AnyHashable("NSApplicationPath")] as? String ?? "unknown").split(separator: "/").last?.description ?? "unknown"
         if (appNames.contains(terminatedAppName)) {
             Task {
-                try await quitSteam(cxAppPath: cxAppPath, bottleName: bottleName)
-                try await closeWineActivities()
+                try await quitSteam(cxAppPath: cxAppPath, bottleName: bottleName, isNative: isNative)
+                if (!isNative) {
+                    try await closeWineActivities()
+                }
                 onTerminate()
             }
         }
     })
     try await trackPlaying(apps: appNames, then: {
         onLoad()
-    })
+    }, isNative: isNative)
     return tOb
 }
 

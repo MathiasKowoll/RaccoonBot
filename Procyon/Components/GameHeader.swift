@@ -35,39 +35,20 @@ struct GameHeader: View {
                 Text(developers).font(.footnote)
                 Text(publishers).font(.footnote)
             }
+            HStack(alignment: .center) {
             if(game!.downloadProgress == 100 && game!.isInstalled) {
-                BigButton(text: isPlaying ? "Stop" : "Play", action: {
+                PlayButtonExtras(playAction: {
                     playGame()
-                })
-                .padding(.leading, 24)
+                }, optionsAction: {
+                    showGameOptions = true
+                }, folderAction: {
+                    let meta = getMeta(libraryPageGlobals.gamesMeta, byID: String(game!.id))!
+                    showFolder(url: meta.gameURL!)
+                }, isPlaying: isPlaying)
             }
             Spacer()
-            HStack(alignment: .center) {
+            
                 HStack{
-                    if(game!.downloadProgress == 100 && game!.isInstalled) {
-                        Button {
-                            showGameOptions = true
-                        } label: {
-                            Image(systemName: "gear")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 20)
-                                .foregroundStyle(.white)
-                        }.buttonStyle(.plain)
-                    }
-                    
-                    if (game!.downloadProgress == 100 && game!.isInstalled) {
-                        Button {
-                            let meta = getMeta(libraryPageGlobals.gamesMeta, byID: String(game!.id))!
-                            showFolder(url: meta.gameURL!)
-                        } label: {
-                            Image(systemName: "folder.fill")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 20)
-                                .foregroundStyle(.white)
-                        }.buttonStyle(.plain)
-                    }
                     if(game!.isNative == true) {
                         Image(systemName: "apple.logo")
                             .resizable()

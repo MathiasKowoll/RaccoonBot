@@ -5,7 +5,7 @@
 //  Created by Italo Mandara on 19/02/2026.
 //
 
-internal import Foundation
+import Foundation
 import Combine
 
 enum CXGraphicsBackend: String {
@@ -179,7 +179,7 @@ struct Game: Identifiable {
     let backgroundRaw: String?
 
     let contentDescriptors: ContentDescriptors?
-    let ratings: Ratings?
+    let ratings: [String: RatingBody]?
     
     init(from: SteamGame, id: String, isNative: Bool, downloadProgress: Double, isInstalled: Bool, appNames: [String]) {
         self.id = id
@@ -317,11 +317,11 @@ extension Game {
         background: "https://placehold.co/600x400/orange/white",
         backgroundRaw: "https://placehold.co/600x400",
         contentDescriptors: ContentDescriptors(ids: [1, 2, 3], notes: "Contains mild violence"),
-        ratings: Ratings(
-            esrb: RatingBody(rating: "T", requiredAge: "13", descriptors: "Violence"),
-            pegi: RatingBody(rating: "16", requiredAge: "16", descriptors: "Violence"),
-            usk: RatingBody(rating: "12", requiredAge: "12", descriptors: "Violence")
-        )
+        ratings: [
+            "esrb": RatingBody(rating: "T", requiredAge: "13", descriptors: "Violence"),
+            "pegi": RatingBody(rating: "16", requiredAge: "16", descriptors: "Violence"),
+            "usk": RatingBody(rating: "12", requiredAge: "12", descriptors: "Violence")
+        ]
     )
     static let mock = Game(from: Game.steamMock, id: "example", isNative: true, downloadProgress: 100, isInstalled: true, appNames: ["test.exe"])
 }

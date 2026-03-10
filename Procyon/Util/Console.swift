@@ -6,7 +6,7 @@
 //
 
 import os
-internal import Foundation
+import Foundation
 
 let logger = Logger(subsystem: "CXPatcher", category: "util")
 

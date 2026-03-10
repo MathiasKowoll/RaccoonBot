@@ -5,7 +5,7 @@
 //  Created by Italo Mandara on 24/02/2026.
 //
 
-internal import Foundation
+import Foundation
 
 let suiteName = "group.com.italomandara.procyon"
 

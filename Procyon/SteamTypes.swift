@@ -237,7 +237,7 @@ struct SteamGame: Codable {
     let backgroundRaw: String?
 
     let contentDescriptors: ContentDescriptors?
-    let ratings: Ratings?
+    let ratings: [String: RatingBody]?
 
     enum CodingKeys: String, CodingKey {
         case type, name

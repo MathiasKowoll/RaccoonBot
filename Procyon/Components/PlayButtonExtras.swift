@@ -9,21 +9,22 @@ import SwiftUI
 
 struct PlayButtonExtras: View {
     var playAction: () -> Void
+    var stopAction: () -> Void
     var optionsAction: () -> Void
     var folderAction: () -> Void
     var isPlaying: Bool
     
     var body: some View {
         HStack{
-            Button { playAction() } label: {
+            Button { isPlaying ? playAction() : stopAction() } label: {
                 Text(isPlaying ? "Stop" : "Play")
-                    .padding(.vertical, 5)
+                    .padding(.vertical, 4)
                     
-            }
+            }.font(.system(size: 20, weight: .bold))
             Divider()
             Button { optionsAction() } label: {
                 Image(systemName: "gear")
-                    .padding(.vertical, 5)
+                    .padding(.vertical, 4)
                     
             }
             Divider()
@@ -31,13 +32,13 @@ struct PlayButtonExtras: View {
                 folderAction()
             } label: {
                 Image(systemName: "folder.fill")
-                    .padding(.vertical, 5)
+                    .padding(.vertical, 4)
                                                
             }
         }
         .padding(.horizontal, 20)
         .buttonStyle(.plain)
-        .font(.system(size: 20, weight: .bold))
+        .font(.system(size: 16))
         .foregroundStyle(.black)
         .background(.procyonSecondary)
         .controlSize(.large)
@@ -50,10 +51,8 @@ struct PlayButtonExtras: View {
 
 #Preview {
     PlayButtonExtras(playAction: {
-    
+    }, stopAction: {
     }, optionsAction: {
-        
     }, folderAction: {
-        
     }, isPlaying: false)
 }

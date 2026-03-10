@@ -6,7 +6,7 @@
 //
 
 
-internal import Foundation
+import Foundation
 func toCrossoverENVString(_ key: String, _ value: String) -> String {
     return "\"\(key)\"=\"\(value)\""
 }

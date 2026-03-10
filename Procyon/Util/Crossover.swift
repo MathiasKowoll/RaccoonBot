@@ -5,7 +5,7 @@
 //  Created by Italo Mandara on 26/02/2026.
 //
 
-internal import Foundation
+import Foundation
 
 func getCXDefaultBottlesURL() -> URL {
     let appID = "com.codeweavers.CrossOver" as CFString

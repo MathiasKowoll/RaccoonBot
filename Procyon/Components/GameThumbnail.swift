@@ -70,7 +70,18 @@ struct GameThumbnail: View {
                         
                         if(!isDownloading && item.isInstalled) {
                             Button {
-                                PlayGame()
+                                if (isPlaying) {
+                                    if(item.isNative) {
+                                        console.log("stop action not implemented for macOS")
+                                    } else {
+                                        Task {
+                                            try! await closeWineActivities()
+                                            libraryPageGlobals.playingID = nil
+                                        }
+                                    }
+                                } else {
+                                    PlayGame()
+                                }
                             } label: {
                                 Label(isPlaying ? "Stop" :"Play", systemImage: isPlaying ? "stop.fill" : "play.fill").foregroundStyle(.black)
                             }

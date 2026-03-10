@@ -6,7 +6,7 @@
 //
 
 
-internal import Foundation
+import Foundation
 
 func parseACFToDict(from file: String) -> [String:Any] {
     return parseVDFToDict(from: file)

@@ -36,16 +36,25 @@ struct GameHeader: View {
                 Text(publishers).font(.footnote)
             }
             HStack(alignment: .center) {
-            if(game!.downloadProgress == 100 && game!.isInstalled) {
-                PlayButtonExtras(playAction: {
-                    playGame()
-                }, optionsAction: {
-                    showGameOptions = true
-                }, folderAction: {
-                    let meta = getMeta(libraryPageGlobals.gamesMeta, byID: String(game!.id))!
-                    showFolder(url: meta.gameURL!)
-                }, isPlaying: isPlaying)
-            }
+                if(game!.downloadProgress == 100 && game!.isInstalled) {
+                    PlayButtonExtras(playAction: {
+                        playGame()
+                    }, stopAction: {
+                        if(game!.isNative) {
+                            console.log("stop action not implemented for macOS")
+                        } else {
+                            Task {
+                                try! await closeWineActivities()
+                                libraryPageGlobals.playingID = nil
+                            }
+                        }
+                    }, optionsAction: {
+                        showGameOptions = true
+                    }, folderAction: {
+                        let meta = getMeta(libraryPageGlobals.gamesMeta, byID: String(game!.id))!
+                        showFolder(url: meta.gameURL!)
+                    }, isPlaying: isPlaying)
+                }
             Spacer()
             
                 HStack{

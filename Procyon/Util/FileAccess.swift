@@ -5,7 +5,7 @@
 //  Created by Italo Mandara on 24/02/2026.
 //
 
-internal import Foundation
+import Foundation
 
 func withSecurityScope<T>(for url: URL, _ body: () throws -> T) rethrows -> T? {
     guard url.startAccessingSecurityScopedResource() else { return nil }

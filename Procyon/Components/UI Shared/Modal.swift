@@ -24,8 +24,8 @@ struct Modal<Content: View>: View {
         }
         .overlay(alignment: .topTrailing) {
             CloseModalButton(show: $showModal)
-                .padding(.horizontal, collapse == true ? 15 : 0)
+                .padding(.horizontal, collapse == true ? 30 : 15)
         }
-        .padding(.horizontal, collapse == true ? 0 : 15)
+//        .padding(.horizontal, collapse == true ? 0 : 15)
     }
 }

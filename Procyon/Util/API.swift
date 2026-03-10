@@ -5,7 +5,7 @@
 //  Created by Italo Mandara on 29/01/2026.
 //
 
-internal import Foundation
+import Foundation
 import Alamofire
 
 let apiKey = Bundle.main.object(forInfoDictionaryKey: "API_KEY") as! String

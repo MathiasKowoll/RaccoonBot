@@ -16,7 +16,7 @@ struct PlayButtonExtras: View {
     
     var body: some View {
         HStack{
-            Button { isPlaying ? playAction() : stopAction() } label: {
+            Button { isPlaying ? stopAction() : playAction() } label: {
                 Text(isPlaying ? "Stop" : "Play")
                     .padding(.vertical, 4)
                     

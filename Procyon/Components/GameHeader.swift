@@ -37,9 +37,8 @@ struct GameHeader: View {
             }
             HStack(alignment: .center) {
                 if(game!.downloadProgress == 100 && game!.isInstalled) {
-                    PlayButtonExtras(playAction: {
-                        playGame()
-                    }, stopAction: {
+                    PlayButtonExtras(playAction: playGame,
+                    stopAction: {
                         if(game!.isNative) {
                             console.log("stop action not implemented for macOS")
                         } else {

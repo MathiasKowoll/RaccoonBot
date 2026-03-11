@@ -122,8 +122,10 @@ struct GameThumbnail: View {
                 let gameOptKey = namespacedKey("GameOptions", String(item.steamAppID))
                 let gameOptions: GameOptions = GameOptions()
                 if let gameOptionsData: GameOptionsData = readUsrDefData(key: gameOptKey) {
-                    let gameOptions: GameOptions = GameOptions()
                     gameOptions.set(data: gameOptionsData)
+                    console.log("options retrieved")
+                } else {
+                    console.warn("failed to retrieve game options")
                 }
                 Task(priority: .background) {
                     tObserver = try await getGameTracker(appNames: updatedItem.appNames, cxAppPath: appGlobals.cxAppPath!, bottleName: appGlobals.selectedBottle, onLoad: {

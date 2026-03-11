@@ -58,7 +58,7 @@ func closeWineActivities() async throws {
 
 func trackPlaying(apps: [String], then: @escaping () -> Void, onTimeout: @escaping () -> Void, isNative: Bool) async throws -> Void {
     let pollInterval: UInt64 = 500_000_000
-    let gracePeriod: UInt64 = 40_000_000_000 // after 30 seconds give up tracking
+    let gracePeriod: UInt64 = 60_000_000_000 // after 60 seconds give up tracking
     var elapsed: UInt64 = 0
     var targets = isNative ? NSWorkspace.shared.runningApplications : NSWorkspace.shared.runningApplications.filter { app in
         guard let url = app.executableURL else { return false }
@@ -85,12 +85,13 @@ func trackPlaying(apps: [String], then: @escaping () -> Void, onTimeout: @escapi
         }
         elapsed += pollInterval
     }
-    onTimeout()
     if(elapsed < gracePeriod){
-        console.warn("\(nativeOrWineApps.description) crashed, cleaning up steam processes...")
+        console.warn("\(nativeOrWineApps.description) crashed")
     } else {
-        console.warn("couldn't find apps \(nativeOrWineApps.description) within the allowed grace period elapsed: \(elapsed/1_000_000_000)s")
+        console.warn("couldn't find apps \(nativeOrWineApps.description) within the allowed grace period elapsed: \(elapsed/1_000_000_000)s ")
     }
+    console.log("starting timeout callback...")
+    onTimeout()
 }
 
 func quitSteam(cxAppPath: String, bottleName: String, isNative: Bool) async throws -> Void {

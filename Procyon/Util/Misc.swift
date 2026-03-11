@@ -144,7 +144,7 @@ func getSteamLibraryFolders(from: URL) -> [URL] {
             let steamSettingsFile = try String(contentsOfFile: steamSettingsPath.path(percentEncoded: false), encoding: .utf8)
             let parsed = parseVDFToDict(from: steamSettingsFile)
             if let libraries = parsed["libraryfolders"] as? [String: Any] {
-                for (_, value) in libraries {
+                for (_, value) in libraries { // Refactor this mess
                     if let val = (value as? [String: Any]) {
                         if let path = val["path"] as? String{
                             let driveAlias = String(path.split(separator: ":\\")[0]) + ":"

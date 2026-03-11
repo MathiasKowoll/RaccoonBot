@@ -31,10 +31,23 @@ struct ProfileWidget: View {
                             .scaledToFit()
                             .mask(Circle())
                             .padding(5)
+                            .frame(width: 40)
                         Text(p.personaName).lineLimit(1)
                     }.frame(maxWidth: 150, alignment: .init(horizontal: .leading, vertical: .center))
                 }
                 .buttonStyle(.plain)
+            } else {
+                if let fallbackProfileData = getSteamUserDataFallback(usingBottlePath: URL(string: appGlobals.selectedBottle)!) {
+                    HStack {
+                        KFImage(URL(string: fallbackProfileData.avatar))
+                            .resizable()
+                            .scaledToFit()
+                            .mask(Circle())
+                            .padding(5)
+                            .frame(width: 40)
+                        Text(fallbackProfileData.personaName).lineLimit(1)
+                    }.frame(maxWidth: 150, alignment: .init(horizontal: .leading, vertical: .center))
+                }
             }
         }
         .sheet(isPresented: $showProfile) {
@@ -65,7 +78,9 @@ struct ProfileWidget: View {
                                 VStack (alignment: .leading){
                                     HStack (alignment: .bottom){
                                         Text(p.personaName).font(.largeTitle)
-                                        Flag(countryCode: p.locCountryCode!).font(.largeTitle)
+                                        if (p.locCountryCode != nil){
+                                            Flag(countryCode: p.locCountryCode!).font(.largeTitle)
+                                        }
                                     }
                                     HStack {
                                         Tag(p.communityVisibilityState == 3 ? "Public" : "Private")

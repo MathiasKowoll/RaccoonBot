@@ -127,6 +127,39 @@ func getSteamUserID (usingBottlePath: URL) -> String? {
     return users?.keys.first?.description
 }
 
+func getSteamUserDataFallback (usingBottlePath: URL) -> UserInfo? {
+    let steamLoginUsersPath = usingBottlePath.appendingPathComponent(DEFAULT_STEAM_WINE_PATH)
+        .appendingPathComponent("loginusers.vdf")
+    guard let steamSettingsFile = try? String(contentsOfFile: steamLoginUsersPath.path(percentEncoded: false), encoding: .utf8) else { return nil }
+    let parsed = parseVDFToDict(from: steamSettingsFile)
+    let users = parsed["users"] as? [String: Any]
+    if let key = users?.keys.first {
+        var user = users![key] as? [String: Any]
+        let personaName = user?["PersonaName"] as? String ?? ""
+        let avatar = usingBottlePath.appendingPathComponent("/drive_c/Program Files (x86)/Steam/config/avatarcache/").appendingPathComponent(key).appendingPathExtension("png").absoluteString
+        let fallbackProfileData = UserInfo(
+            steamID: "",
+            communityVisibilityState: 0,
+            profileState: 0,
+            personaName: personaName,
+            profileURL: "",
+            avatar: avatar,
+            avatarMedium: avatar,
+            avatarFull: avatar,
+            avatarHash: "",
+            lastLogOff: 0,
+            personaState: 0,
+            primaryClanID: "",
+            timeCreated: 0,
+            personaStateFlags: 0,
+            locCountryCode: nil,
+            locStateCode: nil
+        )
+        return fallbackProfileData
+    }
+    return nil
+}
+
 func getSteamLibraryFolders(from: URL) -> [URL] {
     let f = FileManager.default
     var steamLibraries: [URL] = []

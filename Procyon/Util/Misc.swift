@@ -147,14 +147,15 @@ func getSteamLibraryFolders(from: URL) -> [URL] {
                 for (_, value) in libraries {
                     if let val = (value as? [String: Any]) {
                         if let path = val["path"] as? String{
-                            let driveAlias = String(path.split(separator: ":/")[0]) + ":"
+                            let driveAlias = String(path.split(separator: ":\\")[0]) + ":"
                             let splitPath = path.split(separator: ":")
                             if (splitPath.count > 1){
-                                let partial = splitPath[1].replacingOccurrences(of: "//", with: "/")
+                                let partial = splitPath[1].replacingOccurrences(of: "\\\\", with: "/")
                                 if let newPath = drives[driveAlias]?.appendingPathComponent(partial).appendingPathComponent("/steamapps") {
                                     steamLibraries.append(newPath)
                                 } else {
-                                    console.log("couldn't find mac Steam config")
+                                    print(driveAlias)
+                                    console.log("couldn't find Windows Steam config")
                                 }
                             } else {
                                 let macNewPath = URL(fileURLWithPath: path).appendingPathComponent("/steamapps")

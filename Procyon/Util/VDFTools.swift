@@ -8,22 +8,19 @@
 
 import Foundation
 
-func parseACFToDict(from file: String) -> [String:Any] {
+func parseACFToDict(from file: String) -> [String: Any] {
     return parseVDFToDict(from: file)
 }
 
-func parseVDFToDict(from file: String) -> [String:Any] {
+func parseVDFToDict(from file: String) -> [String: Any] {
     /**
-     more comprehensive parser (to replace the one above)
-     parses an VDF file content String into a dictionary
-     TO DO: Refactor and made the parser logic less brittle
+     * New Refactored parser
      */
     
     func getTokens() -> [String] { // lexer
-        let regex: Regex = /".*?"|\{|\}/
-        return file.matches(of: regex)
+        let pattern = #/"[^"]*"|\{|\}/#
+        return file.matches(of: pattern)
             .compactMap { $0.0.description }
-            .map { $0.replacingOccurrences(of: "\\", with: "/") }
     }
     
     let tks = getTokens()
@@ -32,13 +29,17 @@ func parseVDFToDict(from file: String) -> [String:Any] {
         let stringToken: Regex = /"(.*?)"$/
         return token.wholeMatch(of: stringToken)?.1.description
     }
-    
-    func parse(_ tokens: [String]) -> [String: Any] {
+
+    func parse(_ tokens: [String], _ index: Int = 0) -> ([String: Any], Int) {
+        var pointer = index
+
         var dict: [String: Any] = [:]
-        var openBrackets: Int = 0
-        var sliceStart = 0
-        var sliceEnd = 0
-        var childObjKey: String? = nil
+
+        if(pointer >= tokens.count - 1) {
+          print("EOF")
+          return (dict, tokens.count - 1)
+        }
+        
         func getStringTokenForIndex(_ index: Int) -> String? {
             return getStringToken(from: tokens[index])
         }
@@ -51,39 +52,31 @@ func parseVDFToDict(from file: String) -> [String:Any] {
         func isRBrace(_ index: Int) -> Bool {
             return tokens[index] == "}"
         }
-        
-        for i in tokens.indices {
-            if(i % 2 == 0) { // process the tokens in pairs
-                if(
-                    i > 1 && //skip root key
-                    isStringToken(i) &&
-                    isLBrace(i + 1) && // if it's a string token followed by an open bracket then it's a child object
-                    openBrackets == 0 // not nested in other child objects
-                ){
-                    childObjKey = getStringTokenForIndex(i)! // assign the key for later use
-                    openBrackets += 1 // begin to track the child object
-                    sliceStart = i // begin to track the child object
-                }
-                if (
-                    (i < tokens.indices.count) && // array boundary constraint
-                    isStringToken(i) && // key is a string token
-                    isStringToken(i + 1) && // value is a string token
-                    openBrackets == 0 // skip if inside a nested obj, will be processed recursively instead
-                ) {
-                    let key = getStringTokenForIndex(i)!
-                    let value = getStringTokenForIndex(i + 1)!
-                    dict[key] = value // update the parent objeect string values
-                }
+
+        while pointer < tokens.count {
+          if(pointer + 1 < tokens.count) {
+            let next = pointer+1
+            let key = getStringTokenForIndex(pointer)
+            if(isStringToken(pointer) && isStringToken(next) && key != nil) {
+              let value = getStringTokenForIndex(next)!
+              dict[key!] = value
+              pointer = next + 1
+            } else if(isStringToken(pointer) && isLBrace(next)) {
+              pointer = next + 1
+              let (d, p) = parse(tokens, pointer)
+              dict[key!] = d
+              if(p + 1 < tokens.count) {
+                pointer = p + 1
+              } else {
+                return (dict, tokens.count - 1)
+              }
             }
-            if(openBrackets == 0 && childObjKey != nil) { // if the child object is closed and a key is assigned
-                sliceEnd = i + 1 // update the range
-                dict[childObjKey!] = parse(Array(tokens[sliceStart..<sliceEnd])) // process the child obj (slice) recursively
-                childObjKey = nil
-            } else if(i < tokens.indices.count - 1 && isRBrace(i)) { //skip root closing bracket
-                openBrackets -= 1 // will continue until all the brackets are balanced (optimistic)
+            if(isRBrace(pointer)) {
+              return (dict, pointer)
             }
+          }
         }
-        return dict
+        return (dict, pointer)
     }
-    return [getStringToken(from: tks[0])!: parse(tks)]
+    return parse(tks).0
 }

@@ -22,6 +22,14 @@ let debugEnabled: Bool = {
 }()
 let useLogger: Bool = false
 
+func prettyPrinted(dict: Dictionary<String, Any>) -> String {
+    if let data = try? JSONSerialization.data(withJSONObject: dict, options: .prettyPrinted),
+       let str = String(data: data, encoding: .utf8) {
+        return str
+    }
+    return "{}"
+}
+
 func addSteamFolderPaths(_ url: URL) {
     do {
         if (try getIDsFromFolder(dest: url).isEmpty) {
@@ -134,7 +142,7 @@ func getSteamUserDataFallback (usingBottlePath: URL) -> UserInfo? {
     let parsed = parseVDFToDict(from: steamSettingsFile)
     let users = parsed["users"] as? [String: Any]
     if let key = users?.keys.first {
-        var user = users![key] as? [String: Any]
+        let user = users![key] as? [String: Any]
         let personaName = user?["PersonaName"] as? String ?? ""
         let avatar = usingBottlePath.appendingPathComponent("/drive_c/Program Files (x86)/Steam/config/avatarcache/").appendingPathComponent(key).appendingPathExtension("png").absoluteString
         let fallbackProfileData = UserInfo(

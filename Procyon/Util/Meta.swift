@@ -17,7 +17,7 @@ func getGamesMeta(from: URL) throws -> [GamesMeta] {
         let urls = try f.contentsOfDirectory(at: from, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants, .skipsPackageDescendants]).filter { $0.pathExtension == "acf" }
         try urls.forEach { url in
             let file  = try readFile(at: url)
-            let parsed = parseACFToDict(from: file)
+            let parsed = parseVDFToDict(from: file)
             let meta = mapDictToGamesMeta(from: parsed["AppState"] as! [String: Any])
             meta.gameURL = from.appendingPathComponent("common").appendingPathComponent(meta.installdir)
             meta.isNative = meta.isDownloaded() ? getIsNative(fromURL: meta.gameURL!) : false

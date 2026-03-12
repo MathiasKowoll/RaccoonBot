@@ -26,7 +26,6 @@ func parseVDFToDict(from file: String) -> [String: Any] {
                 }
             }
     }
-    
     func getStringToken(from token: Token) -> String? {
         if case let .string(string) = token {
             return string
@@ -35,23 +34,23 @@ func parseVDFToDict(from file: String) -> [String: Any] {
     }
     
     let tokens = getTokens()
-
-    func parse(at index: Int = 0) -> (data: [String: Any], pointer: Int) {
-        var pointer = index
+    func getStringTokenForIndex(_ index: Int) -> String? {
+        return getStringToken(from: tokens[index])
+    }
+    func isStringToken(_ index: Int) -> Bool {
+        getStringTokenForIndex(index) != nil
+    }
+    func parse(at pointer: inout Int) -> (data: [String: Any], pointer: Int) {
         var dict: [String: Any] = [:]
 
-        if(pointer > tokens.count - 1) {
-          return (dict, tokens.count - 1)
-        }
-        
-        func getStringTokenForIndex(_ index: Int) -> String? {
-            return getStringToken(from: tokens[index])
-        }
-        func isStringToken(_ index: Int) -> Bool {
-            getStringTokenForIndex(index) != nil
+        if(pointer > tokens.count - 1) { // if starts parsing after the last token, bail out
+          return (dict, tokens.count)
         }
 
         while pointer < tokens.count {
+            if(tokens[pointer] == .closeBrace) { // exit the recursion and continue from where you were before
+                return (dict, pointer)
+            }
             if(pointer + 1 < tokens.count) {
                 let next = pointer + 1
                 guard let key = getStringTokenForIndex(pointer) else {
@@ -63,7 +62,7 @@ func parseVDFToDict(from file: String) -> [String: Any] {
                     pointer = next + 1
                 } else if(tokens[next] == .openBrace) { // if it's an open bracket we have a child node
                     pointer = next + 1
-                    let (childDict, exitPointer) = parse(at: pointer)
+                    let (childDict, exitPointer) = parse(at: &pointer)
                     dict[key] = childDict
                     if(exitPointer + 1 < tokens.count) { // we're done with the child node, now proceed
                         pointer = exitPointer + 1
@@ -71,12 +70,12 @@ func parseVDFToDict(from file: String) -> [String: Any] {
                         return (dict, tokens.count - 1)
                     }
                 }
-                if(tokens[pointer] == .closeBrace) { // exit the recursion and continue from where you were before
-                    return (dict, pointer)
-                }
+            } else {
+                return (dict, pointer)
             }
         }
         return (dict, pointer)
     }
-    return parse().data
+    var startIndex = 0
+    return parse(at: &startIndex).data
 }

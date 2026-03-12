@@ -7,6 +7,11 @@
 
 import Foundation
 
+enum VDFValue {
+    case string(String)
+    case object([String: VDFValue])
+}
+
 func parseVDFToDict(from file: String) -> [String: Any] {
     enum Token: Equatable { // need to be Equatable otherwise the check for the token type would be complicated
         case string(String)
@@ -16,7 +21,8 @@ func parseVDFToDict(from file: String) -> [String: Any] {
     
     func getTokens() -> [Token] { // lexer
         let pattern = #/"([^"\n]*?)"|\{|\}/# // the string token is a capture group so it's in match.1
-        return file.matches(of: pattern)
+        let strippedComments = file.replacingOccurrences(of: "//.*?\n", with: "", options: .regularExpression, range: nil)
+        return strippedComments.matches(of: pattern)
             .map { match in
                 if let inner = match.1 { return .string(String(inner)) } // if quoted string return early with the string token
                 switch match.0 {

@@ -40,21 +40,21 @@ func parseVDFToDict(from file: String) -> [String: Any] {
     func isStringToken(_ index: Int) -> Bool {
         getStringTokenForIndex(index) != nil
     }
-    func parse(at pointer: inout Int) -> (data: [String: Any], pointer: Int) {
+    func parse(at pointer: inout Int) -> [String: Any] {
         var dict: [String: Any] = [:]
 
         if(pointer > tokens.count - 1) { // if starts parsing after the last token, bail out
-          return (dict, tokens.count)
+          return dict
         }
 
         while pointer < tokens.count {
             if(tokens[pointer] == .closeBrace) { // exit the recursion and continue from where you were before
-                return (dict, pointer)
+                return dict
             }
             if(pointer + 1 < tokens.count) {
                 let next = pointer + 1
                 guard let key = getStringTokenForIndex(pointer) else {
-                    return (dict, pointer) // first token should always be a string if not, bail out
+                    return dict // first token should always be a string if not, bail out
                 }
                 if(isStringToken(next)) { // if next is another string then we have a key value case
                     let value = getStringTokenForIndex(next)
@@ -62,20 +62,20 @@ func parseVDFToDict(from file: String) -> [String: Any] {
                     pointer = next + 1
                 } else if(tokens[next] == .openBrace) { // if it's an open bracket we have a child node
                     pointer = next + 1
-                    let (childDict, exitPointer) = parse(at: &pointer)
+                    let childDict = parse(at: &pointer)
                     dict[key] = childDict
-                    if(exitPointer + 1 < tokens.count) { // we're done with the child node, now proceed
-                        pointer = exitPointer + 1
+                    if(pointer + 1 < tokens.count) { // we're done with the child node, now proceed
+                        pointer += 1
                     } else { // if the child node was sitting at the eof bail out
-                        return (dict, tokens.count - 1)
+                        return dict
                     }
                 }
             } else {
-                return (dict, pointer)
+                return dict
             }
         }
-        return (dict, pointer)
+        return dict
     }
     var startIndex = 0
-    return parse(at: &startIndex).data
+    return parse(at: &startIndex)
 }

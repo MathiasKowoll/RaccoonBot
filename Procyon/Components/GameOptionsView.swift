@@ -33,6 +33,8 @@ struct GameOptionsView: View {
                                 .pickerStyle(.menu)
                                 TextField("Game arguments", text: $gameOptions.gameArguments)
                                 TextField("Env variables", text: $gameOptions.envVariables)
+                                Toggle("Use X87 Patch (32 bits only)", isOn: $gameOptions.x87PatchEnabled)
+                                Toggle("Use DX9 Patch", isOn: $gameOptions.dx9PatchEnabled)
                             }
                             Spacer()
                             VStack(alignment: .trailing) {

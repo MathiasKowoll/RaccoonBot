@@ -22,10 +22,11 @@ enum OnOff: String {
 
 typealias CXDrives = [String: URL]
 
-struct GameOptionsData: Codable {
+struct GameOptionsData: Codable { // this is used for reading saved properties
     var cxGraphicsBackend: String
     var wineMSync: Bool
     var mtlHudEnabled: Bool
+    var x87PatchEnabled: Bool
     var gameArguments: String
     var dxmtPreferredMaxFrameRate: Double
     var dxmtMetalFXSpatial: Bool
@@ -39,6 +40,7 @@ struct GameOptionsData: Codable {
         self.cxGraphicsBackend = data.cxGraphicsBackend
         self.wineMSync = data.wineMSync
         self.mtlHudEnabled = data.mtlHudEnabled
+        self.x87PatchEnabled = data.x87PatchEnabled
         self.gameArguments = data.gameArguments
         self.dxmtPreferredMaxFrameRate = data.dxmtPreferredMaxFrameRate
         self.dxmtMetalFXSpatial = data.dxmtMetalFXSpatial
@@ -50,10 +52,11 @@ struct GameOptionsData: Codable {
     }
 }
 
-class GameOptions: ObservableObject {
+class GameOptions: ObservableObject { // this is used as form state
     @Published var cxGraphicsBackend: String
     @Published var wineMSync: Bool
     @Published var mtlHudEnabled: Bool
+    @Published var x87PatchEnabled: Bool
     @Published var dxvk: String?
     @Published var wineEsync: String?
     @Published var d3dMEnableMetalFX: String?
@@ -67,10 +70,11 @@ class GameOptions: ObservableObject {
     @Published var enableSDL: Bool
     @Published var disableHidraw: Bool
     
-    init(cxGraphicsBackend: String = "d3dmetal", wineMSync: Bool = true, mtlHudEnabled: Bool = false, dxvk: String? = nil, wineEsync: String? = nil, d3dMEnableMetalFX: String? = nil, d3dSupportDXR: String? = nil, gameArguments: String = "", dxmtPreferredMaxFrameRate: Double = 0, dxmtMetalFXSpatial: Bool = false, dxmtMetalSpatialUpscaleFactor: Double = 1.0, advertiseAVX: Bool = true, envVariables: String = "", sdlEnabled: Bool = true, hidrawDisabled: Bool = false) {
+    init(cxGraphicsBackend: String = "d3dmetal", wineMSync: Bool = true, mtlHudEnabled: Bool = false, x87PatchEnabled: Bool = false, dxvk: String? = nil, wineEsync: String? = nil, d3dMEnableMetalFX: String? = nil, d3dSupportDXR: String? = nil, gameArguments: String = "", dxmtPreferredMaxFrameRate: Double = 0, dxmtMetalFXSpatial: Bool = false, dxmtMetalSpatialUpscaleFactor: Double = 1.0, advertiseAVX: Bool = true, envVariables: String = "", sdlEnabled: Bool = true, hidrawDisabled: Bool = false) {
         self.cxGraphicsBackend = cxGraphicsBackend
         self.wineMSync = wineMSync
         self.mtlHudEnabled = mtlHudEnabled
+        self.x87PatchEnabled = x87PatchEnabled
         self.dxvk = dxvk
         self.wineEsync = wineEsync
         self.d3dMEnableMetalFX = d3dMEnableMetalFX
@@ -88,6 +92,7 @@ class GameOptions: ObservableObject {
         self.cxGraphicsBackend = data.cxGraphicsBackend
         self.wineMSync = data.wineMSync
         self.mtlHudEnabled = data.mtlHudEnabled
+        self.x87PatchEnabled = data.dxmtMetalFXSpatial
         self.gameArguments = data.gameArguments
         self.dxmtMetalFXSpatial = data.dxmtMetalFXSpatial
         self.dxmtMetalSpatialUpscaleFactor = data.dxmtMetalSpatialUpscaleFactor

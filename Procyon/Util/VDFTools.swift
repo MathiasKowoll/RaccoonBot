@@ -20,7 +20,7 @@ func parseVDFToDict(from file: String) -> [String: Any] {
     }
     
     func getTokens() -> [Token] { // lexer
-        let pattern = #/"([^"\n]*?)"|\{|\}/# // the string token is a capture group so it's in match.1
+        let pattern = #/"([^"\n]*?)"|\{|\}/# // the string token is a capture group so it's in match.1, skipping escaped characters like stringified JSON in VDF values, which is used by steam but not useful for Procyon at the moment
         let strippedComments = file.replacingOccurrences(of: "//.*?\n", with: "", options: .regularExpression, range: nil)
         return strippedComments.matches(of: pattern)
             .map { match in

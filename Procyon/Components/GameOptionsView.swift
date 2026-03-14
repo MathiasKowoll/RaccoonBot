@@ -23,7 +23,7 @@ struct GameOptionsView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     Section("Generic options") {
                         HStack(alignment: .top, spacing: 20) {
-                            VStack(alignment: .leading, spacing: 20){
+                            VStack(alignment: .trailing){
                                 Picker("Graphics Backend", selection: $gameOptions.cxGraphicsBackend) {
                                     Text("D3DMetal")
                                         .tag("d3dmetal")
@@ -31,8 +31,10 @@ struct GameOptionsView: View {
                                         .tag("dxmt")
                                 }
                                 .pickerStyle(.menu)
+                                Divider()
                                 TextField("Game arguments", text: $gameOptions.gameArguments)
                                 TextField("Env variables", text: $gameOptions.envVariables)
+                                Divider()
                                 Toggle("Use X87 Patch (32 bits only)", isOn: $gameOptions.x87PatchEnabled)
                                 Toggle("Use DX9 Patch", isOn: $gameOptions.dx9PatchEnabled)
                             }

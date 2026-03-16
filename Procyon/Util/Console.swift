@@ -62,6 +62,10 @@ class Console {
         let message: String = "[\(function)] error: \(msg)"
         
         let errorMsg: String = "ERROR: \(message)"
+        
+        #if DEBUG
+        print(errorMsg)
+        #endif
         if (useLogger) {
             logger.error("\(errorMsg)")
         }

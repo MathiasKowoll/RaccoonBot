@@ -62,8 +62,8 @@ struct OptionsView: View {
                         appGlobals.cxAppPath = url.relativePath
                         persistUsrDefOptionString(key: "cxAppPath", value: url.relativePath)
                         persistUsrDefOptionString(key: "cxCompleteAppPath", value: url.path(percentEncoded: false))
+                        makeX87CrossoverPatchedCopy(sourceCXPath: url)
                     }
-                    
                 }
                 if(!bottles.isEmpty) {
                     Picker("Select a bottle", selection: $appGlobals.selectedBottle) {

@@ -97,19 +97,22 @@ func getCXBottleConfigFileURL(selectedBottle: String) -> URL? {
 }
 
 func editCXBottleConfigFile(selectedBottle: String, options: [String: String]) throws {
-    let bottleURL = getCXBottleConfigFileURL(selectedBottle: selectedBottle)
-    let original = try String(contentsOf: bottleURL!, encoding: .utf8)
-    let lines = original.components(separatedBy: .newlines)
-    let newLines = lines.map { line in
-        for (key, value) in options {
-            if(line.hasPrefix("\"\(key)\"")) {
-                return toCrossoverENVString(key, value)
+    if let bottleURL = getCXBottleConfigFileURL(selectedBottle: selectedBottle) {
+        let original = try String(contentsOf: bottleURL, encoding: .utf8)
+        let lines = original.components(separatedBy: .newlines)
+        let newLines = lines.map { line in
+            for (key, value) in options {
+                if(line.hasPrefix("\"\(key)\"")) {
+                    return toCrossoverENVString(key, value)
+                }
             }
+            return line
         }
-        return line
+        let updated = newLines.joined(separator: "\n")
+        try updated.write(to: bottleURL, atomically: true, encoding: .utf8)
+    } else {
+        console.error("No bottle selected in Procyon config")
     }
-    let updated = newLines.joined(separator: "\n")
-    try updated.write(to: bottleURL!, atomically: true, encoding: .utf8)
 }
 
 func getInlineEnvs(from: GameOptions) -> String {
@@ -134,6 +137,23 @@ func getInlineEnvs(from: GameOptions) -> String {
     
     let dxmtPreferredMaxFrameRate = from.dxmtPreferredMaxFrameRate > 20 ? "d3d11.preferredMaxFrameRate=\(DoubleToFormattedStr(from.dxmtPreferredMaxFrameRate));" : ""
     let dxmtMetalSpatialUpscaleFactor = from.dxmtMetalFXSpatial == true ? "d3d11.metalSpatialUpscaleFactor=\(from.dxmtMetalSpatialUpscaleFactor);" : ""
+    
+    if (from.x87PatchEnabled) {
+        if let dllsUrl = Bundle.main.url(forResource: "dlls", withExtension: nil) {
+            //WINEDLLPATH="/your/custom/path${WINEDLLPATH:+:$WINEDLLPATH}"
+            let dllsOverride = "WINEDLLPATH=\"\(dllsUrl.path())${WINEDLLPATH:+:$WINEDLLPATH}\" "
+            value += dllsOverride
+        } else {
+            console.error("Couldn't find the dlls folder")
+        }
+        if let runtimex87Url = Bundle.main.url(forResource: "runtime_loader", withExtension: nil) {
+            let runtimex87 = "ROSETTA_X87_PATH=\"\(runtimex87Url.path())\" "
+            value += runtimex87
+        } else {
+            console.error("Couldn't find runtime_loader")
+        }
+    }
+    
     value += getDxmtConfigEnv(values:  dxmtMetalSpatialUpscaleFactor + dxmtPreferredMaxFrameRate)
     return value
 }

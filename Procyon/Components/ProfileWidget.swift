@@ -37,16 +37,18 @@ struct ProfileWidget: View {
                 }
                 .buttonStyle(.plain)
             } else {
-                if let fallbackProfileData = getSteamUserDataFallback(usingBottlePath: URL(string: appGlobals.selectedBottle)!) {
-                    HStack {
-                        KFImage(URL(string: fallbackProfileData.avatar))
-                            .resizable()
-                            .scaledToFit()
-                            .mask(Circle())
-                            .padding(5)
-                            .frame(width: 40)
-                        Text(fallbackProfileData.personaName).lineLimit(1)
-                    }.frame(maxWidth: 150, alignment: .init(horizontal: .leading, vertical: .center))
+                if let bottlePath = URL(string: appGlobals.selectedBottle) {
+                    if let fallbackProfileData = getSteamUserDataFallback(usingBottlePath: bottlePath) {
+                        HStack {
+                            KFImage(URL(string: fallbackProfileData.avatar))
+                                .resizable()
+                                .scaledToFit()
+                                .mask(Circle())
+                                .padding(5)
+                                .frame(width: 40)
+                            Text(fallbackProfileData.personaName).lineLimit(1)
+                        }.frame(maxWidth: 150, alignment: .init(horizontal: .leading, vertical: .center))
+                    }
                 }
             }
         }

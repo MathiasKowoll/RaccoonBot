@@ -49,11 +49,25 @@
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
+/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+		38E53BC32F68707F00C9FF59 /* Exceptions for "Procyon" folder in "Copy Bundle Resources" phase from "Procyon" target */ = {
+			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
+			buildPhase = 383306822F2BE63D00228E6C /* Resources */;
+			membershipExceptions = (
+				Libs/ntdll.so,
+			);
+		};
+/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		383306862F2BE63D00228E6C /* Procyon */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				38183F682F2D5F6C00EB0330 /* Exceptions for "Procyon" folder in "Procyon" target */,
+				38E53BC32F68707F00C9FF59 /* Exceptions for "Procyon" folder in "Copy Bundle Resources" phase from "Procyon" target */,
+			);
+			explicitFolders = (
+				Libs/dlls,
 			);
 			path = Procyon;
 			sourceTree = "<group>";
@@ -469,6 +483,10 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/Procyon/Libs",
+				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = itmandar.Procyon;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -522,6 +540,10 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/Procyon/Libs",
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = itmandar.Procyon;

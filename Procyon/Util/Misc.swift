@@ -252,10 +252,13 @@ func getAppNames(isNative: Bool, gameURL: URL?) -> [String] {
 
 func getGameTracker(appNames: [String], cxAppPath: String, bottleName: String, onLoad: @escaping () -> Void, onTerminate: @escaping () -> Void, isNative: Bool) async throws -> TerminationObserver {
     let tOb = TerminationObserver(then: { output in
-        let terminatedAppName = (output.userInfo?[AnyHashable("NSApplicationPath")] as? String ?? "unknown").split(separator: "/").last?.description ?? "unknown"
-        console.log("will check if \(terminatedAppName) is being terminated...")
-        if (appNames.contains(terminatedAppName)) {
-            console.log("\(appNames) -> \(terminatedAppName) has been terminated, closing steam...")
+        console.log(output.userInfo?.description ?? "no userInfo")
+        let terminatedAppProcessName = output.userInfo?[AnyHashable("NSApplicationName")] as? String ?? "unknown"
+        let terminatedAppPath = output.userInfo?[AnyHashable("NSApplicationPath")] as? String ?? "unknown"
+        let terminatedAppName = String(terminatedAppPath.split(separator: "/").last ?? "unknown")
+        console.log("will check if \(terminatedAppName) or \(terminatedAppProcessName) is being terminated...")
+        if (appNames.contains(terminatedAppName) || appNames.contains(terminatedAppProcessName)) {
+            console.log("\(appNames) -> \(terminatedAppName) or \(terminatedAppProcessName) has been terminated, closing steam...")
             Task {
                 try await quitSteam(cxAppPath: cxAppPath, bottleName: bottleName, isNative: isNative)
                 if (!isNative) {
@@ -276,4 +279,40 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottleName: String, o
     return tOb
 }
 
-    
+func makeX87CrossoverPatchedCopy (sourceCXPath: URL) -> Void {
+    let f = FileManager.default
+    do {
+        let destUrl = f.homeDirectoryForCurrentUser.appendingPathComponent("Applications", isDirectory: true).appendingPathComponent("Crossover_x87.app")
+        // Make sure destination app doesn't exist and if it does, delete it
+        if (f.fileExists(atPath: destUrl.path())) {
+            try f.removeItem(at: destUrl)
+        }
+        // Step 1 copy the app in the user's application folder
+        
+        try f.copyItem(at: sourceCXPath, to: destUrl)
+        
+        if(f.fileExists(atPath: destUrl.path())) {
+            // Step 2 unsign app
+            try safeShell("codesign --remove-signature \"\(destUrl.path())\"")
+            try safeShell("codesign --remove-signature \"\(destUrl.appendingPathComponent("Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/wine").path())\"")
+            
+            // Step 3 copy ntdll.so to CrossOver.app/Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/ntdll.so
+            if let ntdllUrl = Bundle.main.url(forResource: "ntdll", withExtension: "so") {
+                let ntdllDest = destUrl.appendingPathComponent("Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/ntdll.so")
+                if(f.fileExists(atPath: ntdllDest.path())) {
+                    try f.removeItem(at: ntdllDest)
+                }
+                try f.copyItem(at: ntdllUrl, to: ntdllDest)
+            } else {
+                console.error("Couldn't find ntdll.so")
+            }
+            
+            // Step 4 fix app after patching
+            try safeShell("xattr -cr \"\(destUrl.path())\"")
+        } else {
+            console.error("Couldn't find Crossover_x87.app in \(destUrl.path())")
+        }
+    } catch {
+        console.error(error.localizedDescription)
+    }
+}

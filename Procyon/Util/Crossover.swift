@@ -138,14 +138,16 @@ func getInlineEnvs(from: GameOptions) -> String {
     let dxmtPreferredMaxFrameRate = from.dxmtPreferredMaxFrameRate > 20 ? "d3d11.preferredMaxFrameRate=\(DoubleToFormattedStr(from.dxmtPreferredMaxFrameRate));" : ""
     let dxmtMetalSpatialUpscaleFactor = from.dxmtMetalFXSpatial == true ? "d3d11.metalSpatialUpscaleFactor=\(from.dxmtMetalSpatialUpscaleFactor);" : ""
     
-    if (from.x87PatchEnabled) {
+    if (from.dx9PatchEnabled) {
         if let dllsUrl = Bundle.main.url(forResource: "dlls", withExtension: nil) {
-            //WINEDLLPATH="/your/custom/path${WINEDLLPATH:+:$WINEDLLPATH}"
             let dllsOverride = "WINEDLLPATH=\"\(dllsUrl.path())${WINEDLLPATH:+:$WINEDLLPATH}\" "
             value += dllsOverride
         } else {
             console.error("Couldn't find the dlls folder")
         }
+    }
+    
+    if (from.x87PatchEnabled) {
         if let runtimex87Url = Bundle.main.url(forResource: "runtime_loader", withExtension: nil) {
             let runtimex87 = "ROSETTA_X87_PATH=\"\(runtimex87Url.path())\" "
             value += runtimex87

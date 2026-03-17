@@ -42,10 +42,6 @@ final class SteamAPI {
     var progress: Double = 0
     private var cacheBlacklist: [String] = [
         "228980", // Steamworks
-        "41010",
-        "42690",
-        "43160",
-        "1530910"
     ]
     private var cacheProfileData: UserInfo? = nil
     private var cache: [String: SteamGame] = [:]
@@ -135,7 +131,7 @@ final class SteamAPI {
             try encoded.write(to: self.cacheBlacklistURL, options: [.atomic])
             console.warn("Blacklist cache saved")
         } catch {
-            console.error(error.localizedDescription)
+            console.error(String(reflecting: error))
         }
     }
     func deleteCacheBlacklist() {
@@ -159,7 +155,7 @@ final class SteamAPI {
             try encoded.write(to: self.profileDataCacheURL, options: [.atomic])
             console.warn("Profile Data Cache saved")
         } catch {
-            console.error(error.localizedDescription)
+            console.error(String(reflecting: error))
         }
     }
     func deleteProfileDataCache() {
@@ -175,7 +171,7 @@ final class SteamAPI {
             try encoded.write(to: self.cacheURL, options: [.atomic])
             console.warn("Cache saved")
         } catch {
-            console.error(error.localizedDescription)
+            console.error(String(reflecting: error))
         }
     }
     private func saveOwnedGamesIDsCache() {
@@ -184,7 +180,7 @@ final class SteamAPI {
             try encoded.write(to: self.cacheOwnedGamesIDsURL, options: [.atomic])
             console.warn("IDs Cache saved")
         } catch {
-            console.error(error.localizedDescription)
+            console.error(String(reflecting: error))
         }
     }
     func deleteCache() {
@@ -194,7 +190,7 @@ final class SteamAPI {
     }
     func deleteOwnedGamesIDsCache() {
         try? FileManager.default.removeItem(at: cacheOwnedGamesIDsURL)
-        self.cache.removeAll()
+        self.cacheOwnedGamesIDs.removeAll()
         console.warn("IDs Cache deleted")
     }
     func fetchGameInfo(appID: String) async throws -> SteamGame? {
@@ -236,10 +232,14 @@ final class SteamAPI {
         for (index, meta) in meta.enumerated() {
             let bDownloaded = Double(meta.BytesDownloaded ?? "0")!
             let bToDownload = Double(meta.BytesToDownload ?? "0")!
-            let downloadProgress: Double = meta.isDownloaded() ? 100 : (bDownloaded / bToDownload) * 100
-            
-            if let gameInfo = try await self.fetchGameInfo(appID: meta.appid) {
-                items.append(Game(from: gameInfo, id: meta.id, isNative: meta.isNative, downloadProgress: Double(downloadProgress), isInstalled: meta.installdir.isEmpty == false, appNames: []))
+            let downloadProgress: Double = meta.isDownloaded() ? 100 : (bDownloaded / bToDownload) * 100            
+            do {
+                if let gameInfo = try await self.fetchGameInfo(appID: meta.appid) {
+                    items.append(Game(from: gameInfo, id: meta.id, isNative: meta.isNative, downloadProgress: Double(downloadProgress), isInstalled: meta.installdir.isEmpty == false, appNames: []))
+                }
+            } catch {
+                console.warn("Game with id: \(meta.appid) failed gracefully")
+                console.error(String(reflecting: error))
             }
             // Update progress as percentage of total processed
             if total > 0 {
@@ -299,7 +299,7 @@ final class SteamAPI {
             self.saveProfileDataCache()
             return profileData[0]
         } catch {
-            console.error(error.localizedDescription)
+            console.error(String(reflecting: error))
             return nil
         }
     }

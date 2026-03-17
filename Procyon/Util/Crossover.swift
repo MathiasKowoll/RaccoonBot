@@ -60,7 +60,7 @@ func getAllBottles(appDir: URL) -> [URL] {
             do {
                 subfolders = try f.contentsOfDirectory(at: bottlePathForCXP, includingPropertiesForKeys: [.isDirectoryKey], options: [])
             } catch {
-                console.error(error.localizedDescription)
+                console.error(String(reflecting: error))
                 console.error("couldn't find the CXPatched bottles")
             }
         } else {
@@ -70,7 +70,7 @@ func getAllBottles(appDir: URL) -> [URL] {
             do {
                 subfolders = try f.contentsOfDirectory(at: bottlePath, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles, .skipsPackageDescendants, .skipsSubdirectoryDescendants])
             } catch {
-                console.error(error.localizedDescription)
+                console.error(String(reflecting: error))
                 console.error("couldn't find the crossover bottles in \(bottlePath.path(percentEncoded: false))")
             }
         }
@@ -81,7 +81,7 @@ func getAllBottles(appDir: URL) -> [URL] {
         console.warn("filtered: \(filtered.debugDescription)")
         return filtered
     } catch {
-        console.error(error.localizedDescription)
+        console.error(String(reflecting: error))
     }
     return []
 }
@@ -182,7 +182,7 @@ func getDrivesPaths(at: URL) -> CXDrives {
         return drives
     } catch {
         console.error("getDrivesPaths failed")
-        console.error(error.localizedDescription)
+        console.error(String(reflecting: error))
         return [:]
     }
 }

@@ -147,7 +147,7 @@ struct ProfileWidget: View {
                 console.error("Couldn't find the userID")
             }
         } catch {
-            console.error(error.localizedDescription)
+            console.error(String(reflecting: error))
         }
     }
 }

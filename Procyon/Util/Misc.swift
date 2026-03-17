@@ -38,13 +38,13 @@ func addSteamFolderPaths(_ url: URL) {
         }
     } catch {
         console.warn("Failed to validate steam folder")
-        console.error(error.localizedDescription)
+        console.error(String(reflecting: error))
     }
     do {
         try persistFolderAccess(url: url)
     } catch {
         console.error("Failed to save steam folder")
-        console.error(error.localizedDescription)
+        console.error(String(reflecting: error))
     }
 }
 
@@ -195,7 +195,6 @@ func getSteamLibraryFolders(from: URL) -> [URL] {
                                 if let newPath = drives[driveAlias]?.appendingPathComponent(partial).appendingPathComponent("/steamapps") {
                                     steamLibraries.append(newPath)
                                 } else {
-                                    print(driveAlias)
                                     console.log("couldn't find Windows Steam config")
                                 }
                             } else {
@@ -207,7 +206,7 @@ func getSteamLibraryFolders(from: URL) -> [URL] {
                 }
             }
         } catch {
-            console.error(error.localizedDescription)
+            console.error(String(reflecting: error))
             return []
         }
     }
@@ -256,7 +255,6 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottleName: String, o
         let terminatedAppProcessName = output.userInfo?[AnyHashable("NSApplicationName")] as? String ?? "unknown"
         let terminatedAppPath = output.userInfo?[AnyHashable("NSApplicationPath")] as? String ?? "unknown"
         let terminatedAppName = String(terminatedAppPath.split(separator: "/").last ?? "unknown")
-        console.log("will check if \(terminatedAppName) or \(terminatedAppProcessName) is being terminated...")
         if (appNames.contains(terminatedAppName) || appNames.contains(terminatedAppProcessName)) {
             console.log("\(appNames) -> \(terminatedAppName) or \(terminatedAppProcessName) has been terminated, closing steam...")
             Task {
@@ -313,6 +311,6 @@ func makeX87CrossoverPatchedCopy (sourceCXPath: URL) -> Void {
             console.error("Couldn't find Crossover_x87.app in \(destUrl.path())")
         }
     } catch {
-        console.error(error.localizedDescription)
+        console.error(String(reflecting: error))
     }
 }

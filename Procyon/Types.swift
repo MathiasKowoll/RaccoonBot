@@ -289,7 +289,7 @@ extension Game {
                 title: "Standard Edition",
                 description: "Base game package",
                 selectionText: "Select a purchase option",
-                displayType: 0,
+                displayType: "0",
                 subs: [
                     PackageSub(
                         packageID: 3333,

@@ -81,7 +81,7 @@ class Console {
             do {
                 try f.removeItem(at: to)
             } catch {
-                console.error(error.localizedDescription)
+                console.error(String(reflecting: error))
             }
         }
         let content = logMessages.joined(separator: "\n")
@@ -89,7 +89,7 @@ class Console {
         do {
             try content.write(to: to, atomically: true, encoding: .utf8)
         } catch {
-            console.error(error.localizedDescription)
+            console.error(String(reflecting: error))
         }
     }
 }

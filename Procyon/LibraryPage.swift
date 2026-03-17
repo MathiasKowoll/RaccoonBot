@@ -154,7 +154,7 @@ struct LibraryPage: View {
                     let foldergamesMeta = try getGamesMeta(from: folderURL)
                     libraryPageGlobals.gamesMeta.append(contentsOf: foldergamesMeta)
                 } catch {
-                    console.error(error.localizedDescription)
+                    console.error(String(reflecting: error))
                 }
             }
         }
@@ -171,14 +171,14 @@ struct LibraryPage: View {
                 libraryPageGlobals.gamesMeta.append(contentsOf: ownedMeta)
             }
         } catch {
-            console.error(error.localizedDescription)
+            console.error("fetchOwnedGamesIDs \(String(reflecting: error))")
         }
         
         do {
             libraryPageGlobals.games = try await api.fetchGamesInfo(meta: libraryPageGlobals.gamesMeta, setProgress: { self.progress = $0 })
             progress = 100
         } catch {
-            console.error(error.localizedDescription)
+            console.error("fetchGamesInfo \(String(reflecting: error))")
         }
     }
 }

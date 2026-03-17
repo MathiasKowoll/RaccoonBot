@@ -50,10 +50,11 @@ struct GameThumbnail: View {
                             .foregroundStyle(.white.opacity(0.9))                   // icon color
                             .padding(8)
                     }
-                }
+                }.frame(maxHeight: 150)
                 VStack (alignment: .leading, spacing: 6) {
                     Text(item.name)
                         .font(.headline)
+                        .lineLimit(1)
                     HStack (spacing: 6){
                         AccentTag(item.type)
                         if (item.genres != nil && item.genres!.count > 0){
@@ -145,7 +146,7 @@ struct GameThumbnail: View {
                     try await launchWindowsGame(id: String(item.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions)
                 }
             } catch {
-                console.error(error.localizedDescription)
+                console.error(String(reflecting: error))
                 libraryPageGlobals.setLoader(state: false)
             }
         }

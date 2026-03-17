@@ -26,7 +26,7 @@ struct GameDetailView: View {
         if (game != nil) {
             VStack (alignment: .leading) {
                 ZStack(alignment: .bottom ) {
-                    if (game!.movies != nil) {
+                    if (game!.movies != nil && !game!.movies!.isEmpty) {
                         PlayerLayerView(player: player)
                             .ignoresSafeArea()
                             .frame(height: 540)

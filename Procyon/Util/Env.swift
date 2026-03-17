@@ -22,7 +22,7 @@ func parseCXEnvVarString(_ string: String) -> (String, String){
         key = match?.1.description ?? ""
         value = match?.2.description ?? ""
     } catch {
-        console.error("parseCXEnvVarString: \(error.localizedDescription)")
+        console.error("parseCXEnvVarString: \(String(reflecting: error))")
     }
     return (key, value)
 }

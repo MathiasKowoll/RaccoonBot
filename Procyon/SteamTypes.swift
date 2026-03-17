@@ -31,7 +31,7 @@ struct PackageGroup: Codable {
     let title: String
     let description: String
     let selectionText: String
-    let displayType: Int
+    let displayType: String
     let subs: [PackageSub]
 
     enum CodingKeys: String, CodingKey {

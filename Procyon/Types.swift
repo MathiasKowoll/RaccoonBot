@@ -133,28 +133,30 @@ class GamesMeta: SteamACFMeta {
     }
 }
 
-struct Game: Identifiable {
+struct Game: Identifiable, Codable {
     var id: String
     var isNative: Bool
     var downloadProgress: Double
     var isInstalled: Bool
     var appNames: [String] = []
+    var appExeURL: URL?
+    var isCustom: Bool?
     
     // taken from SteamGame
     let type: String
-    let name: String
+    var name: String
     let steamAppID: Int
     let requiredAge: String
     let isFree: Bool
     let controllerSupport: String?
     let dlc: [Int]?
 
-    let detailedDescription: String
-    let aboutTheGame: String
-    let shortDescription: String
+    var detailedDescription: String
+    var aboutTheGame: String
+    var shortDescription: String
     let supportedLanguages: String?
 
-    let headerImage: String
+    var headerImage: String
     let capsuleImage: String
     let capsuleImageV5: String?
     let website: String?
@@ -164,18 +166,18 @@ struct Game: Identifiable {
     let linuxRequirements: Requirements?
 
     let legalNotice: String?
-    let developers: [String]
-    let publishers: [String]
+    var developers: [String]
+    var publishers: [String]
 
     let priceOverview: PriceOverview?
     let packages: [Int]?
     let packageGroups: [PackageGroup]?
 
-    let platforms: Platforms
+    var platforms: Platforms
     let metacritic: Metacritic?
 
-    let categories: [Category]
-    let genres: [Genre]?
+    var categories: [Category]
+    var genres: [Genre]?
 
     let screenshots: [Screenshot]?
     let movies: [Movie]?
@@ -191,7 +193,7 @@ struct Game: Identifiable {
     let contentDescriptors: ContentDescriptors?
     let ratings: [String: RatingBody]?
     
-    init(from: SteamGame, id: String, isNative: Bool, downloadProgress: Double, isInstalled: Bool, appNames: [String]) {
+    init(from: SteamGame, id: String, isNative: Bool, downloadProgress: Double, isInstalled: Bool, appNames: [String], isCustom: Bool? = false) {
         self.id = id
         self.isNative = isNative
         self.downloadProgress = downloadProgress
@@ -334,6 +336,54 @@ extension Game {
         ]
     )
     static let mock = Game(from: Game.steamMock, id: "example", isNative: true, downloadProgress: 100, isInstalled: true, appNames: ["test.exe"])
+    static let steamEmptyGame = SteamGame(
+        type: "game",
+        name: "Game Name here",
+        steamAppID: 0,
+        requiredAge: "18",
+        isFree: false,
+        controllerSupport: "full",
+        dlc: [],
+        detailedDescription: "Game description here",
+        aboutTheGame: "Game description here",
+        shortDescription: "Short game description here",
+        supportedLanguages: "English",
+        headerImage: "https://placehold.co/800x400?text=Game",
+        capsuleImage: "https://placehold.co/800x400?text=Game",
+        capsuleImageV5: nil,
+        website: "",
+        pcRequirements: Requirements(minimum: "Windows 10, 8GB RAM", recommended: "Windows 11, 16GB RAM"),
+        macRequirements: nil,
+        linuxRequirements: nil,
+        legalNotice: "All trademarks are property of their respective owners.",
+        developers: [""],
+        publishers: [""],
+        priceOverview: PriceOverview(
+            currency: "USD",
+            initial: 0,
+            final: 0,
+            discountPercent: 0,
+            initialFormatted: "$0",
+            finalFormatted: "$0"
+        ),
+        packages: [],
+        packageGroups: [],
+        platforms: Platforms(windows: true, mac: false, linux: false),
+        metacritic: nil,
+        categories: [],
+        genres: [],
+        screenshots: nil,
+        movies: nil,
+        recommendations: nil,
+        achievements: nil,
+        releaseDate: ReleaseDate(comingSoon: false, date: "Jan 01, 2026"),
+        supportInfo: nil,
+        background: nil,
+        backgroundRaw: nil,
+        contentDescriptors: nil,
+        ratings: nil
+    )
+    static let emptyGame = Game(from: Game.steamEmptyGame, id: "example", isNative: true, downloadProgress: 100, isInstalled: true, appNames: ["test.exe"])
 }
 
 enum SortingOptions {
@@ -351,14 +401,19 @@ class LibraryPageGlobals: ObservableObject {
     @Published var showDetailView = false
     @Published var selectedGame: Game? = nil
     @Published var isLaunchingGame: Bool = false
+    @Published var customAddedGames: [Game] = []
     @Published var games: [Game] = []
     @Published var sortBy: SortingOptions = SortingOptions.name
     @Published var playingID: String?
     
+    init() {
+        self.loadCustomAddedGames()
+    }
+    
     var filteredGames: [Game] {
-        self.games.filter { item in
-            self.filter.isEmpty ||
-            item.name.lowercased().contains(self.filter.lowercased())
+        let allGames = self.games + self.customAddedGames
+        return allGames.filter { item in
+            self.filter.isEmpty || item.name.lowercased().contains(self.filter.lowercased())
         }.sorted { lhs, rhs in
             switch self.sortBy {
             case SortingOptions.name:
@@ -371,6 +426,43 @@ class LibraryPageGlobals: ObservableObject {
                 return lhs.developers[0].lowercased() < rhs.developers[0].lowercased()
             }
         }
+    }
+    
+    func loadCustomAddedGames() {
+        let groupDefaults = UserDefaults(suiteName: suiteName)!
+        if let savedGamesData = groupDefaults.data(forKey: "customAddedGames") {
+            let decoder = JSONDecoder()
+            guard let savedGames = try? decoder.decode([Game].self, from: savedGamesData) else { return }
+            self.customAddedGames = savedGames
+        }
+    }
+    
+    func getCustomAddedGame(id: String) -> Game? {
+        return self.customAddedGames.first(where: { $0.id == id })
+    }
+    
+    func saveCustomAddedGames() {
+        let groupDefaults = UserDefaults(suiteName: suiteName)!
+        let encoder = JSONEncoder()
+        guard let data = try? encoder.encode(self.customAddedGames) else { return }
+        groupDefaults.set(data, forKey: "customAddedGames")
+    }
+    
+    func updateCustomAddedGames(gameData: Game) {
+        if let index = self.customAddedGames.firstIndex(where: { $0.id == gameData.id }) {
+            console.log("game \(self.customAddedGames[index].name) is being updated")
+            console.log(String(describing: gameData))
+            self.customAddedGames[index] = gameData
+        }
+        let groupDefaults = UserDefaults(suiteName: suiteName)!
+        let encoder = JSONEncoder()
+        guard let data = try? encoder.encode(self.customAddedGames) else { return }
+        groupDefaults.set(data, forKey: "customAddedGames")
+    }
+    
+    func deleteCustomAddedGame(game: Game) {
+        self.customAddedGames.removeAll { $0.id == game.id }
+        saveCustomAddedGames()
     }
     
     func setLoader(state: Bool) {

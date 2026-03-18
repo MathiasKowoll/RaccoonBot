@@ -111,7 +111,7 @@ func quitWine(cxAppPath: String, bottleName: String) async throws -> Void {
     try safeShell("\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) wineserver -k")
 }
 
-func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, options: GameOptions? = nil, gameFolderURL: URL) async throws -> Void {
+func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, options: GameOptions? = nil, appExeURL: URL? = nil) async throws -> Void {
     if(options == nil) {
         console.error("Missing game options for game with id \(id) - cannot launch (options = nil)")
         return
@@ -140,8 +140,10 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, op
     let arguments = options != nil ? " " + options!.gameArguments : ""
     let x87cxAppPath = f.homeDirectoryForCurrentUser.appendingPathComponent("Applications", isDirectory: true).appendingPathComponent("Crossover_x87.app")
     let steamBootOptions = "-nochatui -nofriendsui -silent -no-browser -no-cef-sandbox -skipinitialbootstrap"
-    if (options!.x87PatchEnabled && f.fileExists(atPath: x87cxAppPath.path())) {
-        let wineEnvs = "CX_ROOT=\"\(x87cxAppPath.path())Contents/SharedSupport/CrossOver\" WINEPREFIX=\"\(URL(string: selectedBottle)?.path ?? "")\" WINEMSYNC=1"
+    let wineEnvs = "CX_ROOT=\"\(x87cxAppPath.path())Contents/SharedSupport/CrossOver\" WINEPREFIX=\"\(URL(string: selectedBottle)?.path ?? "")\" WINEMSYNC=1"
+    if(appExeURL != nil) {
+        command = "\(getInlineEnvs(from: options!)) \(wineEnvs) \(x87cxAppPath.path())Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/wine \"\(appExeURL!.path(percentEncoded: false))\"" + arguments
+    } else if (options!.x87PatchEnabled && f.fileExists(atPath: x87cxAppPath.path())) {
         command = "\(getInlineEnvs(from: options!)) \(wineEnvs) \(x87cxAppPath.path())Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/wine \"C:\\Program Files (x86)\\Steam\\Steam.exe\" \(steamBootOptions) -applaunch \(String(id))" + arguments
     } else {
         command = "\(getInlineEnvs(from: options!)) \(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \"C:\\Program Files (x86)\\Steam\\Steam.exe\" \(steamBootOptions) -applaunch \(String(id))" + arguments
@@ -157,9 +159,14 @@ func setReg (cxAppPath: String, selectedBottle: String, key: String, value: Stri
     try safeShell(command)
 }
 
-func launchNativeGame(id: String, cxAppPath: String, selectedBottle: String, options: GameOptions? = nil) async throws {
+func launchNativeGame(id: String, cxAppPath: String, selectedBottle: String, options: GameOptions? = nil, appExeURL: URL? = nil) async throws {
     let arguments = options != nil ? " " + options!.gameArguments : ""
-    let command = "\(getInlineEnvs(from: options!)) /Applications/Steam.app/Contents/MacOS/steam_osx -nochatui -nofriendsui -silent -no-browser -applaunch \(String(id))" + arguments
+    var command = ""
+    if(appExeURL != nil) {
+        command = "\(getInlineEnvs(from: options!)) open \"\(appExeURL!.path(percentEncoded: false))\" " + arguments
+    } else {
+        command = "\(getInlineEnvs(from: options!)) /Applications/Steam.app/Contents/MacOS/steam_osx -nochatui -nofriendsui -silent -no-browser -applaunch \(String(id)) " + arguments
+    }
     console.warn(command)
     try safeShell(command)
 }

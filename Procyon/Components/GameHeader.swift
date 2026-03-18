@@ -50,8 +50,11 @@ struct GameHeader: View {
                     }, optionsAction: {
                         showGameOptions = true
                     }, folderAction: {
-                        let meta = getMeta(libraryPageGlobals.gamesMeta, byID: String(game!.id))!
-                        showFolder(url: meta.gameURL!)
+                        if let meta = getMeta(libraryPageGlobals.gamesMeta, byID: String(game!.id)) {
+                            showFolder(url: meta.gameURL!)
+                        } else if game!.appExeURL != nil {
+                            showFolder(url: game!.appExeURL!.deletingLastPathComponent())
+                        }
                     }, isPlaying: isPlaying)
                 }
             Spacer()
@@ -117,7 +120,8 @@ struct GameHeader: View {
     func playGame() {
         libraryPageGlobals.setLoader(state: true)
         Task {
-            let gameOptKey = namespacedKey("GameOptions", String(game!.steamAppID))
+            let id = game!.steamAppID != 0 ? String(describing: game!.steamAppID) : String(describing: game!.id)
+            let gameOptKey = namespacedKey("GameOptions", id)
             let gameOptions: GameOptions = GameOptions()
             if let gameOptionsData: GameOptionsData = readUsrDefData(key: gameOptKey) {
                 gameOptions.set(data: gameOptionsData)
@@ -139,13 +143,9 @@ struct GameHeader: View {
                     }, isNative: game!.isNative)
                 }
                 if(game!.isNative) {
-                    try await launchNativeGame(id: String(game!.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions)
+                    try await launchNativeGame(id: String(game!.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions, appExeURL: game!.appExeURL)
                 } else {
-                    if let meta = libraryPageGlobals.gamesMeta.first(where: { $0.id == game!.id }) {
-                        try await launchWindowsGame(id: String(game!.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions, gameFolderURL: meta.gameURL!)
-                    } else {
-                        console.error("failed to get game meta or game url")
-                    }
+                    try await launchWindowsGame(id: String(game!.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions, appExeURL: game!.appExeURL)
                 }
             } catch {
                 libraryPageGlobals.setLoader(state: false)

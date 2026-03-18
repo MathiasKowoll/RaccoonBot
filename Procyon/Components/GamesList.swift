@@ -17,6 +17,8 @@ struct GamesList: View {
     @EnvironmentObject var router: Router
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
     @State private var showProfile: Bool = false
+    @State private var showAddCustomGameView: Bool = false
+    
     var load: @Sendable () async -> Void
     
     var body: some View {
@@ -29,6 +31,11 @@ struct GamesList: View {
             .padding(.horizontal)
             .padding(.bottom)
         }
+        .sheet(isPresented: $showAddCustomGameView) {
+            Modal(showModal: $showAddCustomGameView, collapse: true, content:  {
+                AddCustomGameView(isPresented: $showAddCustomGameView)
+            }).frame(maxHeight: 500)
+        }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 HStack {
@@ -39,6 +46,13 @@ struct GamesList: View {
                     } label: {
                         Image(systemName: "gear")
                     }
+                }
+            }
+            ToolbarItem(placement: .secondaryAction) {
+                Button {
+                    showAddCustomGameView = true
+                } label: {
+                    Image(systemName: "plus.circle")
                 }
             }
             ToolbarItem(placement: .secondaryAction) {

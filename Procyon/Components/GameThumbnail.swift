@@ -20,9 +20,12 @@ struct GameThumbnail: View {
         item.downloadProgress < 100
     }
     var updatedItem: Game {
-        let meta = libraryPageGlobals.gamesMeta.first(where: { $0.id == item.id })!
         var newItem = item
-        newItem.appNames = getAppNames(isNative: meta.isNative, gameURL: meta.gameURL)
+        if let meta = libraryPageGlobals.gamesMeta.first(where: { $0.id == item.id }){
+            
+            newItem.appNames = getAppNames(isNative: meta.isNative, gameURL: meta.gameURL)
+            return newItem
+        }
         return newItem
     }
     
@@ -38,17 +41,35 @@ struct GameThumbnail: View {
                         }
                         .resizable()
                         .scaledToFit()
-                    if (item.isNative == true) {
-                        Image(systemName: "apple.logo")            // icon size
-                            .resizable()
-                            .frame(width: 16, height: 16)
-                            .padding(8)                                // space inside the circle
-                            .background(Color.black.opacity(0.1))     // semi-transparent black
-                            .clipShape(Circle())                       // make it circular
-                            .foregroundStyle(.white.opacity(0.9))                   // icon color
-                            .padding(8)
+                    HStack(alignment: .top) {
+                        if (item.isNative == true) {
+                            Image(systemName: "apple.logo")            // icon size
+                                .resizable()
+                                .frame(width: 16, height: 16)
+                                .padding(8)                                // space inside the circle
+                                .background(Color.black.opacity(0.1))     // semi-transparent black
+                                .clipShape(Circle())                       // make it circular
+                                .foregroundStyle(.white.opacity(0.9))                   // icon color
+                                .padding(8)
+                        }
+                        if (item.isCustom == true) {
+                            Button {
+                                libraryPageGlobals.deleteCustomAddedGame(game: item)
+                            } label: {
+                                Image(systemName: "trash")
+                                    .resizable()
+                                    .frame(width: 16, height: 16)
+                                    .padding(8)                                // space inside the circle
+                                    .background(Color.black.opacity(0.1))     // semi-transparent black
+                                    .clipShape(Circle())                       // make it circular
+                                    .foregroundStyle(.white.opacity(0.9))                   // icon color
+                                    .padding(8)
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, 10)
+                        }
                     }
-                }.frame(maxHeight: 150)
+                }
                 VStack (alignment: .leading, spacing: 6) {
                     Text(item.name)
                         .font(.headline)
@@ -119,7 +140,8 @@ struct GameThumbnail: View {
         }
         Task {
             do {
-                let gameOptKey = namespacedKey("GameOptions", String(item.steamAppID))
+                let id = item.steamAppID != 0 ? String(describing: item.steamAppID) : String(describing: item.id)
+                let gameOptKey = namespacedKey("GameOptions", id)
                 let gameOptions: GameOptions = GameOptions()
                 if let gameOptionsData: GameOptionsData = readUsrDefData(key: gameOptKey) {
                     gameOptions.set(data: gameOptionsData)
@@ -140,13 +162,9 @@ struct GameThumbnail: View {
                     }, isNative: item.isNative)
                 }
                 if(item.isNative) {
-                    try await launchNativeGame(id: String(item.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions)
+                    try await launchNativeGame(id: String(item.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions, appExeURL: item.appExeURL)
                 } else {
-                    if let meta = libraryPageGlobals.gamesMeta.first(where: { $0.id == item.id }) {
-                        try await launchWindowsGame(id: String(item.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions, gameFolderURL: meta.gameURL!)
-                    } else {
-                        console.error("failed to get game meta or game url")
-                    }
+                    try await launchWindowsGame(id: String(item.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions, appExeURL: item.appExeURL)
                 }
             } catch {
                 console.error(String(reflecting: error))

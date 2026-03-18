@@ -40,9 +40,7 @@ enum APIError: Error {
 
 final class SteamAPI {
     var progress: Double = 0
-    private var cacheBlacklist: [String] = [
-        "228980", // Steamworks
-    ]
+    private var cacheBlacklist: [String] = BLACKLIST
     private var cacheProfileData: UserInfo? = nil
     private var cache: [String: SteamGame] = [:]
     private var cacheOwnedGamesIDs: [String] = []

@@ -57,9 +57,9 @@ struct PackageSub: Codable {
 }
 
 struct Platforms: Codable {
-    let windows: Bool
-    let mac: Bool
-    let linux: Bool
+    var windows: Bool
+    var mac: Bool
+    var linux: Bool
 }
 
 struct Screenshot: Codable {

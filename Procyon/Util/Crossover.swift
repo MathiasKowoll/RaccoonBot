@@ -148,11 +148,7 @@ func getInlineEnvs(from: GameOptions) -> String {
     }
     
     if (from.dx9PatchEnabled) {
-        if let dllsURL = Bundle.main.url(forResource: "dlls", withExtension: nil) {
-            value += "MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=1 DXVK_ASYNC=1 WINEDLLOVERRIDES=\"d3d9=n,b;d3d8=n,b\" "
-        } else {
-            console.error("Couldn't find /dlls")
-        }
+        value += "MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=1 DXVK_ASYNC=1 WINEDLLOVERRIDES=\"d3d9=n,b;d3d8=n,b\" "
     }
     
     value += getDxmtConfigEnv(values:  dxmtMetalSpatialUpscaleFactor + dxmtPreferredMaxFrameRate)

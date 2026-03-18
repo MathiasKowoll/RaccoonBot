@@ -9,6 +9,9 @@ import UniformTypeIdentifiers
 import Combine
 
 let DEFAULT_BOTTLE_PATH = "Library/Application Support/CrossOver/Bottles/"
+let BLACKLIST = [
+    "228980", // Steamworks
+]
 let debugEnabled: Bool = {
     let env = ProcessInfo.processInfo.environment["PROCYON_DEBUG"]?.lowercased()
     switch env {
@@ -92,15 +95,15 @@ func getIDsFromFolder(dest: URL) throws -> [String] {
             .map {
                 extractAppIDRegex(from: $0.lastPathComponent) ?? "0"
             }
-//            .filter { !blacklist.contains($0) }
+            .filter { !BLACKLIST.contains($0) }
     } ?? []
 }
 
 func getIsNative(fromURL: URL) -> Bool {
-    if folderContainsFile(withExtension: "exe", at: fromURL) {
-        return false
+    if !folderContainsFile(withExtension: "exe", at: fromURL) && folderContainsFile(withExtension: "app", at: fromURL) {
+        return true
     }
-    return true
+    return false
 }
 
 @discardableResult

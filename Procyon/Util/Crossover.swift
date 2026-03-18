@@ -115,15 +115,16 @@ func editCXBottleConfigFile(selectedBottle: String, options: [String: String]) t
     }
 }
 
+func getDxmtConfigEnv(values: String) -> String {
+    return values == "" ? "" : "DXMT_CONFIG=\(values)"
+}
+
 func getInlineEnvs(from: GameOptions) -> String {
     func onOff(_ value: Bool?) -> String {
         return value != nil && value == true ? "1" : "0"
     }
     var value = "\(from.envVariables) "
     let defaults = "WINEDEBUG=-all "
-    func getDxmtConfigEnv(values: String) -> String {
-        return "DXMT_CONFIG=\"\(values)\""
-    }
     func DoubleToFormattedStr(_ value: Double, _ digits: Int = 2) -> String {
         return String(value.formatted(.number.precision(.fractionLength(0...digits))))
     }
@@ -138,21 +139,19 @@ func getInlineEnvs(from: GameOptions) -> String {
     let dxmtPreferredMaxFrameRate = from.dxmtPreferredMaxFrameRate > 20 ? "d3d11.preferredMaxFrameRate=\(DoubleToFormattedStr(from.dxmtPreferredMaxFrameRate));" : ""
     let dxmtMetalSpatialUpscaleFactor = from.dxmtMetalFXSpatial == true ? "d3d11.metalSpatialUpscaleFactor=\(from.dxmtMetalSpatialUpscaleFactor);" : ""
     
-    if (from.dx9PatchEnabled) {
-        if let dllsUrl = Bundle.main.url(forResource: "dlls", withExtension: nil) {
-            let dllsOverride = "WINEDLLPATH=\"\(dllsUrl.path())${WINEDLLPATH:+:$WINEDLLPATH}\" "
-            value += dllsOverride
+    if (from.x87PatchEnabled) {
+        if let runtimex87Url = Bundle.main.url(forResource: "runtime_loader", withExtension: nil) {
+            value += "ROSETTA_X87_PATH=\"\(runtimex87Url.path())\" "
         } else {
-            console.error("Couldn't find the dlls folder")
+            console.error("Couldn't find runtime_loader")
         }
     }
     
-    if (from.x87PatchEnabled) {
-        if let runtimex87Url = Bundle.main.url(forResource: "runtime_loader", withExtension: nil) {
-            let runtimex87 = "ROSETTA_X87_PATH=\"\(runtimex87Url.path())\" "
-            value += runtimex87
+    if (from.dx9PatchEnabled) {
+        if let dllsURL = Bundle.main.url(forResource: "dlls", withExtension: nil) {
+            value += "MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=1 DXVK_ASYNC=1 WINEDLLOVERRIDES=\"d3d9=n,b;d3d8=n,b\" "
         } else {
-            console.error("Couldn't find runtime_loader")
+            console.error("Couldn't find /dlls")
         }
     }
     

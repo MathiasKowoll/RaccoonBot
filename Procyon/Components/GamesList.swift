@@ -41,12 +41,22 @@ struct GamesList: View {
                     }
                 }
             }
-            ToolbarItemGroup(placement: .secondaryAction) {
+            ToolbarItem(placement: .secondaryAction) {
                 Button {
                     api.deleteOwnedGamesIDsCache()
                     Task { await load() }
                 } label: {
                     Image(systemName: "arrow.clockwise")
+                }
+            }
+            ToolbarItem(placement: .secondaryAction) {
+                Button {
+                    Task {
+                        try! await closeWineActivities()
+                        libraryPageGlobals.isLaunchingGame = false
+                    }
+                } label: {
+                    Image(systemName: "exclamationmark.octagon")
                 }
             }
             ToolbarItemGroup(placement: .principal) {

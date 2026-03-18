@@ -18,7 +18,7 @@ func closeWineActivities() async throws {
     // Capture the target apps first to avoid the list changing while iterating
     let targets = NSWorkspace.shared.runningApplications.filter { app in
         guard let url = app.executableURL else { return false }
-        return url.lastPathComponent.lowercased().hasSuffix(".exe")
+        return url.lastPathComponent.lowercased().hasSuffix(".exe") || url.lastPathComponent.lowercased().contains("wine")
     }
 
     // Send terminate to all matching apps
@@ -111,13 +111,13 @@ func quitWine(cxAppPath: String, bottleName: String) async throws -> Void {
     try safeShell("\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) wineserver -k")
 }
 
-func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, options: GameOptions? = nil) async throws -> Void {
+func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, options: GameOptions? = nil, gameFolderURL: URL) async throws -> Void {
     if(options == nil) {
         console.error("Missing game options for game with id \(id) - cannot launch (options = nil)")
         return
     }
-    
     let f = FileManager.default
+
     var command = ""
     let optionsDictionary = [
         "CX_GRAPHICS_BACKEND": options!.cxGraphicsBackend,
@@ -134,15 +134,15 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, op
         let value = regOptionsDictionary[key]!
         try setReg(cxAppPath: cxAppPath, selectedBottle: selectedBottle, key: key, value: value)
     }
+    
     let bottleName = URL(string: selectedBottle)?.lastPathComponent ?? ""
     console.warn("attempting to run steam.exe on game id \(id)")
     let arguments = options != nil ? " " + options!.gameArguments : ""
     let x87cxAppPath = f.homeDirectoryForCurrentUser.appendingPathComponent("Applications", isDirectory: true).appendingPathComponent("Crossover_x87.app")
     let steamBootOptions = "-nochatui -nofriendsui -silent -no-browser -no-cef-sandbox -skipinitialbootstrap"
     if (options!.x87PatchEnabled && f.fileExists(atPath: x87cxAppPath.path())) {
-        let otherEnvs = options!.dx9PatchEnabled ? "MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=1 DXVK_ASYNC=1 WINEDLLOVERRIDES=\"d3d9=n,b\"" : ""
         let wineEnvs = "CX_ROOT=\"\(x87cxAppPath.path())Contents/SharedSupport/CrossOver\" WINEPREFIX=\"\(URL(string: selectedBottle)?.path ?? "")\" WINEMSYNC=1"
-        command = "\(getInlineEnvs(from: options!)) \(wineEnvs) \(otherEnvs) \(x87cxAppPath.path())Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/wine \"C:\\Program Files (x86)\\Steam\\Steam.exe\" \(steamBootOptions) -applaunch \(String(id))" + arguments
+        command = "\(getInlineEnvs(from: options!)) \(wineEnvs) \(x87cxAppPath.path())Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/wine \"C:\\Program Files (x86)\\Steam\\Steam.exe\" \(steamBootOptions) -applaunch \(String(id))" + arguments
     } else {
         command = "\(getInlineEnvs(from: options!)) \(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \"C:\\Program Files (x86)\\Steam\\Steam.exe\" \(steamBootOptions) -applaunch \(String(id))" + arguments
     }

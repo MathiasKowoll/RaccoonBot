@@ -76,6 +76,11 @@ struct OptionsView: View {
                         }
                     }.onChange(of: appGlobals.selectedBottle) { oldValue, newValue in
                         if(newValue != "") {
+                            do {
+                                try cpyd8d9DLLs(to: getSystemWOW64URL(from: URL(string: newValue)!))
+                            } catch {
+                                console.error(String(reflecting: error))
+                            }
                             libraryPageGlobals.folders.removeAll()
                             resetPersistedFolderAccess()
                             let steamLibrariesURLs = getSteamLibraryFolders(from: URL(string: newValue)!)
@@ -103,8 +108,8 @@ struct OptionsView: View {
                     .cornerRadius(20)
                     Divider()
                     Button(action: {
-                        api.deleteCache()
-                        api.deleteCacheBlacklist()
+                        api.deleteGameCache()
+                        api.deleteBlacklistCache()
                         Task {
                             await load()
                         }
@@ -113,7 +118,6 @@ struct OptionsView: View {
                         Label("Delete cache", systemImage: "trash")
                     }
                     .cornerRadius(20)
-//                    Spacer()
                 }
                 
                 if(debugEnabled == true) {

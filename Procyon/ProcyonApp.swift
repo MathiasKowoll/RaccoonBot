@@ -19,12 +19,17 @@ struct ProcyonApp: App {
         WindowGroup {
             ContentView()
                 .frame(width: appWindowResizable ? nil : windowWidth, height: appWindowResizable ? nil : windowHeight)
+                .onAppear {
+                    // Disable "Show Tab Bar" globally
+                    NSWindow.allowsAutomaticWindowTabbing = false
+                }
         }
-//        .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unified)
-//        .windowToolbarLabelStyle(fixed: .iconOnly)
         .defaultSize(width: windowWidth, height: windowHeight)
         .windowResizability(.contentSize)
+        .commands {
+            CommandGroup(replacing: .newItem) { } // replaces "New Window" with nothing
+        }
     }
-
+    
 }

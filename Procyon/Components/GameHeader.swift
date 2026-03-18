@@ -113,9 +113,18 @@ struct GameHeader: View {
         }
     }
     
+    @MainActor
     func playGame() {
         libraryPageGlobals.setLoader(state: true)
         Task {
+            let gameOptKey = namespacedKey("GameOptions", String(game!.steamAppID))
+            let gameOptions: GameOptions = GameOptions()
+            if let gameOptionsData: GameOptionsData = readUsrDefData(key: gameOptKey) {
+                gameOptions.set(data: gameOptionsData)
+                console.log("options retrieved")
+            } else {
+                console.warn("failed to retrieve game options")
+            }
             do {
                 Task(priority: .background) {
                     tObserver = try await getGameTracker(appNames: game!.appNames, cxAppPath: appGlobals.cxAppPath!, bottleName: appGlobals.selectedBottle, onLoad: {
@@ -132,7 +141,11 @@ struct GameHeader: View {
                 if(game!.isNative) {
                     try await launchNativeGame(id: String(game!.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions)
                 } else {
-                    try await launchWindowsGame(id: String(game!.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions)
+                    if let meta = libraryPageGlobals.gamesMeta.first(where: { $0.id == game!.id }) {
+                        try await launchWindowsGame(id: String(game!.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions, gameFolderURL: meta.gameURL!)
+                    } else {
+                        console.error("failed to get game meta or game url")
+                    }
                 }
             } catch {
                 libraryPageGlobals.setLoader(state: false)

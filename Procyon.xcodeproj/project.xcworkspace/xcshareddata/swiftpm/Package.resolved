@@ -1,5 +1,5 @@
 {
-  "originHash" : "b552906d6ca76690c15395788d1d9df7842bf92e746ac6a7ac6ab1b71cf8e2ee",
+  "originHash" : "26dcaa234328a47c68b6d026cc05a5f7e47c17cba2966cba8bbd5f5bfac5749d",
   "pins" : [
     {
       "identity" : "alamofire",
@@ -11,12 +11,21 @@
       }
     },
     {
+      "identity" : "dotlottie-ios",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/LottieFiles/dotlottie-ios.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "688903faef98da913951fadc8a09aa0d1be0b880"
+      }
+    },
+    {
       "identity" : "kingfisher",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/onevcat/Kingfisher",
       "state" : {
-        "revision" : "d30a5fad881137e2267f96a8e3fc35c58999bb94",
-        "version" : "8.6.2"
+        "revision" : "c92b84898e34ab46ff0dad86c02a0acbe2d87008",
+        "version" : "8.8.0"
       }
     },
     {

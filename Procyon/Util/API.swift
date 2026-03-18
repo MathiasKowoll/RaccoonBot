@@ -73,7 +73,7 @@ final class SteamAPI {
         console.log("Loading caches...")
         self.loadGameCache()
         self.loadIDCache()
-        self.loadBlacklist()
+        self.loadBlacklistCache()
         self.loadProfileDataCache()
     }
     
@@ -101,17 +101,19 @@ final class SteamAPI {
             console.error("Cache is empty, coulnd't read the file")
         }
     }
-    private func loadBlacklist() {
+    private func saveGameCache() {
         do {
-            let data = try Data(contentsOf: cacheBlacklistURL)
-            let decoded = try JSONDecoder().decode([String].self, from: data)
-            self.cacheBlacklist = decoded
-            if(self.cacheBlacklist.isEmpty == false){
-                console.warn("Blacklist Cache loaded")
-            }
+            let encoded = try JSONEncoder().encode(self.cache)
+            try encoded.write(to: self.cacheURL, options: [.atomic])
+            console.warn("Cache saved")
         } catch {
-            console.error("Blacklist Cache is empty, coulnd't read the file")
+            console.error(String(reflecting: error))
         }
+    }
+    func deleteGameCache() {
+        try? FileManager.default.removeItem(at: cacheURL)
+        self.cache.removeAll()
+        console.warn("Cache deleted")
     }
     private func loadIDCache() {
         do { // TO DO: Edge case - Track changes in the User ID and invalidate cache
@@ -125,7 +127,19 @@ final class SteamAPI {
             console.error("ID Cache is empty, coulnd't read the file")
         }
     }
-    private func saveBlacklist() {
+    private func loadBlacklistCache() {
+        do {
+            let data = try Data(contentsOf: cacheBlacklistURL)
+            let decoded = try JSONDecoder().decode([String].self, from: data)
+            self.cacheBlacklist = decoded
+            if(self.cacheBlacklist.isEmpty == false){
+                console.warn("Blacklist Cache loaded")
+            }
+        } catch {
+            console.error("Blacklist Cache is empty, coulnd't read the file")
+        }
+    }
+    private func saveBlacklistCache() {
         do {
             let encoded = try JSONEncoder().encode(self.cacheBlacklist)
             try encoded.write(to: self.cacheBlacklistURL, options: [.atomic])
@@ -134,7 +148,7 @@ final class SteamAPI {
             console.error(String(reflecting: error))
         }
     }
-    func deleteCacheBlacklist() {
+    func deleteBlacklistCache() {
         try? FileManager.default.removeItem(at: cacheBlacklistURL)
         self.cacheBlacklist.removeAll()
         console.warn("Blacklist Cache deleted")
@@ -165,15 +179,6 @@ final class SteamAPI {
         // Here we keep the type consistent by not mutating cacheProfileData.
         console.warn("Profile Data Cache deleted")
     }
-    private func saveCache() {
-        do {
-            let encoded = try JSONEncoder().encode(self.cache)
-            try encoded.write(to: self.cacheURL, options: [.atomic])
-            console.warn("Cache saved")
-        } catch {
-            console.error(String(reflecting: error))
-        }
-    }
     private func saveOwnedGamesIDsCache() {
         do {
             let encoded = try JSONEncoder().encode(self.cacheOwnedGamesIDs)
@@ -183,11 +188,7 @@ final class SteamAPI {
             console.error(String(reflecting: error))
         }
     }
-    func deleteCache() {
-        try? FileManager.default.removeItem(at: cacheURL)
-        self.cache.removeAll()
-        console.warn("Cache deleted")
-    }
+
     func deleteOwnedGamesIDsCache() {
         try? FileManager.default.removeItem(at: cacheOwnedGamesIDsURL)
         self.cacheOwnedGamesIDs.removeAll()
@@ -218,7 +219,7 @@ final class SteamAPI {
             return nil
         }
         cache[appID] = root.data[0]
-        saveCache()
+        saveGameCache()
         return root.data[0]
         
     }
@@ -255,7 +256,7 @@ final class SteamAPI {
             setProgress(self.progress)
         }
         console.cacheRelease("The following game's data cache was used", key: "gameCache")
-        self.saveBlacklist()
+        self.saveBlacklistCache()
         return items
     }
     func fetchOwnedGamesIDs(userID: String) async throws -> [String] {

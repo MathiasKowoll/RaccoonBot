@@ -314,3 +314,52 @@ func makeX87CrossoverPatchedCopy (sourceCXPath: URL) -> Void {
         console.error(String(reflecting: error))
     }
 }
+
+func isSameFile(_ file1URL: URL, _ file2URL: URL) -> Bool {
+    let f = FileManager.default
+    do {
+        let attrs1 = try f.attributesOfItem(atPath: file1URL.path())
+        let attrs2 = try f.attributesOfItem(atPath: file2URL.path())
+        let sameSize = attrs1[.size] as? Int == attrs2[.size] as? Int
+        let sameDate = attrs1[.modificationDate] as? Date == attrs2[.modificationDate] as? Date
+        if(sameSize && sameDate) {
+            // just comparing attributes for now
+            return true
+        }
+    } catch {
+        console.error("couldn't get file attributes")
+        console.error(String(reflecting: error))
+        return false
+    }
+    return false
+}
+
+func getSystemWOW64URL(from: URL) -> URL {
+    return from
+        .appending(path: "drive_c")
+        .appending(path: "windows")
+        .appending(path: "syswow64")
+}
+
+func cpyd8d9DLLs(to: URL) throws -> Void {
+    let f = FileManager.default
+    let files = ["d3d9.dll", "d3d8.dll"]
+    for file in files {
+        if let dllsUrl = Bundle.main.url(forResource: "dlls", withExtension: nil) {
+            let dllPath = dllsUrl.appendingPathComponent(file)
+            let dllDest = to.appendingPathComponent(file)
+            if(f.fileExists(atPath: dllDest.path())) {
+                console.log("\(file) exists")
+                if(!isSameFile(dllPath, dllDest)){
+                    try f.moveItem(at: dllDest, to: dllDest.appendingPathExtension(".old"))
+                    try f.copyItem(at: dllPath, to: dllDest)
+                } else {
+                    console.log("already patched with the latest dx9 skipping copy")
+                }
+            }
+            
+        } else {
+            console.log("Couldn't find \(file)")
+        }
+    }
+}

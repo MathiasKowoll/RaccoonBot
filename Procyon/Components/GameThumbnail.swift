@@ -27,8 +27,6 @@ struct GameThumbnail: View {
     }
     
     var body: some View {
-
-        
         Button(action: {
             openDetailPage()
         }) {
@@ -112,6 +110,7 @@ struct GameThumbnail: View {
         .buttonStyle(.plain)
     }
     
+    @MainActor
     func PlayGame () {
         libraryPageGlobals.selectedGame = updatedItem
         libraryPageGlobals.setLoader(state: true)
@@ -143,7 +142,11 @@ struct GameThumbnail: View {
                 if(item.isNative) {
                     try await launchNativeGame(id: String(item.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions)
                 } else {
-                    try await launchWindowsGame(id: String(item.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions)
+                    if let meta = libraryPageGlobals.gamesMeta.first(where: { $0.id == item.id }) {
+                        try await launchWindowsGame(id: String(item.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions, gameFolderURL: meta.gameURL!)
+                    } else {
+                        console.error("failed to get game meta or game url")
+                    }
                 }
             } catch {
                 console.error(String(reflecting: error))

@@ -147,12 +147,32 @@ func getInlineEnvs(from: GameOptions) -> String {
         }
     }
     
-    if (from.dx9PatchEnabled) {
-        value += "MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=1 DXVK_ASYNC=1 WINEDLLOVERRIDES=\"d3d9=n,b;d3d8=n,b\" "
-    }
+//    if (from.dx9PatchEnabled) {
+//        value += "MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=1 DXVK_ASYNC=1 WINEDLLOVERRIDES=\"d3d9=n,b;d3d8=n,b\" "
+//    }
     
     value += getDxmtConfigEnv(values:  dxmtMetalSpatialUpscaleFactor + dxmtPreferredMaxFrameRate)
     return value
+}
+
+func toCrossoverENVString(_ key: String, _ value: String) -> String {
+    return "\"\(key)\"=\"\(value)\""
+}
+
+func parseCXEnvVarString(_ string: String) -> (String, String){
+    // "KEY"="VALUE"
+    // e.g.: "CX_BOTTLE_PATH"="/Users/${USER}/CXPBottles"
+    let regex = /\"(\w+?)\"\=\"(.+?)\"/
+    var key = ""
+    var value = ""
+    do {
+        let match = try regex.firstMatch(in: string)
+        key = match?.1.description ?? ""
+        value = match?.2.description ?? ""
+    } catch {
+        console.error("parseCXEnvVarString: \(String(reflecting: error))")
+    }
+    return (key, value)
 }
 
 func getBottleDrives(bottleURL: URL) -> CXDrives {
@@ -180,4 +200,17 @@ func getDrivesPaths(at: URL) -> CXDrives {
         console.error(String(reflecting: error))
         return [:]
     }
+}
+
+func getSetRegCommand (cxAppPath: String, selectedBottle: String, key: String, value: String) -> String {
+    let bottleName = URL(string: selectedBottle)?.lastPathComponent ?? ""
+    let command = "\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) reg add 'HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Services\\winebus\\' /v '\(key)' /t REG_DWORD /d \(value) /f"
+    console.log(command)
+    return command
+}
+
+func setReg (cxAppPath: String, selectedBottle: String, key: String, value: String) throws -> Void {
+    // example: wine reg add "HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\winebus" /v "Enable SDL" /t REG_DWORD /d 1 /f
+
+    try safeShell(getSetRegCommand(cxAppPath: cxAppPath, selectedBottle: selectedBottle, key: key, value: value))
 }

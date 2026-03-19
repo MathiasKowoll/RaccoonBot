@@ -122,13 +122,13 @@ struct GameHeader: View {
         Task {
             let id = game!.steamAppID != 0 ? String(describing: game!.steamAppID) : String(describing: game!.id)
             let gameOptKey = namespacedKey("GameOptions", id)
-            let gameOptions: GameOptions = GameOptions()
-            if let gameOptionsData: GameOptionsData = readUsrDefData(key: gameOptKey) {
-                gameOptions.set(data: gameOptionsData)
-                console.log("options retrieved")
-            } else {
-                console.warn("failed to retrieve game options")
-            }
+//            let gameOptions: GameOptions = GameOptions()
+//            if let gameOptionsData: GameOptionsData = readUsrDefData(key: gameOptKey) {
+//                gameOptions.set(data: gameOptionsData)
+//                console.log("options retrieved")
+//            } else {
+//                console.warn("failed to retrieve game options")
+//            }
             do {
                 Task(priority: .background) {
                     tObserver = try await getGameTracker(appNames: game!.appNames, cxAppPath: appGlobals.cxAppPath!, bottleName: appGlobals.selectedBottle, onLoad: {

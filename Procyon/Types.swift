@@ -335,7 +335,7 @@ extension Game {
             "usk": RatingBody(rating: "12", requiredAge: "12", descriptors: "Violence")
         ]
     )
-    static let mock = Game(from: Game.steamMock, id: "example", isNative: true, downloadProgress: 100, isInstalled: true, appNames: ["test.exe"])
+    static let mock = Game(from: Game.steamMock, id: "example", isNative: true, downloadProgress: 100, isInstalled: true, appNames: ["test.exe"], isCustom: true)
     static let steamEmptyGame = SteamGame(
         type: "game",
         name: "Game Name here",

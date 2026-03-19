@@ -50,7 +50,7 @@ struct GameThumbnail: View {
                                 .background(Color.black.opacity(0.1))     // semi-transparent black
                                 .clipShape(Circle())                       // make it circular
                                 .foregroundStyle(.white.opacity(0.9))                   // icon color
-                                .padding(8)
+                                .padding(.vertical, 8)
                         }
                         if (item.isCustom == true) {
                             Button {
@@ -63,12 +63,12 @@ struct GameThumbnail: View {
                                     .background(Color.black.opacity(0.1))     // semi-transparent black
                                     .clipShape(Circle())                       // make it circular
                                     .foregroundStyle(.white.opacity(0.9))                   // icon color
-                                    .padding(8)
+                                    .padding(.vertical, 8)
                             }
                             .buttonStyle(.plain)
-                            .padding(.horizontal, 10)
                         }
                     }
+                    .padding(.horizontal, 8)
                 }
                 VStack (alignment: .leading, spacing: 6) {
                     Text(item.name)
@@ -180,7 +180,5 @@ struct GameThumbnail: View {
 }
 
 #Preview {
-    @Previewable @State var showDetailView: Bool = false
-    @Previewable @State var selectedGame: Game? = nil
     GameThumbnail(item: .mock)
 }

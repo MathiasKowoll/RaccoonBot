@@ -106,24 +106,34 @@ func getIsNative(fromURL: URL) -> Bool {
     return false
 }
 
-@discardableResult
-func safeShell(_ command: String) throws -> String {
+func safeShell(_ command: String) throws {
+    let task = Process()
+    
+    task.standardInput = FileHandle.nullDevice
+    task.standardOutput = FileHandle.nullDevice
+    task.standardError = FileHandle.nullDevice
+    task.arguments = ["-c", command]
+    task.executableURL = URL(fileURLWithPath: "/bin/zsh")
+
+    try task.run()
+}
+
+func safeShellWithOutput(_ command: String) throws -> String {
     let task = Process()
     let pipe = Pipe()
     
+    task.standardInput = nil
     task.standardOutput = pipe
     task.standardError = pipe
     task.arguments = ["-c", command]
     task.executableURL = URL(fileURLWithPath: "/bin/zsh")
-    task.standardInput = nil
 
     try task.run()
     
-//    let data = pipe.fileHandleForReading.readDataToEndOfFile()
-//    let output = String(data: data, encoding: .utf8)!
-//    console.warn(output)
-//    return output
-    return "OK"
+    let data = pipe.fileHandleForReading.readDataToEndOfFile()
+    let output = String(data: data, encoding: .utf8)!
+    console.warn(output)
+    return output
 }
 
 let DEFAULT_STEAM_MAC_PATH = "/Library/Application Support/Steam/config/"

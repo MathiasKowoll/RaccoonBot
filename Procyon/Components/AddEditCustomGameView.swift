@@ -55,8 +55,11 @@ struct AddCustomGameView: View {
                 if let url = openFolderSelectorPanel(type: .executable) {
                     game.appExeURL = url
                     game.appNames.append(url.lastPathComponent)
+                    if(url.pathExtension == "exe") {
+                        game.isNative = false
+                    }
                     if id == "" {
-                        game.id = UUID().uuidString + url.path(percentEncoded: false)
+                        game.id = url.path(percentEncoded: false)
                     }
                 }
             }

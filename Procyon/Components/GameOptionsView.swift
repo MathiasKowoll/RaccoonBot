@@ -38,8 +38,11 @@ struct GameOptionsView: View {
                                 Divider()
                                 Toggle("Use X87 Patch (32 bits only)", isOn: $gameOptions.x87PatchEnabled)
                                 Toggle("Use DX9 Patch", isOn: $gameOptions.dx9PatchEnabled).onChange(of: gameOptions.dx9PatchEnabled) {
-                                    if(!gameOptions.envVariables.contains("MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=1 DXVK_ASYNC=1 WINEDLLOVERRIDES=d3d9=n,b;d3d8=n,b")) {
+                                    if(gameOptions.dx9PatchEnabled && !gameOptions.envVariables.contains("MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=1 DXVK_ASYNC=1 WINEDLLOVERRIDES=d3d9=n,b;d3d8=n,b")) {
                                         gameOptions.envVariables = "MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=1 DXVK_ASYNC=1 WINEDLLOVERRIDES=d3d9=n,b;d3d8=n,b"
+                                    }
+                                    if(!gameOptions.dx9PatchEnabled && gameOptions.envVariables.contains("MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=1 DXVK_ASYNC=1 WINEDLLOVERRIDES=d3d9=n,b;d3d8=n,b")) {
+                                        gameOptions.envVariables = ""
                                     }
                                 }
                             }

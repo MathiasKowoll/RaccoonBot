@@ -59,7 +59,7 @@ struct OptionsView: View {
                     if let url = openFolderSelectorPanel(type: .application) {
                         appGlobals.selectedBottle = ""
                         bottles = getAllBottles(appDir: url)
-                        appGlobals.cxAppPath = url.relativePath
+                        appGlobals.cxAppPath = url.path(percentEncoded: false)
                         persistUsrDefOptionString(key: "cxAppPath", value: url.relativePath)
                         persistUsrDefOptionString(key: "cxCompleteAppPath", value: url.path(percentEncoded: false))
                         makeX87CrossoverPatchedCopy(sourceCXPath: url)

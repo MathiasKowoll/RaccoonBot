@@ -115,8 +115,8 @@ func editCXBottleConfigFile(selectedBottle: String, options: [String: String]) t
     }
 }
 
-func getDxmtConfigEnv(values: String) -> String {
-    return values == "" ? "" : "DXMT_CONFIG=\(values)"
+func getDxmtConfigEnv(values: [String]) -> String {
+    return values.count == 0 ? "" : "DXMT_CONFIG=\"\(values.joined(separator: ";"))\""
 }
 
 func getInlineEnvs(from: GameOptions) -> String {
@@ -136,8 +136,13 @@ func getInlineEnvs(from: GameOptions) -> String {
     let dxmtMetalFXSpatial = "DXMT_METALFX_SPATIAL_SWAPCHAIN=\(onOff(from.dxmtMetalFXSpatial)) "
     value += dxmtMetalFXSpatial
     
-    let dxmtPreferredMaxFrameRate = from.dxmtPreferredMaxFrameRate > 20 ? "d3d11.preferredMaxFrameRate=\(DoubleToFormattedStr(from.dxmtPreferredMaxFrameRate));" : ""
-    let dxmtMetalSpatialUpscaleFactor = from.dxmtMetalFXSpatial == true ? "d3d11.metalSpatialUpscaleFactor=\(from.dxmtMetalSpatialUpscaleFactor);" : ""
+    var dxmtConfigValues: [String] = []
+    if from.dxmtPreferredMaxFrameRate > 20 {
+        dxmtConfigValues.append("d3d11.preferredMaxFrameRate=\(DoubleToFormattedStr(from.dxmtPreferredMaxFrameRate))")
+    }
+    if from.dxmtMetalFXSpatial == true  {
+        dxmtConfigValues.append("d3d11.metalSpatialUpscaleFactor=\(from.dxmtMetalSpatialUpscaleFactor)")
+    }
     
     if (from.x87PatchEnabled) {
         if let runtimex87Url = Bundle.main.url(forResource: "runtime_loader", withExtension: nil) {
@@ -147,11 +152,7 @@ func getInlineEnvs(from: GameOptions) -> String {
         }
     }
     
-//    if (from.dx9PatchEnabled) {
-//        value += "MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=1 DXVK_ASYNC=1 WINEDLLOVERRIDES=\"d3d9=n,b;d3d8=n,b\" "
-//    }
-    
-    value += getDxmtConfigEnv(values:  dxmtMetalSpatialUpscaleFactor + dxmtPreferredMaxFrameRate)
+    value += getDxmtConfigEnv(values:  dxmtConfigValues)
     return value
 }
 

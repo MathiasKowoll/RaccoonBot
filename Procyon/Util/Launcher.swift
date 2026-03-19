@@ -147,9 +147,9 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, op
     if (options!.x87PatchEnabled && f.fileExists(atPath: x87cxAppPath.path())) {
         let gameLaunchCommand = appExeURL != nil ? "\"\(appExeURL!.path(percentEncoded: false))\"" : "\"C:\\Program Files (x86)\\Steam\\Steam.exe\" \(steamBootOptions) -applaunch \(String(id))"
         let workdirCommand = appExeURL != nil ? "cd \"\(appExeURL!.deletingLastPathComponent().path(percentEncoded: false))\" && " : ""
-        command = "\(regCommands)\(workdirCommand)\(getInlineEnvs(from: options!)) \(wineEnvs) \(x87cxAppPath.path())Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/wine \(gameLaunchCommand) \(arguments)"
+        command = "\(regCommands)\(workdirCommand)env \(getInlineEnvs(from: options!)) \(wineEnvs) \(x87cxAppPath.path())Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/wine \(gameLaunchCommand) \(arguments)"
     } else {
-        command = "\(regCommands)\(getInlineEnvs(from: options!)) \(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \"C:\\Program Files (x86)\\Steam\\Steam.exe\" \(steamBootOptions) -applaunch \(String(id)) \(arguments)"
+        command = "\(regCommands)env \(getInlineEnvs(from: options!)) \(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \"C:\\Program Files (x86)\\Steam\\Steam.exe\" \(steamBootOptions) -applaunch \(String(id)) \(arguments)"
     }
     
     console.warn(command)
@@ -161,9 +161,9 @@ func launchNativeGame(id: String, cxAppPath: String, selectedBottle: String, opt
     let steamBootOptions = "-nochatui -nofriendsui -silent -no-browser -applaunch"
     var command = ""
     if(appExeURL != nil) {
-        command = "\(getInlineEnvs(from: options!)) open \"\(appExeURL!.path(percentEncoded: false)) \(arguments)\""
+        command = "env \(getInlineEnvs(from: options!)) open \"\(appExeURL!.path(percentEncoded: false)) \(arguments)\""
     } else {
-        command = "\(getInlineEnvs(from: options!)) /Applications/Steam.app/Contents/MacOS/steam_osx \(steamBootOptions) \(String(id)) \(arguments)"
+        command = "env \(getInlineEnvs(from: options!)) /Applications/Steam.app/Contents/MacOS/steam_osx \(steamBootOptions) \(String(id)) \(arguments)"
     }
     console.warn(command)
     try safeShell(command)

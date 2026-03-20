@@ -34,7 +34,7 @@ struct AddCustomGameView: View {
                     }
                 }
             }
-            GameThumbnail(item: game)
+            GameThumbnail(item: game, isResizable: true)
             TextField("Game Title", text: $game.name)
             // Native toggle
             HStack(alignment: .top){
@@ -147,7 +147,7 @@ struct AddCustomGameView: View {
                 }
             }
         }
-        .padding()
+        .padding(.vertical)
     }
 }
 

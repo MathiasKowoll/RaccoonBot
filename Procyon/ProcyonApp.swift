@@ -10,7 +10,17 @@ import CoreData
 
 let windowWidth: CGFloat = 1024
 let windowHeight: CGFloat = 750
-let appWindowResizable: Bool = false
+let appWindowResizable: Bool = {
+    let env = ProcessInfo.processInfo.environment["PROCYON_LAYOUT_RESIZABLE"]?.lowercased()
+    switch env {
+    case "1", "true", "yes":
+        return true
+    case "0", "false", "no":
+        return false
+    default:
+        return false
+    }
+}()
 var api = SteamAPI()
 
 @main

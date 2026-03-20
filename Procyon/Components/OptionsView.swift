@@ -55,92 +55,101 @@ struct OptionsView: View {
                         .stroke(.gray)
                 )
                 .padding(.bottom)
-                Button(URL(string: appGlobals.cxAppPath ?? "")?.lastPathComponent ?? "Select a Crossover App...") {
-                    if let url = openFolderSelectorPanel(type: .application) {
-                        appGlobals.selectedBottle = ""
-                        bottles = getAllBottles(appDir: url)
-                        appGlobals.cxAppPath = url.path(percentEncoded: false)
-                        persistUsrDefOptionString(key: "cxAppPath", value: url.relativePath)
-                        persistUsrDefOptionString(key: "cxCompleteAppPath", value: url.path(percentEncoded: false))
-                        makeX87CrossoverPatchedCopy(sourceCXPath: url)
-                    }
-                }
-                if(!bottles.isEmpty) {
-                    Picker("Select a bottle", selection: $appGlobals.selectedBottle) {
-                        Text("No bottle selected").tag("")
-                        ForEach(bottles, id: \.absoluteString) { bottle in
-                            let components = bottle.pathComponents
-                            let lastTwo = Array(components.suffix(2))
-                            let label = lastTwo.joined(separator: "/")
-                            Text(label).tag(bottle.absoluteString)
+                VStack(alignment: .leading) {
+                    Button(URL(string: appGlobals.cxAppPath ?? "")?.lastPathComponent ?? "Select a Crossover App...") {
+                        if let url = openFolderSelectorPanel(type: .application) {
+                            appGlobals.selectedBottle = ""
+                            bottles = getAllBottles(appDir: url)
+                            appGlobals.cxAppPath = url.path(percentEncoded: false)
+                            persistUsrDefOptionString(key: "cxAppPath", value: url.relativePath)
+                            persistUsrDefOptionString(key: "cxCompleteAppPath", value: url.path(percentEncoded: false))
+                            makeX87CrossoverPatchedCopy(sourceCXPath: url)
                         }
-                    }.onChange(of: appGlobals.selectedBottle) { oldValue, newValue in
-                        if(newValue != "") {
-                            do {
-                                try cpyd8d9DLLs(to: getSystemWOW64URL(from: URL(string: newValue)!))
-                            } catch {
-                                console.error(String(reflecting: error))
+                    }
+                    if(!bottles.isEmpty) {
+                        HStack {
+                            Picker("Select a bottle", selection: $appGlobals.selectedBottle) {
+                                Text("No bottle selected").tag("")
+                                ForEach(bottles, id: \.absoluteString) { bottle in
+                                    let components = bottle.pathComponents
+                                    let lastTwo = Array(components.suffix(2))
+                                    let label = lastTwo.joined(separator: "/")
+                                    Text(label).tag(bottle.absoluteString)
+                                }
+                            }.onChange(of: appGlobals.selectedBottle) { oldValue, newValue in
+                                if(newValue != "") {
+                                    do {
+                                        try cpyd8d9DLLs(to: getSystemWOW64URL(from: URL(string: newValue)!))
+                                    } catch {
+                                        console.error(String(reflecting: error))
+                                    }
+                                    libraryPageGlobals.folders.removeAll()
+                                    resetPersistedFolderAccess()
+                                    let steamLibrariesURLs = getSteamLibraryFolders(from: URL(string: newValue)!)
+                                    steamLibrariesURLs.forEach { url in
+                                        validateAddSteamFolder(url, to: &libraryPageGlobals.folders)
+                                    }
+                                    Task { await load() }
+                                    persistUsrDefOptionString(key: "selectedBottle", value: newValue)
+                                }
                             }
-                            libraryPageGlobals.folders.removeAll()
-                            resetPersistedFolderAccess()
-                            let steamLibrariesURLs = getSteamLibraryFolders(from: URL(string: newValue)!)
-                            steamLibrariesURLs.forEach { url in
-                                validateAddSteamFolder(url, to: &libraryPageGlobals.folders)
+                            Button {
+                                showFolder(url: (URL(string:appGlobals.selectedBottle)) ?? URL(string: "/")!)
+                            } label: {
+                                Image(systemName: "eye")
                             }
-                            Task { await load() }
-                            persistUsrDefOptionString(key: "selectedBottle", value: newValue)
                         }
+                    } else {
+                        Text("No bottles found")
+                        Text("Create a new bottle first").font(.footnote)
                     }
-                } else {
-                    Text("No bottles found")
-                    Text("Create a new bottle first").font(.footnote)
-                }
-                HStack {
-                    Button(action: {
-                        api.deleteOwnedGamesIDsCache()
-                        Task {
-                            await load()
-                        }
-                        libraryPageGlobals.showOptions = false
-                    }) {
-                        Label("Delete Owned games cache", systemImage: "trash")
-                    }
-                    .cornerRadius(20)
-                    Divider()
-                    Button(action: {
-                        api.deleteGameCache()
-                        api.deleteBlacklistCache()
-                        Task {
-                            await load()
-                        }
-                        libraryPageGlobals.showOptions = false
-                    }) {
-                        Label("Delete cache", systemImage: "trash")
-                    }
-                    .cornerRadius(20)
-                }
-                
-                if(debugEnabled == true) {
-                    Divider().padding(.top, 10)
-                    Text("Debug")
-                        .padding(.vertical, 5)
                     HStack {
-                        Button(action: { console.enableLogFile = true }) {
-                            Label("Start Logging", systemImage: "ant")
-                        }
-                        .cornerRadius(20)
-                        Spacer()
                         Button(action: {
-                            console.saveLogs()
+                            api.deleteOwnedGamesIDsCache()
+                            Task {
+                                await load()
+                            }
+                            libraryPageGlobals.showOptions = false
                         }) {
-                            Label("Download logs", systemImage: "square.and.arrow.down")
+                            Label("Delete Owned games cache", systemImage: "trash")
                         }
                         .cornerRadius(20)
+                        Divider()
+                        Button(action: {
+                            api.deleteGameCache()
+                            api.deleteBlacklistCache()
+                            Task {
+                                await load()
+                            }
+                            libraryPageGlobals.showOptions = false
+                        }) {
+                            Label("Delete cache", systemImage: "trash")
+                        }
+                        .cornerRadius(20)
+                    }
+                    
+                    if(debugEnabled == true) {
+                        Divider().padding(.top, 10)
+                        Text("Debug")
+                            .padding(.vertical, 5)
+                        HStack {
+                            Button(action: { console.enableLogFile = true }) {
+                                Label("Start Logging", systemImage: "ant")
+                            }
+                            .cornerRadius(20)
+                            Spacer()
+                            Button(action: {
+                                console.saveLogs()
+                            }) {
+                                Label("Download logs", systemImage: "square.and.arrow.down")
+                            }
+                            .cornerRadius(20)
+                        }
                     }
                 }
             }
             .frame(width: 300)
-            .padding()
+            .padding(.bottom)
         }
         .onAppear() {
             if let path = readUsrDefOptionString(key: "cxCompleteAppPath") {

@@ -111,6 +111,21 @@ func quitWine(cxAppPath: String, bottleName: String) async throws -> Void {
     try safeShell("\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) wineserver -k")
 }
 
+func openSteam(cxAppPath: String?, selectedBottle: String?) {
+    if cxAppPath == nil || selectedBottle == nil {
+        return
+    }
+    if let bottleName = URL(string: selectedBottle!)?.lastPathComponent {
+        let steamLaunchCommand = "\(cxAppPath!)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \"C:\\Program Files (x86)\\Steam\\Steam.exe\""
+        do {
+            try safeShell(steamLaunchCommand)
+            console.log(steamLaunchCommand)
+        } catch {
+            console.error(String(reflecting: error))
+        }
+    }
+}
+
 func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, options: GameOptions? = nil, appExeURL: URL? = nil) async throws -> Void {
     if(options == nil) {
         console.error("Missing game options for game with id \(id) - cannot launch (options = nil)")
@@ -161,7 +176,7 @@ func launchNativeGame(id: String, cxAppPath: String, selectedBottle: String, opt
     let steamBootOptions = "-nochatui -nofriendsui -silent -no-browser -applaunch"
     var command = ""
     if(appExeURL != nil) {
-        command = "env \(getInlineEnvs(from: options!)) open \"\(appExeURL!.path(percentEncoded: false)) \(arguments)\""
+        command = "env \(getInlineEnvs(from: options!)) open \"\(appExeURL!.path(percentEncoded: false))\" \(arguments)"
     } else {
         command = "env \(getInlineEnvs(from: options!)) /Applications/Steam.app/Contents/MacOS/steam_osx \(steamBootOptions) \(String(id)) \(arguments)"
     }

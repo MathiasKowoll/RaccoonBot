@@ -8,14 +8,13 @@
 import SwiftUI
 
 let columns = [
-    GridItem(.flexible()),
-    GridItem(.flexible()),
-    GridItem(.flexible())
+    GridItem(.adaptive(minimum: 250, maximum: 325), spacing: 10),
 ]
 
 struct GamesList: View {
     @EnvironmentObject var router: Router
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
+    @EnvironmentObject var appGlobals: AppGlobals
     @State private var showProfile: Bool = false
     @State private var showAddCustomGameView: Bool = false
     
@@ -23,18 +22,18 @@ struct GamesList: View {
     
     var body: some View {
         ScrollView {
-            LazyVGrid(columns: columns, spacing: 8) {
+            LazyVGrid(columns: columns, spacing: 10) {
                 ForEach(libraryPageGlobals.filteredGames) { item in
-                    GameThumbnail(item: item)
+                    GameThumbnail(item: item, isResizable: appWindowResizable)
                 }
             }
             .padding(.horizontal)
             .padding(.bottom)
         }
         .sheet(isPresented: $showAddCustomGameView) {
-            Modal(showModal: $showAddCustomGameView, collapse: true, content:  {
+            Modal(showModal: $showAddCustomGameView)  {
                 AddCustomGameView(isPresented: $showAddCustomGameView)
-            }).frame(maxHeight: 500)
+            }.frame(maxHeight: 500)
         }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
@@ -46,6 +45,38 @@ struct GamesList: View {
                     } label: {
                         Image(systemName: "gear")
                     }
+                }
+            }
+            ToolbarItem(placement: .secondaryAction) {
+                Button {
+                    if let cxPath = appGlobals.cxAppPath {
+                        let url = URL(fileURLWithPath: cxPath)
+                        NSWorkspace.shared.open(url)
+                    }
+                } label: {
+                    Image("crossover-fill")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 24)
+                }
+            }
+            ToolbarItem(placement: .secondaryAction) {
+                Button {
+                    openSteam(cxAppPath: appGlobals.cxAppPath, selectedBottle: appGlobals.selectedBottle)
+                } label: {
+                    Image("steam-fill")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 24)
+                }
+            }
+            ToolbarItem(placement: .secondaryAction) {
+                Button {
+                    if let selectedBottleURL = URL(string: appGlobals.selectedBottle){
+                        showFolder(url: selectedBottleURL)
+                    }
+                } label: {
+                    Image(systemName: "waterbottle")
                 }
             }
             ToolbarItem(placement: .secondaryAction) {
@@ -106,7 +137,7 @@ struct GamesList: View {
                         .controlSize(.small)
                     }
                     Divider()
-                    Text("Showing \(libraryPageGlobals.filteredGames.count)/\(libraryPageGlobals.games.count)").font(Font.footnote)
+                    Text("Showing \(libraryPageGlobals.filteredGames.count)/\(libraryPageGlobals.allGamesCount)").font(Font.footnote)
                 }.padding(.horizontal)
             }
         }

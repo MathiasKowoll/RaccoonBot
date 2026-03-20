@@ -10,6 +10,7 @@ import Kingfisher
 
 struct GameThumbnail: View {
     var item: Game
+    var isResizable: Bool = false
     @EnvironmentObject var appGlobals: AppGlobals
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
     @State private var tObserver: TerminationObserver?
@@ -40,7 +41,9 @@ struct GameThumbnail: View {
                             ProgressView()
                         }
                         .resizable()
-                        .scaledToFit()
+                        .aspectRatio(2.15, contentMode: .fit)
+                        .frame(maxWidth:.infinity, maxHeight: .infinity, alignment: .top)
+                        
                     HStack(alignment: .top) {
                         if (item.isNative == true) {
                             OIcon("apple.logo").padding(.vertical, 8)            // icon size
@@ -115,6 +118,7 @@ struct GameThumbnail: View {
             .cornerRadius(30)
         }
         .buttonStyle(.plain)
+        .frame(height: isResizable ? nil : 214)
     }
     
     @MainActor

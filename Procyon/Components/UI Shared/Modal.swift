@@ -21,11 +21,10 @@ struct Modal<Content: View>: View {
     var body: some View {
         ScrollView(.vertical) {
             content
-        }
-        .overlay(alignment: .topTrailing) {
+        }.overlay(alignment: .topTrailing) {
             CloseModalButton(show: $showModal)
-                .padding(.horizontal, collapse == true ? 30 : 15)
+                .padding(.horizontal, collapse == true ? 15 : 0)
         }
-//        .padding(.horizontal, collapse == true ? 0 : 15)
+        .padding(.horizontal, collapse == true ? 0 : 15)
     }
 }

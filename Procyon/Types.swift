@@ -348,8 +348,8 @@ extension Game {
         aboutTheGame: "Game description here",
         shortDescription: "Short game description here",
         supportedLanguages: "English",
-        headerImage: "https://placehold.co/800x400?text=Game",
-        capsuleImage: "https://placehold.co/800x400?text=Game",
+        headerImage: "https://placehold.co/430x200?text=Game",
+        capsuleImage: "https://placehold.co/430x200?text=Game",
         capsuleImageV5: nil,
         website: "",
         pcRequirements: Requirements(minimum: "Windows 10, 8GB RAM", recommended: "Windows 11, 16GB RAM"),
@@ -410,8 +410,18 @@ class LibraryPageGlobals: ObservableObject {
         self.loadCustomAddedGames()
     }
     
+    var allGamesCount: Int {
+        return self.games.count + self.customAddedGames.count
+    }
+    
+    var allGames: [Game] {
+        self.games + self.customAddedGames
+    }
+    
     var filteredGames: [Game] {
-        let allGames = self.games + self.customAddedGames
+        if self.filter.isEmpty || self.filter.count < 3 {
+            return self.allGames
+        }
         return allGames.filter { item in
             self.filter.isEmpty || item.name.lowercased().contains(self.filter.lowercased())
         }.sorted { lhs, rhs in

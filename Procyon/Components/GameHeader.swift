@@ -28,7 +28,6 @@ struct GameHeader: View {
     }
     
     var body: some View {
-        
         HStack (alignment: .bottom) {
             VStack(alignment: .leading){
                 Text(game!.name).font(.largeTitle.bold())
@@ -110,7 +109,7 @@ struct GameHeader: View {
         }
         .foregroundStyle(.white)
         .sheet(isPresented: $showGameOptions) {
-            Modal(showModal: $showGameOptions) {
+            Modal("Options for \(game!.name)", showModal: $showGameOptions) {
                 GameOptionsView(game: $game)
             }
         }

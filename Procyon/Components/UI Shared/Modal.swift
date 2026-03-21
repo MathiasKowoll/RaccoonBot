@@ -23,9 +23,10 @@ struct Modal<Content: View>: View {
     var body: some View {
         ZStack(alignment: .top) {
             ScrollView(.vertical) {
-                content.padding(.top, collapse == true ? 0 : 45)
+                content
+                    .padding(.top, collapse == true ? 0 : 45)
+                    .padding(.horizontal, collapse == true ? 0 : 15)
             }
-            .padding(.horizontal, collapse == true ? 0 : 15)
         }
         .overlay(alignment: .topLeading) {
             if collapse == true || title == nil {
@@ -34,8 +35,10 @@ struct Modal<Content: View>: View {
             } else {
                 HStack(alignment: .top) {
                     CloseModalButton(show: $showModal)
-                    Text(title!).font(Font.title3.bold())
+                    Text(title!)
+                        .font(Font.title3.bold())
                         .padding(.trailing)
+                        .lineLimit(1)
                 }
                 .frame(alignment: .leading)
                 .padding(15)

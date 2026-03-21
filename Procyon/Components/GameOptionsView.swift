@@ -19,7 +19,7 @@ struct GameOptionsView: View {
         let id = game!.steamAppID != 0 ? String(describing: game!.steamAppID) : String(describing: game!.id)
         let gameOptKey = namespacedKey("GameOptions", id)
         VStack (alignment: .leading, spacing: 5){
-            Text("Options for \(game!.name) id:\(id)").font(Font.footnote).foregroundStyle(.procyonBrightGray)
+            Text("id:\(id)").font(Font.footnote).foregroundStyle(.procyonBrightGray)
             Form {
                 VStack(alignment: .leading, spacing: 20) {
                     Section("Generic options") {

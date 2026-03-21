@@ -19,7 +19,7 @@ struct CloseModalButton: View {
         .frame(maxWidth: 20, maxHeight: 20)
         .background(.white.opacity(0.5))
         .clipShape(Circle())
-        .padding(.vertical)
+//        .padding(.vertical)
     }
 }
 

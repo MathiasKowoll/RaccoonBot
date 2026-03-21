@@ -31,8 +31,8 @@ struct GamesList: View {
             .padding(.bottom)
         }
         .sheet(isPresented: $showAddCustomGameView) {
-            Modal(showModal: $showAddCustomGameView)  {
-                AddCustomGameView(isPresented: $showAddCustomGameView)
+            Modal("Custom Game Editor", showModal: $showAddCustomGameView)  {
+                CustomGameView(isPresented: $showAddCustomGameView)
             }.frame(maxHeight: 500)
         }
         .toolbar {

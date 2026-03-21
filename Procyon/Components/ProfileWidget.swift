@@ -53,7 +53,7 @@ struct ProfileWidget: View {
             }
         }
         .sheet(isPresented: $showProfile) {
-            Modal(showModal: $showProfile) {
+            Modal("Steam profile", showModal: $showProfile) {
                 VStack() {
                     if isLoading {
                         VStack {

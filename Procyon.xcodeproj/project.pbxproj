@@ -253,7 +253,6 @@
 				385A91CC2F2D1561006CCF47 /* XCRemoteSwiftPackageReference "Kingfisher" */,
 				3826402E2F2F655600E1FCC0 /* XCRemoteSwiftPackageReference "SwiftUI-Flow" */,
 				385777BB2F30B37200346515 /* XCRemoteSwiftPackageReference "Alamofire" */,
-				38AB6A622F6B02CC00CEDDED /* XCRemoteSwiftPackageReference "dotlottie-ios" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 383306852F2BE63D00228E6C /* Products */;
@@ -711,14 +710,6 @@
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 8.6.2;
-			};
-		};
-		38AB6A622F6B02CC00CEDDED /* XCRemoteSwiftPackageReference "dotlottie-ios" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/LottieFiles/dotlottie-ios.git";
-			requirement = {
-				branch = main;
-				kind = branch;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

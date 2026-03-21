@@ -15,15 +15,17 @@ struct OptionsView: View {
     var load: @Sendable () async -> Void
     var body: some View {
         Modal(
+            "Options",
             showModal: $libraryPageGlobals.showOptions,
         ) {
             VStack (alignment: .center){
-                Text("Options").padding(.vertical, 10)
                 VStack(alignment: .leading) {
-                    Text("Game libraries").padding(.horizontal, 10)
-                    List {
+                    Text("Game libraries")
+                        .padding(.horizontal)
+                    VStack {
+                        Divider()
                         ForEach(libraryPageGlobals.folders, id: \.self) {folder in
-                            HStack{
+                            HStack(alignment: .center) {
                                 Text(extractFolderNameRegex(folder))
                                 Spacer()
                                 Button(action: {
@@ -34,10 +36,11 @@ struct OptionsView: View {
                                     Image(systemName: "trash")
                                 }.buttonStyle(.borderless)
                             }
+                            .padding(.horizontal)
                         }
+                        Divider()
                     }
                     .listStyle(.bordered)
-                    .frame(height: 100)
                     Button(action: {
                         if let url = openFolderSelectorPanel() {
                             validateAddSteamFolder(url, to: &libraryPageGlobals.folders)
@@ -47,13 +50,11 @@ struct OptionsView: View {
                         Label("Add a steam library", systemImage: "plus")
                     }
                     .buttonStyle(.borderless)
-                    .padding(.horizontal, 10)
+                    .padding(.horizontal)
                 }
                 .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(.gray)
-                )
+                .background(.black.opacity(0.5))
+                .clipShape(RoundedRectangle(cornerRadius: 20))
                 .padding(.bottom)
                 VStack(alignment: .leading) {
                     Button(URL(string: appGlobals.cxAppPath ?? "")?.lastPathComponent ?? "Select a Crossover App...") {
@@ -149,7 +150,7 @@ struct OptionsView: View {
                 }
             }
             .frame(width: 300)
-            .padding(.bottom)
+            .padding(.vertical)
         }
         .onAppear() {
             if let path = readUsrDefOptionString(key: "cxCompleteAppPath") {

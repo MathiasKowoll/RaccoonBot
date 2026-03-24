@@ -108,19 +108,16 @@ struct ProfileWidget: View {
                             //                    Text("locStateCode: \(p.locStateCode ?? "-")")
                             Spacer()
                             VStack(alignment: .leading) {
-                                Button(action: {
+                                ProminentButton("Reload Profile Data", systemImage: "arrow.clockwise") {
                                     isLoading = true
                                     api.deleteProfileDataCache()
                                     Task(priority: .background){
                                         await load()
                                     }
-                                }) {
-                                    Label("Reload Profile Data", systemImage: "arrow.clockwise")
                                 }
-                                .cornerRadius(20)
                             }.padding(.top)
                         }
-                        .padding()
+                        .padding(.vertical)
                         .cornerRadius(20)
                     } else {
                         Text("No profile data")

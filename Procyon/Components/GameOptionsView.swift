@@ -24,35 +24,43 @@ struct GameOptionsView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     Section("Generic options") {
                         HStack(alignment: .top, spacing: 20) {
+                            
                             VStack(alignment: .trailing){
-                                Picker("Graphics Backend", selection: $gameOptions.cxGraphicsBackend) {
-                                    Text("D3DMetal")
-                                        .tag("d3dmetal")
-                                    Text("DXMT")
-                                        .tag("dxmt")
+                                if !game!.isNative {
+                                    Picker("Graphics Backend", selection: $gameOptions.cxGraphicsBackend) {
+                                        Text("D3DMetal")
+                                            .tag("d3dmetal")
+                                        Text("DXMT")
+                                            .tag("dxmt")
+                                    }
+                                    .pickerStyle(.menu)
                                 }
-                                .pickerStyle(.menu)
                                 Divider()
                                 TextField("Game arguments", text: $gameOptions.gameArguments)
                                 TextField("Env variables", text: $gameOptions.envVariables)
-                                Divider()
-                                Toggle("Use X87 Patch (32 bits only)", isOn: $gameOptions.x87PatchEnabled)
-                                Toggle("Use DX9 Patch", isOn: $gameOptions.dx9PatchEnabled).onChange(of: gameOptions.dx9PatchEnabled) {
-                                    if(gameOptions.dx9PatchEnabled && !gameOptions.envVariables.contains("MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=1 DXVK_ASYNC=1 WINEDLLOVERRIDES=d3d9=n,b;d3d8=n,b")) {
-                                        gameOptions.envVariables = "MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=1 DXVK_ASYNC=1 WINEDLLOVERRIDES=d3d9=n,b;d3d8=n,b"
-                                    }
-                                    if(!gameOptions.dx9PatchEnabled && gameOptions.envVariables.contains("MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=1 DXVK_ASYNC=1 WINEDLLOVERRIDES=d3d9=n,b;d3d8=n,b")) {
-                                        gameOptions.envVariables = ""
+                                if !game!.isNative {
+                                    Divider()
+                                    Text("32Bits options")
+                                    Toggle("Use X87 Patch", isOn: $gameOptions.x87PatchEnabled)
+                                    Toggle("Use DX9 Patch", isOn: $gameOptions.dx9PatchEnabled).onChange(of: gameOptions.dx9PatchEnabled) {
+                                        if(gameOptions.dx9PatchEnabled && !gameOptions.envVariables.contains("MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=1 DXVK_ASYNC=1 WINEDLLOVERRIDES=d3d9=n,b;d3d8=n,b")) {
+                                            gameOptions.envVariables = "MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=1 DXVK_ASYNC=1 WINEDLLOVERRIDES=d3d9=n,b;d3d8=n,b"
+                                        }
+                                        if(!gameOptions.dx9PatchEnabled && gameOptions.envVariables.contains("MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=1 DXVK_ASYNC=1 WINEDLLOVERRIDES=d3d9=n,b;d3d8=n,b")) {
+                                            gameOptions.envVariables = ""
+                                        }
                                     }
                                 }
                             }
                             Spacer()
                             VStack(alignment: .trailing) {
-                                Toggle("MSync", isOn: $gameOptions.wineMSync)
                                 Toggle("Metal HUD", isOn: $gameOptions.mtlHudEnabled)
                                 Toggle("Advertise AVX", isOn: $gameOptions.advertiseAVX)
-                                Toggle("Enable SDL", isOn: $gameOptions.enableSDL)
-                                Toggle("Disable Hidraw", isOn: $gameOptions.disableHidraw)
+                                if !game!.isNative {
+                                    Toggle("MSync", isOn: $gameOptions.wineMSync)
+                                    Toggle("Enable SDL", isOn: $gameOptions.enableSDL)
+                                    Toggle("Disable Hidraw", isOn: $gameOptions.disableHidraw)
+                                }
                             }
                         }
                     }
@@ -95,12 +103,12 @@ struct GameOptionsView: View {
                             console.log("saving")
                             persistUsrDefData(key: gameOptKey, data: GameOptionsData(data: gameOptions))
                         }.buttonStyle(.borderedProminent)
-//                        Button("Undo") {
-//                            console.log("resetting")
-//                            if let data: GameOptionsData = readUsrDefData(key: gameOptKey) {
-//                                self.gameOptions.set(data: data)
-//                            }
-//                        }
+                        //                        Button("Undo") {
+                        //                            console.log("resetting")
+                        //                            if let data: GameOptionsData = readUsrDefData(key: gameOptKey) {
+                        //                                self.gameOptions.set(data: data)
+                        //                            }
+                        //                        }
                         Button("Reset") {
                             console.log("resetting")
                             gameOptions.set(data: GameOptionsData(data: GameOptions()))
@@ -111,7 +119,6 @@ struct GameOptionsView: View {
             }
             .formStyle(.columns)
             .toggleStyle(.switch)
-            //        .controlSize(/*@START_MENU_TOKEN@*/.mini/*@END_MENU_TOKEN@*/)
         }
         .padding()
         .onAppear() {

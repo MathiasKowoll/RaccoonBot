@@ -183,20 +183,20 @@ struct CustomGameView: View {
                     )
                 }
             }
-            if id != "" {
-                Button("Update Game") {
-                    libraryPageGlobals.updateCustomAddedGames(gameData: game)
-                    isPresented = false
+            Group {
+                if id != "" {
+                    ProminentButton("Update Game", systemImage: "arrow.2.circlepath") {
+                        libraryPageGlobals.updateCustomAddedGames(gameData: game)
+                        isPresented = false
+                    }
+                } else {
+                    ProminentButton("Add Game", systemImage: "plus.circle") {
+                        game.isCustom = true
+                        libraryPageGlobals.customAddedGames.append(game)
+                        libraryPageGlobals.saveCustomAddedGames()
+                        isPresented = false
+                    }
                 }
-                .buttonStyle(.borderedProminent)
-            } else {
-                Button("Add Game") {
-                    game.isCustom = true
-                    libraryPageGlobals.customAddedGames.append(game)
-                    libraryPageGlobals.saveCustomAddedGames()
-                    isPresented = false
-                }
-                .buttonStyle(.borderedProminent)
             }
         }
         .padding(.vertical)

@@ -104,47 +104,41 @@ struct OptionsView: View {
                         Text("No bottles found")
                         Text("Create a new bottle first").font(.footnote)
                     }
-                    HStack {
-                        Button(action: {
+                    VStack(alignment: .leading) {
+                        Divider().padding(.top, 10)
+                        Text("Cache management")
+                            .padding(.vertical, 5)
+                        ProminentButton("Delete Owned games cache", systemImage: "trash") {
                             api.deleteOwnedGamesIDsCache()
+                            libraryPageGlobals.gamesMeta.removeAll()
                             Task {
                                 await load()
                             }
                             libraryPageGlobals.showOptions = false
-                        }) {
-                            Label("Delete Owned games cache", systemImage: "trash")
                         }
-                        .cornerRadius(20)
-                        Divider()
-                        Button(action: {
+                        ProminentButton("Delete cache", systemImage: "trash") {
                             api.deleteGameCache()
                             api.deleteBlacklistCache()
+                            libraryPageGlobals.games.removeAll()
                             Task {
                                 await load()
                             }
                             libraryPageGlobals.showOptions = false
-                        }) {
-                            Label("Delete cache", systemImage: "trash")
                         }
-                        .cornerRadius(20)
                     }
                     
                     if(debugEnabled == true) {
                         Divider().padding(.top, 10)
                         Text("Debug")
                             .padding(.vertical, 5)
-                        HStack {
-                            Button(action: { console.enableLogFile = true }) {
-                                Label("Start Logging", systemImage: "ant")
+                        VStack(alignment: .leading) {
+                            ProminentButton("Start Logging", systemImage: "ant") {
+                                console.enableLogFile = true
                             }
-                            .cornerRadius(20)
                             Spacer()
-                            Button(action: {
+                            ProminentButton("Download logs", systemImage: "square.and.arrow.down") {
                                 console.saveLogs()
-                            }) {
-                                Label("Download logs", systemImage: "square.and.arrow.down")
                             }
-                            .cornerRadius(20)
                         }
                     }
                 }

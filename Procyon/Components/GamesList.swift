@@ -31,9 +31,9 @@ struct GamesList: View {
             .padding(.bottom)
         }
         .sheet(isPresented: $showAddCustomGameView) {
-            Modal("Custom Game Editor", showModal: $showAddCustomGameView)  {
+            Modal("Custom Game Editor", showModal: $showAddCustomGameView, scrollable: false)  {
                 CustomGameView(isPresented: $showAddCustomGameView)
-            }.frame(maxHeight: 500)
+            }
         }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
@@ -83,12 +83,13 @@ struct GamesList: View {
                 Button {
                     showAddCustomGameView = true
                 } label: {
-                    Image(systemName: "plus.circle")
+                    Image(systemName: "rectangle.badge.plus")
                 }
             }
             ToolbarItem(placement: .secondaryAction) {
                 Button {
                     api.deleteOwnedGamesIDsCache()
+                    libraryPageGlobals.gamesMeta.removeAll()
                     Task { await load() }
                 } label: {
                     Image(systemName: "arrow.clockwise")
@@ -117,15 +118,14 @@ struct GamesList: View {
                             Image(systemName: libraryPageGlobals.filter.isEmpty ? "magnifyingglass": "xmark.circle")
                         }
                         .buttonStyle(.plain)
-                        .controlSize(.small)
                         TextField("Search Game...", text: $libraryPageGlobals.filter)
                             .textFieldStyle(.plain)
                             .disableAutocorrection(true)
                             .focusEffectDisabled()
                             .textFieldStyle(.plain)
                             .frame(width: 100)
-                            .controlSize(.small)
-                    }
+                            
+                    }.controlSize(.small)
                     Divider()
                     HStack {
                         Image(systemName: "arrow.up.arrow.down.circle")

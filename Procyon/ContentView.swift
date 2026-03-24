@@ -35,7 +35,7 @@ struct ContentView: View {
             case .libraryPage:
                 LibraryPage()
             case .profilePage:
-                ProfilePage()
+                Text("Profile Page")
             }
         }
         .animation(.easeInOut, value: router.route)

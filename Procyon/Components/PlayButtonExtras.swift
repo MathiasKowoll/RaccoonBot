@@ -17,14 +17,14 @@ struct PlayButtonExtras: View {
     var body: some View {
         HStack{
             Button { isPlaying ? stopAction() : playAction() } label: {
-                Text(isPlaying ? "Stop" : "Play")
-                    .padding(.vertical, 4)
-                    
-            }.font(.system(size: 20, weight: .bold))
+                Label(isPlaying ? "Stop" : "Play", systemImage: "play.fill")
+                    .padding(.vertical, 10)
+                    .padding(.leading, 20)
+            }.font(.system(size: 16))
             Divider()
             Button { optionsAction() } label: {
                 Image(systemName: "gear")
-                    .padding(.vertical, 4)
+                    .padding(.vertical, 10)
                     
             }
             Divider()
@@ -32,11 +32,11 @@ struct PlayButtonExtras: View {
                 folderAction()
             } label: {
                 Image(systemName: "folder.fill")
-                    .padding(.vertical, 4)
+                    .padding(.vertical, 10)
+                    .padding(.trailing, 20)
                                                
             }
         }
-        .padding(.horizontal, 20)
         .buttonStyle(.plain)
         .font(.system(size: 16))
         .foregroundStyle(.black)

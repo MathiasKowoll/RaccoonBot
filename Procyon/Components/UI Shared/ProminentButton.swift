@@ -7,12 +7,34 @@
 
 import SwiftUI
 
-struct ProminentButton: View {
+struct ProminentButton : View {
+    var action: () -> Void
+    var text: String
+    var systemImage: String?
+    
+    init(_ text: String, systemImage: String? = nil ,action: @escaping () -> Void) {
+        self.text = text
+        self.systemImage = systemImage
+        self.action = action
+    }
+    
     var body: some View {
-        Text(/*@START_MENU_TOKEN@*/"Hello, World!"/*@END_MENU_TOKEN@*/)
+        Button(action: {
+            action()
+        }) {
+            if systemImage != nil {
+                Label(text, systemImage: systemImage!)
+            } else {
+                Text(text)
+            }
+        }
+        .buttonBorderShape(.capsule)
+        .controlSize(.large)
     }
 }
 
 #Preview {
-    ProminentButton()
+    ProminentButton("Hello") {
+        print("Hello!")
+    }
 }

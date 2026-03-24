@@ -11,18 +11,26 @@ struct Modal<Content: View>: View {
     @Binding var showModal: Bool
     var title: String? = nil
     var collapse: Bool? = false
+    var scrollable: Bool? = true
     let content: Content
     
-    init(_ title: String? = nil, showModal: Binding<Bool>, collapse: Bool? = nil, @ViewBuilder content: () -> Content) {
+    init(_ title: String? = nil, showModal: Binding<Bool>, collapse: Bool? = nil, scrollable: Bool = true, @ViewBuilder content: () -> Content) {
         self._showModal = showModal
         self.title = title
         self.collapse = collapse
         self.content = content()
+        self.scrollable = scrollable
     }
     
     var body: some View {
         ZStack(alignment: .top) {
-            ScrollView(.vertical) {
+            if(scrollable == true) {
+                ScrollView(.vertical) {
+                    content
+                        .padding(.top, collapse == true ? 0 : 45)
+                        .padding(.horizontal, collapse == true ? 0 : 15)
+                }
+            } else {
                 content
                     .padding(.top, collapse == true ? 0 : 45)
                     .padding(.horizontal, collapse == true ? 0 : 15)
@@ -42,9 +50,8 @@ struct Modal<Content: View>: View {
                 }
                 .frame(alignment: .leading)
                 .padding(15)
-//                .padding(.trailing, 45)
                 .background(.ultraThinMaterial)
-                .clipShape(Capsule())
+                .clipShape(.capsule)
             }
         }
         .background(

@@ -202,16 +202,3 @@ func getDrivesPaths(at: URL) -> CXDrives {
         return [:]
     }
 }
-
-func getSetRegCommand (cxAppPath: String, selectedBottle: String, key: String, value: String) -> String {
-    let bottleName = URL(string: selectedBottle)?.lastPathComponent ?? ""
-    let command = "\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) reg add 'HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Services\\winebus\\' /v '\(key)' /t REG_DWORD /d \(value) /f"
-    console.log(command)
-    return command
-}
-
-func setReg (cxAppPath: String, selectedBottle: String, key: String, value: String) throws -> Void {
-    // example: wine reg add "HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\winebus" /v "Enable SDL" /t REG_DWORD /d 1 /f
-
-    try safeShell(getSetRegCommand(cxAppPath: cxAppPath, selectedBottle: selectedBottle, key: key, value: value))
-}

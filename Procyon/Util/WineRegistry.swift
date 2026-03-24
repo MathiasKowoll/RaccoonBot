@@ -60,9 +60,13 @@ class WineRegSection {
     }
 
     func setDword(forKey key: String, value: UInt32) {
-        guard let index = values.firstIndex(where: { $0.key == key }) else { return }
+        guard let index = values.firstIndex(where: { $0.key == key }) else {
+            console.error("Couldn't find key \(key) when setting dword value")
+            return
+        }
         values[index].value.type = .dword(value)
         values[index].value.rawLine = "\"\(key)\"=dword:\(String(format: "%08x", value))"
+        console.log("Set \(key) to \(value)")
     }
 
     func addOrSetValue(forKey key: String, stringValue: String) {
@@ -77,6 +81,16 @@ class WineRegSection {
 }
 
 class WineRegistryFile {
+    /**
+     Loads the registry file from the URL when instanced, can save the files, and each section accessible in the sections array can be modified with the methods offered by the WineRegSection
+     Usage:
+     registryFile = WineRegistryFile(fileURL: regURL) -> set the URL of the registry file
+     registryFile.load() -> load the file into the registryfile object
+     section = registryFile.section(forPath: "Some\\\\Wine\\\\Path") -> get your section example: System\\\\CurrentControlSet\\\\Services\\\\winebus (startying from System as root and without the trailing \\, remember to escape the \)
+     section?.getValue(forKey: "SomeKey") -> get value for the property "SomeKey"
+     section?.addOrSetValue(forKey: "SomeOtherKey", stringValue: "SomeValue") -> set value for the property "SomeOtherKey", if the key doesn't exist it will add the key and set the value
+     registryFile.save() -> Saves the file (this will also create a bacup named {{fileName}}.orig)
+     */
     var headerLines: [String] = [] // "WINE REGISTRY Version 2", comments, #arch line
     var sections: [WineRegSection] = []
     let fileURL: URL
@@ -252,7 +266,11 @@ class WineRegistryFile {
             }
         }
 
-        try output.write(to: fileURL, atomically: true, encoding: .utf8)
+        do {
+            try output.write(to: fileURL, atomically: true, encoding: .utf8)
+        } catch {
+            console.error("Coulnd't write registry file: \(error)")
+        }
         console.log("Registry file saved to \(fileURL.lastPathComponent)")
     }
 }

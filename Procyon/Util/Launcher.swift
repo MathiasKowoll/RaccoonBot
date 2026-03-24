@@ -134,23 +134,40 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, op
     let f = FileManager.default
 
     var command = ""
+    
+    // registry
+    let regOptionsDictionary: [String: UInt32] = [
+        "DisableHidraw":options!.disableHidraw ? 1 : 0,
+        "Enable SDL": options!.enableSDL ? 1 : 0
+    ]
+    if let registryURL = URL(string: selectedBottle)?.appendingPathComponent("system.reg") {
+        let registry = WineRegistryFile(fileURL: registryURL)
+        try registry.load()
+        if let controllersSection = registry.section(forPath: "System\\\\CurrentControlSet\\\\Services\\\\winebus") {
+            regOptionsDictionary.keys.forEach { key in
+                let value = regOptionsDictionary[key]!
+                console.log("setting \(key) to \(value)")
+                controllersSection.setDword(forKey: key, value: value)
+            }
+            console.log(registry.sections.map { section in
+                section.path + ":\n" + section.values.map{ String(describing: $0) }.joined(separator: "\n")
+            }.joined(separator: "\n"))
+            try registry.save()
+        } else {
+            console.error(".winebus section not found in system.reg file for the bottle \(selectedBottle)")
+        }
+    } else {
+        console.error("Couldn't find a system.reg file for the bottle \(selectedBottle)")
+    }
+    console.warn("applying config changes to the bottle \(selectedBottle)...")
+    
+    // update bottle config file
     let optionsDictionary = [
         "CX_GRAPHICS_BACKEND": options!.cxGraphicsBackend,
         "WINEMSYNC": options!.wineMSync ? "1" : "0",
         "MTL_HUD_ENABLED": options!.mtlHudEnabled ? "1" : "0"
     ]
-    let regOptionsDictionary = [
-        "DisableHidraw":options!.disableHidraw ? "1" : "0",
-        "Enable SDL": options!.enableSDL ? "1" : "0"
-    ]
-    console.warn("applying config changes to the bottle \(selectedBottle)...")
     try editCXBottleConfigFile(selectedBottle: selectedBottle, options: optionsDictionary)
-    
-    var regCommands = ""
-    regOptionsDictionary.keys.forEach { key in
-        let value = regOptionsDictionary[key]!
-        regCommands += getSetRegCommand(cxAppPath: cxAppPath, selectedBottle: selectedBottle, key: key, value: value) + " && "
-    }
     
     let bottleName = URL(string: selectedBottle)?.lastPathComponent ?? ""
     console.warn("attempting to run steam.exe on game id \(id)")
@@ -162,9 +179,9 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, op
     if (options!.x87PatchEnabled && f.fileExists(atPath: x87cxAppPath.path())) {
         let gameLaunchCommand = appExeURL != nil ? "\"\(appExeURL!.path(percentEncoded: false))\"" : "\"C:\\Program Files (x86)\\Steam\\Steam.exe\" \(steamBootOptions) -applaunch \(String(id))"
         let workdirCommand = appExeURL != nil ? "cd \"\(appExeURL!.deletingLastPathComponent().path(percentEncoded: false))\" && " : ""
-        command = "\(regCommands)\(workdirCommand)env \(getInlineEnvs(from: options!)) \(wineEnvs) \(x87cxAppPath.path())Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/wine \(gameLaunchCommand) \(arguments)"
+        command = "\(workdirCommand)env \(getInlineEnvs(from: options!)) \(wineEnvs) \(x87cxAppPath.path())Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/wine \(gameLaunchCommand) \(arguments)"
     } else {
-        command = "\(regCommands)env \(getInlineEnvs(from: options!)) \(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \"C:\\Program Files (x86)\\Steam\\Steam.exe\" \(steamBootOptions) -applaunch \(String(id)) \(arguments)"
+        command = "env \(getInlineEnvs(from: options!)) \(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \"C:\\Program Files (x86)\\Steam\\Steam.exe\" \(steamBootOptions) -applaunch \(String(id)) \(arguments)"
     }
     
     console.warn(command)

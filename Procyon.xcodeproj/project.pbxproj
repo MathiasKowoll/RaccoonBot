@@ -44,6 +44,12 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
+				"Libs/dxvk/i386-windows/d3d10core.dll",
+				"Libs/dxvk/i386-windows/d3d11.dll",
+				"Libs/dxvk/x86_64-windows/d3d10core.dll",
+				"Libs/dxvk/x86_64-windows/d3d11.dll",
+				"Libs/libMoltenVK-experimental.dylib",
+				"Libs/libMoltenVK-latest.dylib",
 				Libs/ntdll.so,
 			);
 			target = 383306832F2BE63D00228E6C /* Procyon */;
@@ -447,7 +453,7 @@
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-Osize";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
 			};
 			name = Release;
 		};
@@ -479,7 +485,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Procyon/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Procyon;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -488,6 +494,7 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/Procyon/Libs",
+					"$(PROJECT_DIR)/Procyon/Components",
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = itmandar.Procyon;
@@ -537,7 +544,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Procyon/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Procyon;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -546,6 +553,7 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/Procyon/Libs",
+					"$(PROJECT_DIR)/Procyon/Components",
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = itmandar.Procyon;

@@ -8,6 +8,7 @@
 import SwiftUI
 import CoreData
 
+let appName = "procyon"
 let windowWidth: CGFloat = 1024
 let windowHeight: CGFloat = 750
 let appWindowResizable: Bool = {

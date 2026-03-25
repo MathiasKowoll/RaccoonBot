@@ -149,9 +149,6 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, op
                 console.log("setting \(key) to \(value)")
                 controllersSection.setDword(forKey: key, value: value)
             }
-            console.log(registry.sections.map { section in
-                section.path + ":\n" + section.values.map{ String(describing: $0) }.joined(separator: "\n")
-            }.joined(separator: "\n"))
             try registry.save()
         } else {
             console.error(".winebus section not found in system.reg file for the bottle \(selectedBottle)")

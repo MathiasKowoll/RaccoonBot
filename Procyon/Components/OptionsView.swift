@@ -10,6 +10,8 @@ import UniformTypeIdentifiers
 
 struct OptionsView: View {
     @State var bottles: [URL] = []
+    @State var progress: Double = 0
+    @State var downloading: Bool = false
     @EnvironmentObject var appGlobals: AppGlobals
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
     var load: @Sendable () async -> Void
@@ -61,11 +63,17 @@ struct OptionsView: View {
                         if let url = openFolderSelectorPanel(type: .application) {
                             appGlobals.selectedBottle = ""
                             bottles = getAllBottles(appDir: url)
-                            appGlobals.cxAppPath = url.path(percentEncoded: false)
-                            persistUsrDefOptionString(key: "cxAppPath", value: url.relativePath)
-                            persistUsrDefOptionString(key: "cxCompleteAppPath", value: url.path(percentEncoded: false))
+                            Task { @MainActor in
+                                let patchedAppURL = await makeCrossoverPatchedCopy(sourceCXPath: url, setProgress: { progress = $0  }, setLoading: { state in downloading = state })
+                                appGlobals.cxAppPath = patchedAppURL.path(percentEncoded: false)
+                                persistUsrDefOptionString(key: "cxAppPath", value: patchedAppURL.relativePath)
+                                persistUsrDefOptionString(key: "cxCompleteAppPath", value: patchedAppURL.path(percentEncoded: false))
+                            }
                             makeX87CrossoverPatchedCopy(sourceCXPath: url)
                         }
+                    }
+                    if(downloading){
+                        ProgressView(value: progress, total: 100)
                     }
                     if(!bottles.isEmpty) {
                         HStack {

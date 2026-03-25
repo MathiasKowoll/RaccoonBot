@@ -290,6 +290,18 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottleName: String, o
     return tOb
 }
 
+func copyResource(name: String, destUrl: URL) throws {
+    let f = FileManager.default
+    if let resUrl = Bundle.main.url(forResource: name, withExtension: nil) {
+        if(f.fileExists(atPath: destUrl.path())) {
+            try f.removeItem(at: destUrl)
+        }
+        try f.copyItem(at: resUrl, to: destUrl)
+    } else {
+        console.error("Couldn't find \(name)")
+    }
+}
+
 func makeX87CrossoverPatchedCopy (sourceCXPath: URL) -> Void {
     let f = FileManager.default
     do {
@@ -308,15 +320,7 @@ func makeX87CrossoverPatchedCopy (sourceCXPath: URL) -> Void {
             try safeShell("codesign --remove-signature \"\(destUrl.appendingPathComponent("Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/wine").path())\"")
             
             // Step 3 copy ntdll.so to CrossOver.app/Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/ntdll.so
-            if let ntdllUrl = Bundle.main.url(forResource: "ntdll", withExtension: "so") {
-                let ntdllDest = destUrl.appendingPathComponent("Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/ntdll.so")
-                if(f.fileExists(atPath: ntdllDest.path())) {
-                    try f.removeItem(at: ntdllDest)
-                }
-                try f.copyItem(at: ntdllUrl, to: ntdllDest)
-            } else {
-                console.error("Couldn't find ntdll.so")
-            }
+            try copyResource(name: "ntdll.so", destUrl: destUrl.appendingPathComponent("Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/ntdll.so"))
             
             // Step 4 fix app after patching
             try safeShell("xattr -cr \"\(destUrl.path())\"")
@@ -326,6 +330,68 @@ func makeX87CrossoverPatchedCopy (sourceCXPath: URL) -> Void {
     } catch {
         console.error(String(reflecting: error))
     }
+}
+
+func makeCrossoverPatchedCopy (sourceCXPath: URL, setProgress: @escaping (Double) -> Void, setLoading: @escaping (Bool) -> Void) async -> URL {
+    let ROOT = "Contents/SharedSupport/"
+    let f = FileManager.default
+    let destUrl = f.homeDirectoryForCurrentUser.appendingPathComponent("Applications", isDirectory: true).appendingPathComponent("Crossover_patched.app")
+    let resources: [(res: String, dest: URL)] = [
+        (res: "ntdll.so", dest: "CrossOver/lib/wine/x86_64-unix/"),
+        (res: "winedmo.so", dest: "CrossOver/lib/wine/x86_64-unix/"),
+        (res: "winegstreamer.so", dest: "CrossOver/lib/wine/x86_64-unix/"),
+    ].map { item in
+        (res: item.res, dest: destUrl.appendingPathComponent(ROOT + item.dest + item.res))
+    }
+    do {
+        // Make sure destination app doesn't exist and if it does, delete it
+        if (f.fileExists(atPath: destUrl.path())) {
+            try f.removeItem(at: destUrl)
+        }
+        // MARK: Step 1 copy the app in the user's application folder
+        
+        try f.copyItem(at: sourceCXPath, to: destUrl)
+        
+        if(f.fileExists(atPath: destUrl.path())) {
+            // MARK: Step 1 copy resources
+            for (res, dest) in resources{
+                console.log("Copying \(res) to \(dest.path())")
+                try copyResource(name: res, destUrl: dest)
+            }
+            // MARK: Step 2 download gstreamer
+            let gstURL = try await getGstreamerDownloadURL()
+            console.log("Gstreamer download url: \(gstURL)")
+            let gstreamerDownloader = TarDownloader(
+                fromUrl: gstURL,
+                onProgress: { progress in
+                    setProgress(progress)
+                },
+                onComplete: { url in
+                    do {
+                        let src = url.appendingPathComponent("GStreamer.framework")
+                        let dst = destUrl.appendingPathComponent("Contents/SharedSupport/CrossOver/lib64/")
+                        try f.copyItem(at: src, to: dst.appendingPathComponent("GStreamer.framework"))
+                        try f.removeItem(at: dst.appendingPathComponent("gstreamer-1.0"))
+                    } catch {
+                        console.error(String(reflecting: error))
+                    }
+                    setLoading(false)
+                },
+                onError: { error in console.error(String(reflecting: error)) }
+            )
+            setLoading(true)
+            gstreamerDownloader.download()
+            // MARK: Step 3 sign
+            try safeShell("codesign --force --deep --sign - \"\(destUrl.path())\"")
+            // MARK: Step 4 fix app after patching
+            try safeShell("xattr -cr \"\(destUrl.path())\"")
+        } else {
+            console.error("Couldn't find Crossover_x87.app in \(destUrl.path())")
+        }
+    } catch {
+        console.error(String(reflecting: error))
+    }
+    return destUrl
 }
 
 func isSameFile(_ file1URL: URL, _ file2URL: URL) -> Bool {
@@ -354,13 +420,13 @@ func getSystemWOW64URL(from: URL) -> URL {
         .appending(path: "syswow64")
 }
 
-func cpyd8d9DLLs(to: URL) throws -> Void {
+func cpyd8d9DLLs(to url: URL) throws -> Void {
     let f = FileManager.default
     let files = ["d3d9.dll", "d3d8.dll"]
     for file in files {
         if let dllsUrl = Bundle.main.url(forResource: "dlls", withExtension: nil) {
             let dllPath = dllsUrl.appendingPathComponent(file)
-            let dllDest = to.appendingPathComponent(file)
+            let dllDest = url.appendingPathComponent(file)
             if(f.fileExists(atPath: dllDest.path())) {
                 console.log("\(file) exists")
                 if(!isSameFile(dllPath, dllDest)){
@@ -375,4 +441,100 @@ func cpyd8d9DLLs(to: URL) throws -> Void {
             console.log("Couldn't find \(file)")
         }
     }
+}
+
+class TarDownloader: NSObject, URLSessionDownloadDelegate {
+    /**
+     Class that takes 3 mandatory arguments
+     fromUrl: the http url from where we download
+     onProgress: (Double) called as the download progresses progress is passed to the function
+     onComplete: (URL) called when download + extraction is complete the URL
+     onError: (Error) called at any point there's an error
+     */
+    var fromUrl: URL
+    var downloadDir: URL
+    var onProgress: (Double) -> Void
+    var onComplete: (URL) -> Void
+    var onError: (Error) -> Void
+    
+    init(fromUrl: URL, onProgress: @escaping (Double) -> Void, onComplete: @escaping (URL) -> Void, onError: @escaping (Error) -> Void) {
+        let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        self.downloadDir = cacheDir.appendingPathComponent("\(appName)/downloads")
+        self.fromUrl = fromUrl
+        self.onProgress = onProgress
+        self.onError = onError
+        self.onComplete = onComplete
+        super.init()
+    }
+    
+    func download() {
+        try? FileManager.default.createDirectory(at: downloadDir, withIntermediateDirectories: true, attributes: nil)
+        let session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
+        session.downloadTask(with: fromUrl).resume()
+    }
+    
+    private func extract() -> Process {
+        let filename = fromUrl.lastPathComponent
+        let dest = downloadDir.appendingPathComponent(filename) // assuming the file has the correct extension
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/tar")
+        process.arguments = ["-xf", dest.path, "-C", downloadDir.path] // just xf autodetects the compression format
+        return process
+    }
+    
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        guard totalBytesExpectedToWrite > 0 else { return }
+        let progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite) * 100
+        DispatchQueue.main.async {
+            self.onProgress(progress) // percentage
+        }
+    }
+    
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        let destination = downloadDir.appendingPathComponent(fromUrl.lastPathComponent)
+        
+        do {
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.removeItem(at: destination)
+            }
+            try FileManager.default.moveItem(at: location, to: destination)
+            let process = extract()
+            process.terminationHandler = { process in
+                DispatchQueue.main.async {
+                    if process.terminationStatus == 0 {
+                        self.onComplete(self.downloadDir)
+                    } else {
+                        let error = NSError(domain: "GStreamerDownloader", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: "tar extraction failed"])
+                        self.onError(error)
+                    }
+                }
+            }
+            try? process.run()
+        } catch {
+            DispatchQueue.main.async { self.onError(error) }
+        }
+    }
+    
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        if let error {
+            DispatchQueue.main.async { self.onError(error) }
+        }
+    }
+    
+    func clearTemp() {
+        try? FileManager.default.removeItem(at: downloadDir.deletingLastPathComponent() )
+    }
+}
+
+func fetchLatestRelease(from path: String) async throws -> String {
+    let url = URL(string: "\(path)/releases/latest")!
+    let (data, _) = try await URLSession.shared.data(from: url)
+    let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+    return json["tag_name"] as! String
+}
+
+func getGstreamerDownloadURL() async throws -> URL {
+    let path = "https://api.github.com/repos/Sikarugir-App/gstreamer"
+    let version = try await fetchLatestRelease(from: path)
+    return URL(string: "https://github.com/Sikarugir-App/gstreamer/releases/download/\(version)/gstreamer-1.0-\(version)-x86_64.tar.xz")!
 }

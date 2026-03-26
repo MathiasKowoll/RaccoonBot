@@ -65,11 +65,12 @@ struct OptionsView: View {
                             bottles = getAllBottles(appDir: url)
                             Task { @MainActor in
                                 let patchedAppURL = await makeCrossoverPatchedCopy(sourceCXPath: url, setProgress: { progress = $0  }, setLoading: { state in downloading = state })
+                                progress = 0
+                                makeX87CrossoverPatchedCopy(sourceCXPath: url, patchedApp: patchedAppURL)
                                 appGlobals.cxAppPath = patchedAppURL.path(percentEncoded: false)
                                 persistUsrDefOptionString(key: "cxAppPath", value: patchedAppURL.relativePath)
                                 persistUsrDefOptionString(key: "cxCompleteAppPath", value: patchedAppURL.path(percentEncoded: false))
                             }
-                            makeX87CrossoverPatchedCopy(sourceCXPath: url)
                         }
                     }
                     if(downloading){

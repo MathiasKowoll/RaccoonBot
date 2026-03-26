@@ -51,6 +51,8 @@
 				"Libs/libMoltenVK-experimental.dylib",
 				"Libs/libMoltenVK-latest.dylib",
 				Libs/ntdll.so,
+				Libs/winedmo.so,
+				Libs/winegstreamer.so,
 			);
 			target = 383306832F2BE63D00228E6C /* Procyon */;
 		};
@@ -62,6 +64,8 @@
 			buildPhase = 383306822F2BE63D00228E6C /* Resources */;
 			membershipExceptions = (
 				Libs/ntdll.so,
+				Libs/winedmo.so,
+				Libs/winegstreamer.so,
 			);
 		};
 /* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */

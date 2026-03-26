@@ -290,110 +290,6 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottleName: String, o
     return tOb
 }
 
-func copyResource(name: String, destUrl: URL) throws {
-    let f = FileManager.default
-    if let resUrl = Bundle.main.url(forResource: name, withExtension: nil) {
-        if(f.fileExists(atPath: destUrl.path())) {
-            try f.removeItem(at: destUrl)
-        }
-        try f.copyItem(at: resUrl, to: destUrl)
-    } else {
-        console.error("Couldn't find \(name)")
-    }
-}
-
-func makeX87CrossoverPatchedCopy (sourceCXPath: URL) -> Void {
-    let f = FileManager.default
-    do {
-        let destUrl = f.homeDirectoryForCurrentUser.appendingPathComponent("Applications", isDirectory: true).appendingPathComponent("Crossover_x87.app")
-        // Make sure destination app doesn't exist and if it does, delete it
-        if (f.fileExists(atPath: destUrl.path())) {
-            try f.removeItem(at: destUrl)
-        }
-        // Step 1 copy the app in the user's application folder
-        
-        try f.copyItem(at: sourceCXPath, to: destUrl)
-        
-        if(f.fileExists(atPath: destUrl.path())) {
-            // Step 2 unsign app
-            try safeShell("codesign --remove-signature \"\(destUrl.path())\"")
-            try safeShell("codesign --remove-signature \"\(destUrl.appendingPathComponent("Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/wine").path())\"")
-            
-            // Step 3 copy ntdll.so to CrossOver.app/Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/ntdll.so
-            try copyResource(name: "ntdll.so", destUrl: destUrl.appendingPathComponent("Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/ntdll.so"))
-            
-            // Step 4 fix app after patching
-            try safeShell("xattr -cr \"\(destUrl.path())\"")
-        } else {
-            console.error("Couldn't find Crossover_x87.app in \(destUrl.path())")
-        }
-    } catch {
-        console.error(String(reflecting: error))
-    }
-}
-
-func makeCrossoverPatchedCopy (sourceCXPath: URL, setProgress: @escaping (Double) -> Void, setLoading: @escaping (Bool) -> Void) async -> URL {
-    let ROOT = "Contents/SharedSupport/"
-    let f = FileManager.default
-    let destUrl = f.homeDirectoryForCurrentUser.appendingPathComponent("Applications", isDirectory: true).appendingPathComponent("Crossover_patched.app")
-    let resources: [(res: String, dest: URL)] = [
-        (res: "ntdll.so", dest: "CrossOver/lib/wine/x86_64-unix/"),
-        (res: "winedmo.so", dest: "CrossOver/lib/wine/x86_64-unix/"),
-        (res: "winegstreamer.so", dest: "CrossOver/lib/wine/x86_64-unix/"),
-    ].map { item in
-        (res: item.res, dest: destUrl.appendingPathComponent(ROOT + item.dest + item.res))
-    }
-    do {
-        // Make sure destination app doesn't exist and if it does, delete it
-        if (f.fileExists(atPath: destUrl.path())) {
-            try f.removeItem(at: destUrl)
-        }
-        // MARK: Step 1 copy the app in the user's application folder
-        
-        try f.copyItem(at: sourceCXPath, to: destUrl)
-        
-        if(f.fileExists(atPath: destUrl.path())) {
-            // MARK: Step 1 copy resources
-            for (res, dest) in resources{
-                console.log("Copying \(res) to \(dest.path())")
-                try copyResource(name: res, destUrl: dest)
-            }
-            // MARK: Step 2 download gstreamer
-            let gstURL = try await getGstreamerDownloadURL()
-            console.log("Gstreamer download url: \(gstURL)")
-            let gstreamerDownloader = TarDownloader(
-                fromUrl: gstURL,
-                onProgress: { progress in
-                    setProgress(progress)
-                },
-                onComplete: { url in
-                    do {
-                        let src = url.appendingPathComponent("GStreamer.framework")
-                        let dst = destUrl.appendingPathComponent("Contents/SharedSupport/CrossOver/lib64/")
-                        try f.copyItem(at: src, to: dst.appendingPathComponent("GStreamer.framework"))
-                        try f.removeItem(at: dst.appendingPathComponent("gstreamer-1.0"))
-                    } catch {
-                        console.error(String(reflecting: error))
-                    }
-                    setLoading(false)
-                },
-                onError: { error in console.error(String(reflecting: error)) }
-            )
-            setLoading(true)
-            gstreamerDownloader.download()
-            // MARK: Step 3 sign
-            try safeShell("codesign --force --deep --sign - \"\(destUrl.path())\"")
-            // MARK: Step 4 fix app after patching
-            try safeShell("xattr -cr \"\(destUrl.path())\"")
-        } else {
-            console.error("Couldn't find Crossover_x87.app in \(destUrl.path())")
-        }
-    } catch {
-        console.error(String(reflecting: error))
-    }
-    return destUrl
-}
-
 func isSameFile(_ file1URL: URL, _ file2URL: URL) -> Bool {
     let f = FileManager.default
     do {
@@ -430,7 +326,7 @@ func cpyd8d9DLLs(to url: URL) throws -> Void {
             if(f.fileExists(atPath: dllDest.path())) {
                 console.log("\(file) exists")
                 if(!isSameFile(dllPath, dllDest)){
-                    try f.moveItem(at: dllDest, to: dllDest.appendingPathExtension(".old"))
+                    try? f.moveItem(at: dllDest, to: dllDest.appendingPathExtension(".old"))
                     try f.copyItem(at: dllPath, to: dllDest)
                 } else {
                     console.log("already patched with the latest dx9 skipping copy")

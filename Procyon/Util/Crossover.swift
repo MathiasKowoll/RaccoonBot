@@ -50,11 +50,12 @@ func getCXPatcherBottlesURL(appDir: URL)  throws -> URL {
 
 func getAllBottles(appDir: URL) -> [URL] {
     let f = FileManager.default
+    let FORCE_IS_CXPATCHED = true
     
     do {
         var subfolders: [URL] = []
         
-        if(isCXPatched(appDir: appDir)) {
+        if(isCXPatched(appDir: appDir) || FORCE_IS_CXPATCHED) {
             let bottlePathForCXP = try getCXPatcherBottlesURL(appDir: appDir)
             console.log("app is patched with CXPatcher")
             do {

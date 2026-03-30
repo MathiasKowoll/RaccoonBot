@@ -127,6 +127,10 @@ func openSteam(cxAppPath: String?, selectedBottle: String?) {
 }
 
 func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, options: GameOptions? = nil, appExeURL: URL? = nil) async throws -> Void {
+    guard let bottleURL = URL(string: selectedBottle) else {
+        console.error("Invalid bottle URL: \(selectedBottle)")
+        return
+    }
     if(options == nil) {
         console.error("Missing game options for game with id \(id) - cannot launch (options = nil)")
         return
@@ -140,22 +144,21 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, op
         "DisableHidraw":options!.disableHidraw ? 1 : 0,
         "Enable SDL": options!.enableSDL ? 1 : 0
     ]
-    if let registryURL = URL(string: selectedBottle)?.appendingPathComponent("system.reg") {
-        let registry = WineRegistryFile(fileURL: registryURL)
-        try registry.load()
-        if let controllersSection = registry.section(forPath: "System\\\\CurrentControlSet\\\\Services\\\\winebus") {
-            regOptionsDictionary.keys.forEach { key in
-                let value = regOptionsDictionary[key]!
-                console.log("setting \(key) to \(value)")
-                controllersSection.setDword(forKey: key, value: value)
-            }
-            try registry.save()
-        } else {
-            console.error(".winebus section not found in system.reg file for the bottle \(selectedBottle)")
+    
+    let registryURL = bottleURL.appendingPathComponent("system.reg")
+    let registry = WineRegistryFile(fileURL: registryURL)
+    try registry.load()
+    if let controllersSection = registry.section(forPath: "System\\\\CurrentControlSet\\\\Services\\\\winebus") {
+        regOptionsDictionary.keys.forEach { key in
+            let value = regOptionsDictionary[key]!
+            console.log("setting \(key) to \(value)")
+            controllersSection.setDword(forKey: key, value: value)
         }
+        try registry.save()
     } else {
-        console.error("Couldn't find a system.reg file for the bottle \(selectedBottle)")
+        console.error("\\\\winebus section not found in system.reg file for the bottle \(selectedBottle)")
     }
+    
     console.warn("applying config changes to the bottle \(selectedBottle)...")
     
     // update bottle config file
@@ -169,19 +172,29 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, op
     let bottleName = URL(string: selectedBottle)?.lastPathComponent ?? ""
     console.warn("attempting to run steam.exe on game id \(id)")
     let arguments = options != nil ? " " + options!.gameArguments : ""
-    let x87cxAppPath = f.homeDirectoryForCurrentUser.appendingPathComponent("Applications", isDirectory: true).appendingPathComponent("Crossover_x87.app")
+    let x87cxAppURL = f.homeDirectoryForCurrentUser.appendingPathComponent("Applications", isDirectory: true).appendingPathComponent(PATCHED_CX_X87_APPNAME)
     let steamBootOptions = "-nochatui -nofriendsui -silent -no-browser -no-cef-sandbox -skipinitialbootstrap"
-    let wineEnvs = "CX_ROOT=\"\(x87cxAppPath.path())Contents/SharedSupport/CrossOver\" WINEPREFIX=\"\(URL(string: selectedBottle)?.path ?? "")\" WINEMSYNC=\(options!.wineMSync ? "1" : "0")"
+    let wineEnvs = "CX_ROOT=\"\(options!.x87PatchEnabled ? x87cxAppURL.path() : cxAppPath)Contents/SharedSupport/CrossOver\" WINEPREFIX=\"\(URL(string: selectedBottle)?.path ?? "")\" WINEMSYNC=\(options!.wineMSync ? "1" : "0")"
     
-    if (options!.x87PatchEnabled && f.fileExists(atPath: x87cxAppPath.path())) {
-        let gameLaunchCommand = appExeURL != nil ? "\"\(appExeURL!.path(percentEncoded: false))\"" : "\"C:\\Program Files (x86)\\Steam\\Steam.exe\" \(steamBootOptions) -applaunch \(String(id))"
-        let workdirCommand = appExeURL != nil ? "cd \"\(appExeURL!.deletingLastPathComponent().path(percentEncoded: false))\" && " : ""
-        command = "\(workdirCommand)env \(getInlineEnvs(from: options!)) \(wineEnvs) \(x87cxAppPath.path())Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/wine \(gameLaunchCommand) \(arguments)"
-    } else {
-        command = "env \(getInlineEnvs(from: options!)) \(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \"C:\\Program Files (x86)\\Steam\\Steam.exe\" \(steamBootOptions) -applaunch \(String(id)) \(arguments)"
+    if(options!.dx9PatchEnabled) {
+        try cpyd8d9DLLs(to: bottleURL)
     }
     
-    console.warn(command)
+    let gameLaunchCommand = appExeURL != nil ? "\"\(appExeURL!.path(percentEncoded: false))\"" : "\"C:\\Program Files (x86)\\Steam\\Steam.exe\" \(steamBootOptions) -applaunch \(String(id))"
+    if (options!.x87PatchEnabled) {
+        if(!f.fileExists(atPath: x87cxAppURL.path())) {
+            console.error("Couldn't find \(x87cxAppURL.path())")
+            return
+        }
+        let workdirCommand = appExeURL != nil ? "cd \"\(appExeURL!.deletingLastPathComponent().path(percentEncoded: false))\" && " : ""
+        command = "\(workdirCommand)env \(getInlineEnvs(from: options!)) \(wineEnvs) \(x87cxAppURL.path())Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/wine \(gameLaunchCommand) \(arguments)"
+    } else {
+        command = "env \(getInlineEnvs(from: options!)) \(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \(gameLaunchCommand) \(arguments)"
+    }
+    
+    #if DEBUG
+    console.log(command)
+    #endif
     try safeShell(command)
 }
 

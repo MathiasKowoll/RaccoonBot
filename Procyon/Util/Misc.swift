@@ -132,7 +132,6 @@ func safeShellWithOutput(_ command: String) throws -> String {
     
     let data = pipe.fileHandleForReading.readDataToEndOfFile()
     let output = String(data: data, encoding: .utf8)!
-    console.warn(output)
     return output
 }
 
@@ -316,23 +315,42 @@ func getSystemWOW64URL(from: URL) -> URL {
         .appending(path: "syswow64")
 }
 
+func getSystem32URL(from: URL) -> URL {
+    return from
+        .appending(path: "drive_c")
+        .appending(path: "windows")
+        .appending(path: "system32")
+}
+
 func cpyd8d9DLLs(to url: URL) throws -> Void {
     let f = FileManager.default
     let files = ["d3d9.dll", "d3d8.dll"]
-    for file in files {
-        if let dllsUrl = Bundle.main.url(forResource: "dlls", withExtension: nil) {
-            let dllPath = dllsUrl.appendingPathComponent(file)
-            let dllDest = url.appendingPathComponent(file)
-            if(f.fileExists(atPath: dllDest.path())) {
-                console.log("\(file) exists")
-                if(!isSameFile(dllPath, dllDest)){
-                    try? f.moveItem(at: dllDest, to: dllDest.appendingPathExtension(".old"))
-                    try f.copyItem(at: dllPath, to: dllDest)
-                } else {
-                    console.log("already patched with the latest dx9 skipping copy")
-                }
+    
+    func copyByBitness(dllsUrl: URL, file: String, is32Bit: Bool) throws {
+        let dllPathComponentByBitness = "drive_c" + (is32Bit ? "/windows/SysWOW64": "/windows/System32")
+        let dllPath = dllsUrl.appendingPathComponent(file)
+        let dllDest = url.appendingPathComponent(dllPathComponentByBitness).appendingPathComponent(file) // the logic seems flipped but it's actually how the winwos logic works System32 is for 64 bits libs
+        console.log("\(file) exists")
+        if(!isSameFile(dllPath, dllDest)){
+            if(!f.fileExists(atPath: dllDest.appendingPathExtension("old").path())){
+                try? f.moveItem(at: dllDest, to: dllDest.appendingPathExtension("old"))
+            } else {
+                try? f.removeItem(at: dllDest)
             }
-            
+            try f.copyItem(at: dllPath, to: dllDest)
+        } else {
+            console.log("already patched with the latest dx9 skipping copy")
+        }
+    }
+    
+    for file in files {
+        if let dllsUrl = Bundle.main.url(forResource: "d9vk/x32", withExtension: nil) {
+            try copyByBitness(dllsUrl: dllsUrl, file: file, is32Bit: true)
+        } else {
+            console.log("Couldn't find \(file)")
+        }
+        if let dllsUrl = Bundle.main.url(forResource: "d9vk/x64", withExtension: nil) {
+            try copyByBitness(dllsUrl: dllsUrl, file: file, is32Bit: false)
         } else {
             console.log("Couldn't find \(file)")
         }
@@ -364,6 +382,13 @@ class TarDownloader: NSObject, URLSessionDownloadDelegate {
     }
     
     func download() {
+        console.log(self.fromUrl.debugDescription)
+        if let lastDownloadedPath = readUsrDefOptionString(key: namespacedKey("downloads", self.fromUrl.lastPathComponent)){
+            if lastDownloadedPath == self.fromUrl.path(percentEncoded: false) {
+                console.log("download cache found, skipping download")
+                return self.onComplete(self.downloadDir)
+            }
+        }
         try? FileManager.default.createDirectory(at: downloadDir, withIntermediateDirectories: true, attributes: nil)
         let session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
         session.downloadTask(with: fromUrl).resume()
@@ -399,8 +424,9 @@ class TarDownloader: NSObject, URLSessionDownloadDelegate {
                 DispatchQueue.main.async {
                     if process.terminationStatus == 0 {
                         self.onComplete(self.downloadDir)
+                        persistUsrDefOptionString(key: namespacedKey("downloads", self.fromUrl.lastPathComponent), value: self.fromUrl.path(percentEncoded: false))
                     } else {
-                        let error = NSError(domain: "GStreamerDownloader", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: "tar extraction failed"])
+                        let error = NSError(domain: "TarDownloader", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: "tar extraction failed"])
                         self.onError(error)
                     }
                 }
@@ -420,17 +446,4 @@ class TarDownloader: NSObject, URLSessionDownloadDelegate {
     func clearTemp() {
         try? FileManager.default.removeItem(at: downloadDir.deletingLastPathComponent() )
     }
-}
-
-func fetchLatestRelease(from path: String) async throws -> String {
-    let url = URL(string: "\(path)/releases/latest")!
-    let (data, _) = try await URLSession.shared.data(from: url)
-    let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
-    return json["tag_name"] as! String
-}
-
-func getGstreamerDownloadURL() async throws -> URL {
-    let path = "https://api.github.com/repos/Sikarugir-App/gstreamer"
-    let version = try await fetchLatestRelease(from: path)
-    return URL(string: "https://github.com/Sikarugir-App/gstreamer/releases/download/\(version)/gstreamer-1.0-\(version)-x86_64.tar.xz")!
 }

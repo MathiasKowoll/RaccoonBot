@@ -49,38 +49,6 @@ struct GamesList: View {
             }
             ToolbarItem(placement: .secondaryAction) {
                 Button {
-                    if let cxPath = appGlobals.cxAppPath {
-                        let url = URL(fileURLWithPath: cxPath)
-                        NSWorkspace.shared.open(url)
-                    }
-                } label: {
-                    Image("crossover-fill")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 24)
-                }
-            }
-            ToolbarItem(placement: .secondaryAction) {
-                Button {
-                    openSteam(cxAppPath: appGlobals.cxAppPath, selectedBottle: appGlobals.selectedBottle)
-                } label: {
-                    Image("steam-fill")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 24)
-                }
-            }
-            ToolbarItem(placement: .secondaryAction) {
-                Button {
-                    if let selectedBottleURL = URL(string: appGlobals.selectedBottle){
-                        showFolder(url: selectedBottleURL)
-                    }
-                } label: {
-                    Image(systemName: "waterbottle")
-                }
-            }
-            ToolbarItem(placement: .secondaryAction) {
-                Button {
                     showAddCustomGameView = true
                 } label: {
                     Image(systemName: "rectangle.badge.plus")

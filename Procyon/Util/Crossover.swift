@@ -130,11 +130,9 @@ func getInlineEnvs(from: GameOptions) -> String {
         return String(value.formatted(.number.precision(.fractionLength(0...digits))))
     }
     value += defaults
-    let mtlHudEnabled = "MTL_HUD_ENABLED=\(onOff(from.mtlHudEnabled)) "
-    value += mtlHudEnabled
-    let advertiseAVX = "ROSETTA_ADVERTISE_AVX=\(onOff(from.advertiseAVX)) "
-    value += advertiseAVX
-    let dxmtMetalFXSpatial = "DXMT_METALFX_SPATIAL_SWAPCHAIN=\(onOff(from.dxmtMetalFXSpatial)) "
+    value += from.mtlHudEnabled ? "MTL_HUD_ENABLED=1 " : ""
+    value += "ROSETTA_ADVERTISE_AVX=\(onOff(from.advertiseAVX)) "
+    let dxmtMetalFXSpatial = from.dxmtMetalFXSpatial ? "DXMT_METALFX_SPATIAL_SWAPCHAIN=1 " : ""
     value += dxmtMetalFXSpatial
     
     var dxmtConfigValues: [String] = []
@@ -158,7 +156,7 @@ func getInlineEnvs(from: GameOptions) -> String {
 }
 
 func toCrossoverENVString(_ key: String, _ value: String) -> String {
-    return "\"\(key)\"=\"\(value)\""
+    return "\"\(key)\" = \"\(value)\""
 }
 
 func parseCXEnvVarString(_ string: String) -> (String, String){

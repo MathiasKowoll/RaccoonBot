@@ -14,104 +14,79 @@ struct OptionsView: View {
     @State var downloading: Bool = false
     @EnvironmentObject var appGlobals: AppGlobals
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
-    var load: @Sendable () async -> Void
+    @MainActor var load: @Sendable () async -> Void
     var body: some View {
         Modal(
             "Options",
             showModal: $libraryPageGlobals.showOptions,
         ) {
-            VStack (alignment: .center){
-                VStack(alignment: .leading) {
-                    Text("Game libraries")
-                        .padding(.horizontal)
-                    VStack {
-                        Divider()
-                        ForEach(libraryPageGlobals.folders, id: \.self) {folder in
-                            HStack(alignment: .center) {
-                                Text(extractFolderNameRegex(folder))
-                                Spacer()
-                                Button(action: {
-                                    removeSteamFolderPath(folder)
-                                    libraryPageGlobals.folders = getSteamFolderPaths()
-                                    Task { await load() }
-                                }) {
-                                    Image(systemName: "trash")
-                                }.buttonStyle(.borderless)
-                            }
-                            .padding(.horizontal)
+            VStack (alignment: .leading){
+                Button(URL(string: appGlobals.cxAppPath ?? "")?.lastPathComponent ?? "Select a Crossover App...") {
+                    if let url = openFolderSelectorPanel(type: .application) {
+                        appGlobals.selectedBottle = ""
+                        bottles = getAllBottles(appDir: url)
+                        Task { @MainActor in
+                            let patchedAppURL = await makeCrossoverPatchedCopy(sourceCXPath: url, setProgress: { progress = $0  }, setLoading: { state in downloading = state })
+                            progress = 0
+                            await makeX87CrossoverPatchedCopy(sourceCXPath: url, patchedApp: patchedAppURL)
+                            appGlobals.cxAppPath = patchedAppURL.path(percentEncoded: false)
+                            persistUsrDefOptionString(key: "cxAppPath", value: patchedAppURL.relativePath)
+                            persistUsrDefOptionString(key: "cxCompleteAppPath", value: patchedAppURL.path(percentEncoded: false))
                         }
-                        Divider()
                     }
-                    .listStyle(.bordered)
-                    Button(action: {
-                        if let url = openFolderSelectorPanel() {
-                            validateAddSteamFolder(url, to: &libraryPageGlobals.folders)
-                            Task { await load() }
-                        }
-                    }) {
-                        Label("Add a steam library", systemImage: "plus")
-                    }
-                    .buttonStyle(.borderless)
-                    .padding(.horizontal)
                 }
-                .padding(.vertical, 10)
-                .background(.black.opacity(0.5))
-                .clipShape(RoundedRectangle(cornerRadius: 20))
+                if(downloading){
+                    ProgressView(value: progress, total: 100)
+                }
+                if(!bottles.isEmpty) {
+                    HStack {
+                        Picker("Select a bottle", selection: $appGlobals.selectedBottle) {
+                            Text("No bottle selected").tag("")
+                            ForEach(bottles, id: \.absoluteString) { bottle in
+                                let components = bottle.pathComponents
+                                let lastTwo = Array(components.suffix(2))
+                                let label = lastTwo.joined(separator: "/")
+                                Text(label).tag(bottle.absoluteString)
+                            }
+                        }.onChange(of: appGlobals.selectedBottle) { oldValue, newValue in
+                            if(newValue != "") {
+                                //do {
+                                //    try cpyd8d9DLLs(to: getSystem32URL(from: URL(string: newValue)!))
+                                //    try cpyd8d9DLLs(to: getSystemWOW64URL(from: URL(string: newValue)!))
+                                //} catch {
+                                //    console.error(String(reflecting: error))
+                                //}
+                                libraryPageGlobals.folders.removeAll()
+                                resetPersistedFolderAccess()
+                                let steamLibrariesURLs = getSteamLibraryFolders(from: URL(string: newValue)!)
+                                steamLibrariesURLs.forEach { url in
+                                    validateAddSteamFolder(url, to: &libraryPageGlobals.folders)
+                                }
+                                Task { await load() }
+                                persistUsrDefOptionString(key: "selectedBottle", value: newValue)
+                            }
+                        }
+                    }
+                } else {
+                    Text("No bottles found")
+                    Text("Create a new bottle first").font(.footnote)
+                }
+                GameLibrariesList(load: load)
                 .padding(.bottom)
                 VStack(alignment: .leading) {
-                    Button(URL(string: appGlobals.cxAppPath ?? "")?.lastPathComponent ?? "Select a Crossover App...") {
-                        if let url = openFolderSelectorPanel(type: .application) {
-                            appGlobals.selectedBottle = ""
-                            bottles = getAllBottles(appDir: url)
-                            Task { @MainActor in
-                                let patchedAppURL = await makeCrossoverPatchedCopy(sourceCXPath: url, setProgress: { progress = $0  }, setLoading: { state in downloading = state })
-                                progress = 0
-                                makeX87CrossoverPatchedCopy(sourceCXPath: url, patchedApp: patchedAppURL)
-                                appGlobals.cxAppPath = patchedAppURL.path(percentEncoded: false)
-                                persistUsrDefOptionString(key: "cxAppPath", value: patchedAppURL.relativePath)
-                                persistUsrDefOptionString(key: "cxCompleteAppPath", value: patchedAppURL.path(percentEncoded: false))
-                            }
+                    ProminentButton("Open Crossover", image: "crossover-fill") {
+                        if let cxPath = appGlobals.cxAppPath {
+                            let url = URL(fileURLWithPath: cxPath)
+                            NSWorkspace.shared.open(url)
                         }
                     }
-                    if(downloading){
-                        ProgressView(value: progress, total: 100)
+                    ProminentButton("Open Steam", image: "steam-fill") {
+                        openSteam(cxAppPath: appGlobals.cxAppPath, selectedBottle: appGlobals.selectedBottle)
                     }
-                    if(!bottles.isEmpty) {
-                        HStack {
-                            Picker("Select a bottle", selection: $appGlobals.selectedBottle) {
-                                Text("No bottle selected").tag("")
-                                ForEach(bottles, id: \.absoluteString) { bottle in
-                                    let components = bottle.pathComponents
-                                    let lastTwo = Array(components.suffix(2))
-                                    let label = lastTwo.joined(separator: "/")
-                                    Text(label).tag(bottle.absoluteString)
-                                }
-                            }.onChange(of: appGlobals.selectedBottle) { oldValue, newValue in
-                                if(newValue != "") {
-                                    do {
-                                        try cpyd8d9DLLs(to: getSystemWOW64URL(from: URL(string: newValue)!))
-                                    } catch {
-                                        console.error(String(reflecting: error))
-                                    }
-                                    libraryPageGlobals.folders.removeAll()
-                                    resetPersistedFolderAccess()
-                                    let steamLibrariesURLs = getSteamLibraryFolders(from: URL(string: newValue)!)
-                                    steamLibrariesURLs.forEach { url in
-                                        validateAddSteamFolder(url, to: &libraryPageGlobals.folders)
-                                    }
-                                    Task { await load() }
-                                    persistUsrDefOptionString(key: "selectedBottle", value: newValue)
-                                }
-                            }
-                            Button {
-                                showFolder(url: (URL(string:appGlobals.selectedBottle)) ?? URL(string: "/")!)
-                            } label: {
-                                Image(systemName: "eye")
-                            }
+                    ProminentButton("Open current bottle", systemImage: "waterbottle"){
+                        if let selectedBottleURL = URL(string: appGlobals.selectedBottle){
+                            showFolder(url: selectedBottleURL)
                         }
-                    } else {
-                        Text("No bottles found")
-                        Text("Create a new bottle first").font(.footnote)
                     }
                     VStack(alignment: .leading) {
                         Divider().padding(.top, 10)
@@ -135,7 +110,6 @@ struct OptionsView: View {
                             libraryPageGlobals.showOptions = false
                         }
                     }
-                    
                     if(debugEnabled == true) {
                         Divider().padding(.top, 10)
                         Text("Debug")

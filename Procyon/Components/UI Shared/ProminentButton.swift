@@ -11,10 +11,12 @@ struct ProminentButton : View {
     var action: () -> Void
     var text: String
     var systemImage: String?
+    var image: String?
     
-    init(_ text: String, systemImage: String? = nil ,action: @escaping () -> Void) {
+    init(_ text: String, systemImage: String? = nil , image: String? = nil , action: @escaping () -> Void) {
         self.text = text
         self.systemImage = systemImage
+        self.image = image
         self.action = action
     }
     
@@ -24,6 +26,11 @@ struct ProminentButton : View {
         }) {
             if systemImage != nil {
                 Label(text, systemImage: systemImage!)
+            } else if image != nil{
+                HStack {
+                    Image(self.image!).resizable().scaledToFit().frame(height: 20)
+                    Text(text)
+                }
             } else {
                 Text(text)
             }

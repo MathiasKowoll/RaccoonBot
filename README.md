@@ -5,7 +5,7 @@
 A Steam game launcher for macOS that can run both Windows and MacOS Games.
 
 - Replaces CXPatcher, will patch your copy of crossover and add a nice interface to launch steam games
-- you can configure the graphics backend and the vulcan backed along with advanced options for every game
+- You can configure the graphics backend and the vulcan backed along with advanced options for every game
 - It can run 32bit games much faster thanks to x87 via https://github.com/Lifeisawful/rosettax87
 - You can run doom 2016 using moltenvk - experimental
 - You can run UE4 games via dxvk using the ue4 hack (enabled by default)

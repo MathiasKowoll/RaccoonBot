@@ -7,7 +7,7 @@ It's based on Crossover so you will need to download and install Crossover first
 
 - Replaces CXPatcher, will patch your copy of crossover and add a nice interface to launch steam games
 - You can configure the graphics backend and the vulcan backed along with advanced options for every game
-- It can run 32bit games much faster thanks to x87 via https://github.com/Lifeisawful/rosettax87
+- **It can run 32bit games much faster thanks to x87 via rosettaX87**
 - You can run doom 2016 using moltenvk - experimental
 - You can run UE4 games via dxvk using the ue4 hack (enabled by default)
 
@@ -29,3 +29,8 @@ https://github.com/italomandara/Procyon/issues/1
 
 Which is pretty much in line with the roadmap
 
+Thanks to: 
+@Lifeisawful https://github.com/Lifeisawful for rosettax87
+@Gcenx https://github.com/Gcenx for wine patched components and dxvk-macos
+@nastys https://github.com/nastys for the UE4 Moltenvk hack
+https://www.codeweavers.com for Crossover

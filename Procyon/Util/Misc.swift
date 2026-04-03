@@ -322,7 +322,7 @@ func getSystem32URL(from: URL) -> URL {
         .appending(path: "system32")
 }
 
-func cpyd8d9DLLs(to url: URL) throws -> Void {
+func cpyd8d9DLLs(to url: URL, enable: Bool = true) throws -> Void {
     let f = FileManager.default
     let files = ["d3d9.dll", "d3d8.dll"]
     
@@ -331,16 +331,24 @@ func cpyd8d9DLLs(to url: URL) throws -> Void {
         let dllPath = dllsUrl.appendingPathComponent(file)
         let dllDest = url.appendingPathComponent(dllPathComponentByBitness).appendingPathComponent(file) // the logic seems flipped but it's actually how the winwos logic works System32 is for 64 bits libs
         console.log("\(file) exists")
-        if(!isSameFile(dllPath, dllDest)){
-            if(!f.fileExists(atPath: dllDest.appendingPathExtension("old").path())){
-                try? f.moveItem(at: dllDest, to: dllDest.appendingPathExtension("old"))
+        if(enable) {
+            if(!isSameFile(dllPath, dllDest)){
+                if(!f.fileExists(atPath: dllDest.appendingPathExtension("old").path())){
+                    try? f.moveItem(at: dllDest, to: dllDest.appendingPathExtension("old"))
+                } else {
+                    try? f.removeItem(at: dllDest)
+                }
+                try f.copyItem(at: dllPath, to: dllDest)
             } else {
+                console.log("already patched with the latest dx9 skipping copy")
+            }
+        } else {
+            if(!f.fileExists(atPath: dllDest.path())){
                 try? f.removeItem(at: dllDest)
             }
-            try f.copyItem(at: dllPath, to: dllDest)
-        } else {
-            console.log("already patched with the latest dx9 skipping copy")
+            try f.copyItem(at: dllDest.appendingPathExtension("old"), to: dllDest)
         }
+        
     }
     
     for file in files {
@@ -372,8 +380,7 @@ class TarDownloader: NSObject, URLSessionDownloadDelegate {
     var onError: (Error) -> Void
     
     init(fromUrl: URL, onProgress: @escaping (Double) -> Void, onComplete: @escaping (URL) -> Void, onError: @escaping (Error) -> Void) {
-        let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-        self.downloadDir = cacheDir.appendingPathComponent("\(appName)/downloads")
+        self.downloadDir = TarDownloader.getDownloadsDir()
         self.fromUrl = fromUrl
         self.onProgress = onProgress
         self.onError = onError
@@ -381,7 +388,19 @@ class TarDownloader: NSObject, URLSessionDownloadDelegate {
         super.init()
     }
     
+    public static func getDownloadsDir() -> URL {
+        let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        return cacheDir.appendingPathComponent("\(appName)/downloads")
+    }
+    
+    public static func deleteAllDownloadCache() {
+        let downloadDir = TarDownloader.getDownloadsDir()
+        try? FileManager.default.removeItem(at: downloadDir)
+        deleteUsrDefOptionStartsWith(prefix: "downloads")
+    }
+    
     func download() {
+        let f = FileManager.default
         console.log(self.fromUrl.debugDescription)
         if let lastDownloadedPath = readUsrDefOptionString(key: namespacedKey("downloads", self.fromUrl.lastPathComponent)){
             if lastDownloadedPath == self.fromUrl.path(percentEncoded: false) {
@@ -389,7 +408,7 @@ class TarDownloader: NSObject, URLSessionDownloadDelegate {
                 return self.onComplete(self.downloadDir)
             }
         }
-        try? FileManager.default.createDirectory(at: downloadDir, withIntermediateDirectories: true, attributes: nil)
+        try? f.createDirectory(at: downloadDir, withIntermediateDirectories: true, attributes: nil)
         let session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
         session.downloadTask(with: fromUrl).resume()
     }
@@ -412,13 +431,14 @@ class TarDownloader: NSObject, URLSessionDownloadDelegate {
     }
     
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        let f = FileManager.default
         let destination = downloadDir.appendingPathComponent(fromUrl.lastPathComponent)
         
         do {
-            if FileManager.default.fileExists(atPath: destination.path) {
-                try FileManager.default.removeItem(at: destination)
+            if f.fileExists(atPath: destination.path) {
+                try f.removeItem(at: destination)
             }
-            try FileManager.default.moveItem(at: location, to: destination)
+            try f.moveItem(at: location, to: destination)
             let process = extract()
             process.terminationHandler = { process in
                 DispatchQueue.main.async {
@@ -444,6 +464,6 @@ class TarDownloader: NSObject, URLSessionDownloadDelegate {
     }
     
     func clearTemp() {
-        try? FileManager.default.removeItem(at: downloadDir.deletingLastPathComponent() )
+        try? FileManager.default.removeItem(at: downloadDir )
     }
 }

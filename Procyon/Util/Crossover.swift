@@ -116,22 +116,70 @@ func editCXBottleConfigFile(selectedBottle: String, options: [String: String]) t
     }
 }
 
+func stripEnvsInCXBottleConfigFile(selectedBottle: String) throws {
+    if let bottleURL = getCXBottleConfigFileURL(selectedBottle: selectedBottle) {
+        let original = try String(contentsOf: bottleURL, encoding: .utf8)
+        let lines = original.components(separatedBy: .newlines)
+        if let index = lines.firstIndex(of: "[EnvironmentVariables]") {
+            let newLines = lines[0..<index+1] + [";;\"PROMPT\" = \"$p$g\""]
+            let updated = newLines.joined(separator: "\n")
+            try updated.write(to: bottleURL, atomically: true, encoding: .utf8)
+        }
+    } else {
+        console.error("No bottle selected in Procyon config")
+    }
+}
+
 func getDxmtConfigEnv(values: [String]) -> String {
     return values.count == 0 ? "" : "DXMT_CONFIG=\"\(values.joined(separator: ";"))\""
 }
 
 func getInlineEnvs(from: GameOptions) -> String {
-    func onOff(_ value: Bool?) -> String {
-        return value != nil && value == true ? "1" : "0"
-    }
-    var value = "\(from.envVariables) "
-    let defaults = "WINEDEBUG=-all "
+    /**
+     @TO DO:
+     "MVK_CONFIG_FAST_MATH", "1"
+     "MVK_CONFIG_PREFILL_METAL_COMMAND_BUFFERS", "3"
+     "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS", "1"
+     "MVK_CONFIG_USE_MTLHEAP", "2"
+     MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=1 -> used by d9vk
+     */
     func DoubleToFormattedStr(_ value: Double, _ digits: Int = 2) -> String {
         return String(value.formatted(.number.precision(.fractionLength(0...digits))))
     }
-    value += defaults
+    func onOff(_ value: Bool?) -> String {
+        return value != nil && value == true ? "1" : "0"
+    }
+    var value = from.envVariables == "" ? "" : "\(from.envVariables) "
+    let defaults = [
+        "D3DM_ENABLE_METALFX=1",
+        "DXMT_ENABLE_NVEXT=1",
+        "DXVK_ASYNC=1",
+//        "MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=1", //slower, but more reliable
+//        "MVK_CONFIG_PREFILL_METAL_COMMAND_BUFFERS=3", //this actually slows down everything
+        "MVK_CONFIG_USE_MTLHEAP=2"
+    ]
+    value += defaults.joined(separator: " ") + " "
     value += from.mtlHudEnabled ? "MTL_HUD_ENABLED=1 " : ""
+    value += from.ue4Hack ? "MVK_CONFIG_UE4_HACK_ENABLED=1 NAS_DISABLE_UE4_HACK=0 " : "MVK_CONFIG_UE4_HACK_ENABLED=0 NAS_DISABLE_UE4_HACK=1 "
+    value += from.mvkArgBuff ? "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1 " : "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=0 "
     value += "ROSETTA_ADVERTISE_AVX=\(onOff(from.advertiseAVX)) "
+    value += "CX_GRAPHICS_BACKEND=\"\(from.cxGraphicsBackend)\" "
+    switch (from.vulkanLib) {
+    case "latest":
+        if let url = Bundle.main.url(forResource: "libMoltenVK-latest", withExtension: "dylib") {
+            value += "CX_LIBVULKAN=\"\(url.path(percentEncoded: false))\" "
+        }
+    case "experimental":
+        if let url = Bundle.main.url(forResource: "libMoltenVK-experimental", withExtension: "dylib") {
+            value += "CX_LIBVULKAN=\"\(url.path(percentEncoded: false))\" "
+        }
+    case "kosmikkrisp":
+        if let url = Bundle.main.url(forResource: "libvulkan_kosmickrisp", withExtension: "dylib") {
+            value += "CX_LIBVULKAN=\"\(url.path(percentEncoded: false))\" "
+        }
+    default:
+        break
+    }
     let dxmtMetalFXSpatial = from.dxmtMetalFXSpatial ? "DXMT_METALFX_SPATIAL_SWAPCHAIN=1 " : ""
     value += dxmtMetalFXSpatial
     
@@ -201,3 +249,4 @@ func getDrivesPaths(at: URL) -> CXDrives {
         return [:]
     }
 }
+

@@ -102,3 +102,12 @@ func persistUsrDefOptionString(key: String, value: String) {
 func readUsrDefOptionString(key: String) -> String? {
     return UserDefaults(suiteName: suiteName)!.value(forKey: key) as? String
 }
+
+func deleteUsrDefOptionStartsWith(prefix: String) {
+    guard let defaults = UserDefaults(suiteName: suiteName) else { return }
+    let dict = defaults.dictionaryRepresentation()
+
+    for key in dict.keys where key.hasPrefix(prefix) {
+        defaults.removeObject(forKey: key)
+    }
+}

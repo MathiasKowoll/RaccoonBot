@@ -107,6 +107,7 @@ struct LibraryPage: View {
             }
             .onAppear() {
                 isLoading = true // fixes missing library issue
+                try? stripEnvsInCXBottleConfigFile(selectedBottle: appGlobals.selectedBottle)
                 Task(priority: .background) {
                     await load()
                 }

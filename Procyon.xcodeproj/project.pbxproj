@@ -45,11 +45,11 @@
 			membershipExceptions = (
 				Config.xcconfig,
 				Info.plist,
-				Libs/dxvk,
 				"Libs/libMoltenVK-experimental.dylib",
 				"Libs/libMoltenVK-latest.dylib",
-				Libs/ntdll.so,
-				Libs/ntdll.so_gcenx,
+				Libs/ntdll.so.gcenx,
+				Libs/ntdll.so.x87,
+				Libs/win32u.so,
 				Libs/winedmo.so,
 				Libs/winegstreamer.so,
 			);
@@ -64,8 +64,9 @@
 			membershipExceptions = (
 				"Libs/libMoltenVK-experimental.dylib",
 				"Libs/libMoltenVK-latest.dylib",
-				Libs/ntdll.so,
-				Libs/ntdll.so_gcenx,
+				Libs/ntdll.so.gcenx,
+				Libs/ntdll.so.x87,
+				Libs/win32u.so,
 				Libs/winedmo.so,
 				Libs/winegstreamer.so,
 			);

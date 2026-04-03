@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
 struct OptionsView: View {
     @State var bottles: [URL] = []
     @State var progress: Double = 0
+    @State var progressLabel = "Processing..."
     @State var downloading: Bool = false
     @EnvironmentObject var appGlobals: AppGlobals
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
@@ -26,7 +27,7 @@ struct OptionsView: View {
                         appGlobals.selectedBottle = ""
                         bottles = getAllBottles(appDir: url)
                         Task { @MainActor in
-                            let patchedAppURL = await makeCrossoverPatchedCopy(sourceCXPath: url, setProgress: { progress = $0  }, setLoading: { state in downloading = state })
+                            let patchedAppURL = await makeCrossoverPatchedCopy(sourceCXPath: url, setProgress: { p,m in progress = p; progressLabel = m  }, setLoading: { state in downloading = state })
                             progress = 0
                             await makeX87CrossoverPatchedCopy(sourceCXPath: url, patchedApp: patchedAppURL)
                             appGlobals.cxAppPath = patchedAppURL.path(percentEncoded: false)
@@ -36,7 +37,9 @@ struct OptionsView: View {
                     }
                 }
                 if(downloading){
-                    ProgressView(value: progress, total: 100)
+                    ProgressView(value: progress, total: 100) {
+                        Text(progressLabel).font(.footnote)
+                    }.padding(.top)
                 }
                 if(!bottles.isEmpty) {
                     HStack {
@@ -50,12 +53,6 @@ struct OptionsView: View {
                             }
                         }.onChange(of: appGlobals.selectedBottle) { oldValue, newValue in
                             if(newValue != "") {
-                                //do {
-                                //    try cpyd8d9DLLs(to: getSystem32URL(from: URL(string: newValue)!))
-                                //    try cpyd8d9DLLs(to: getSystemWOW64URL(from: URL(string: newValue)!))
-                                //} catch {
-                                //    console.error(String(reflecting: error))
-                                //}
                                 libraryPageGlobals.folders.removeAll()
                                 resetPersistedFolderAccess()
                                 let steamLibrariesURLs = getSteamLibraryFolders(from: URL(string: newValue)!)
@@ -72,7 +69,7 @@ struct OptionsView: View {
                     Text("Create a new bottle first").font(.footnote)
                 }
                 GameLibrariesList(load: load)
-                .padding(.bottom)
+                .padding(.vertical)
                 VStack(alignment: .leading) {
                     ProminentButton("Open Crossover", image: "crossover-fill") {
                         if let cxPath = appGlobals.cxAppPath {
@@ -108,6 +105,9 @@ struct OptionsView: View {
                                 await load()
                             }
                             libraryPageGlobals.showOptions = false
+                        }
+                        ProminentButton("Delete all downloads cache", systemImage: "trash") {
+                            TarDownloader.deleteAllDownloadCache()
                         }
                     }
                     if(debugEnabled == true) {

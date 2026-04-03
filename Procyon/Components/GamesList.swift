@@ -100,6 +100,9 @@ struct GamesList: View {
                         Picker("", selection: $libraryPageGlobals.sortBy) {
                             Text("Name").tag(SortingOptions.name)
                             Text("Release Date").tag(SortingOptions.releaseDate)
+                            Text("Publisher").tag(SortingOptions.publisher)
+                            Text("Developer").tag(SortingOptions.developer)
+                            Text("Installed").tag(SortingOptions.installed)
                         }
                         .pickerStyle(.menu)
                         .controlSize(.small)

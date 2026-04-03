@@ -10,6 +10,8 @@ let PATCHED_CX_APPNAME = "Crossover_patched.app"
 let PATCHED_CX_X87_APPNAME = "Crossover_patched_x87.app"
 private let DEFAULT_CXP_BOTTLES_ROOTPATH = "/Users/${USER}/"
 private let DEFAULT_CXP_BOTTLES_FOLDER = "CXPBottles"
+//private let DEFAULT_CXP_BOTTLES_ROOTPATH = "/Users/${USER}/Application Support/Procyon/"
+//private let DEFAULT_CXP_BOTTLES_FOLDER = "Bottles"
 private let DEFAULT_CXP_BOTTLES_PATH = DEFAULT_CXP_BOTTLES_ROOTPATH + DEFAULT_CXP_BOTTLES_FOLDER
 private let CROSSOVER_MAIN_CONFIGURATION = "/etc/CrossOver.conf"
 private let WINE_RESOURCES_ROOT = "Crossover"
@@ -31,38 +33,30 @@ private struct CXPlist: Decodable {
 
 
 private let WINE_DXVK_RESOURCES_PATHS: [String] = [
-    "/lib/dxvk/i386-windows/d3d10core.dll",
-    "/lib/dxvk/i386-windows/d3d11.dll",
-    "/lib/dxvk/x86_64-windows/d3d10core.dll",
-    "/lib/dxvk/x86_64-windows/d3d11.dll",
+    "dxvk/i386-windows/d3d9.dll",
+    "dxvk/i386-windows/d3d10core.dll",
+    "dxvk/i386-windows/d3d11.dll",
+    "dxvk/x86_64-windows/d3d9.dll",
+    "dxvk/x86_64-windows/d3d10core.dll",
+    "dxvk/x86_64-windows/d3d11.dll",
+]
+
+private let dxvkRes: [(res: String, dest: String)] = WINE_DXVK_RESOURCES_PATHS.map { path in
+    (res: path, dest: "/lib/" + path)
+}
+
+private let allResources = dxvkRes + [
+    (res: "ntdll.so.x87", dest: "/lib/wine/x86_64-unix/ntdll.so"),
+    (res: "ntdll.so.gcenx", dest: "/lib/wine/x86_64-unix/ntdll.so"),
+    (res: "winedmo.so", dest: "/lib/wine/x86_64-unix/winedmo.so"),
+    (res: "win32u.so", dest: "/lib/wine/x86_64-unix/win32u.so"),
+    (res: "wine/i386-windows/ntdll.dll", dest: "lib/wine/i386-windows/ntdll.dll"),
+    (res: "d9vk/x32/d3d9.dll", dest: "/lib/wine/i386-windows/d3d9.dll"),
+    (res: "d9vk/x64/d3d9.dll", dest: "/lib/wine/x86_64-windows/d3d9.dll"),
+    (res: "winegstreamer.so", dest: "/lib/wine/x86_64-unix/winegstreamer.so"),
 ]
 
 let WINE_WINEINF_PATH: String = "/share/wine/wine.inf"
-
-
-let WINE_RESOURCES_PATHS: [String] = [
-    //    "/lib64/libinotify.0.dylib",
-    //    "/lib64/libinotify.dylib",
-    //    "/lib/wine/i386-windows/kernelbase.dll",
-    //    "/lib/wine/i386-windows/ntdll.dll",
-    //    "/lib/wine/i386-windows/winegstreamer.dll",
-    //    "lib/wine/i386-windows/wineboot.exe",
-    //    "/lib/wine/i386-windows/winecfg.exe",
-    //    "/lib/wine/x86_64-unix/ntdll.so",
-    //    "/lib/wine/x86_64-windows/kernelbase.dll",
-    //    "/lib/wine/x86_64-windows/ntdll.dll",
-    //    "/lib/wine/x86_64-windows/wineboot.exe",
-    //    "/lib/wine/x86_64-windows/winecfg.exe",
-//        "/share/crossover/bottle_data/crossover.inf",
-    //    "/CrossOver-Hosted Application/wineserver",
-]
-//+ [MOLTENVK_BASELINE]
-//+ [WINE_WINEINF_PATH]
-//+ WINE_DXVK_RESOURCES_PATHS
-//+ WINE_GSTREAMER_RESOURCES_PATHS
-//+ WINE_DXMT_RESOURCES_PATHS
-
-
 
 enum PatchMVK {
     case legacyUE4
@@ -210,26 +204,7 @@ private func addEnvs(_ envs: [Env], to: URL, from: URL) {
 
 func addGlobals(appURL: URL, opts: Opts) {
     disable(dest: appURL.path + SHARED_SUPPORT_PATH + CROSSOVER_MAIN_CONFIGURATION)
-    var envs: [Env] = [Env(key: "CX_BOTTLE_PATH", value: opts.cxbottlesPath)] // other envs to be added later
-//    envs += [Env(key: "NAS_DISABLE_UE4_HACK", value: "1")]
-//    if(opts.patchMVK == .legacyUE4) {
-//        console.log("add enable UE4 Hack env")
-//        envs += [Env(key: "MVK_CONFIG_UE4_HACK_ENABLED", value: "1")]
-//    }
-//    if(opts.globalEnvs.dxvkAsync == true) {
-//        console.log("add DXVK async env")
-//        envs += [Env(key: "DXVK_ASYNC", value: "1")]
-//    }
-//    if(opts.globalEnvs.disableUE4Hack == true) {
-//        console.log("add UE4 disable env")
-//        envs += [Env(key: "NAS_DISABLE_UE4_HACK", value: "1")]
-//    }
-    if(opts.globalEnvs.disableMVKArgumentBuffers == true) { // to add the option later
-        console.log("disable MoltenVK Argument Buffers")
-        envs += [Env(key: "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS", value: "0")]
-    }
-//    console.log("enable MoltenVK UE4 Hack")
-//    envs += [Env(key: "MVK_CONFIG_UE4_HACK_ENABLED", value: "1")]
+    let envs: [Env] = [Env(key: "CX_BOTTLE_PATH", value: opts.cxbottlesPath)] // other envs to be added later
     
     addEnvs(envs, to: appURL.appendingPathComponent(SHARED_SUPPORT_PATH + CROSSOVER_MAIN_CONFIGURATION), from: appURL.appendingPathComponent(SHARED_SUPPORT_PATH + CROSSOVER_MAIN_CONFIGURATION + "_disabled"))
 }
@@ -244,8 +219,8 @@ func signAndFixup(destPath: String) throws {
 }
 
 func removeSignature(destURL: URL) throws {
-    try safeShell("codesign --remove-signature \"\(destURL.path())\"")
-    let command = "codesign --remove-signature \"\(destURL.appendingPathComponent("Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/wine").path())\""
+    try safeShell("/usr/bin/codesign --remove-signature \"\(destURL.path())\"")
+    let command = "/usr/bin/codesign --remove-signature \"\(destURL.appendingPathComponent("Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/wine").path())\""
     try safeShell(command)
 }
 
@@ -263,7 +238,7 @@ private func markAsPatched(url: URL) {
 }
 
 func makeX87CrossoverPatchedCopy (sourceCXPath: URL, patchedApp: URL) async -> Void {
-    await makeCrossoverPatchedCopy(sourceCXPath: sourceCXPath, setProgress: { _ in }, setLoading: { _ in }, isX87: true)
+    await makeCrossoverPatchedCopy(sourceCXPath: sourceCXPath, setProgress: { _, _ in }, setLoading: { _ in }, isX87: true)
 }
 
 func fetchLatestRelease(from path: String) async throws -> String {
@@ -275,23 +250,22 @@ func fetchLatestRelease(from path: String) async throws -> String {
 
 
 @discardableResult
-func makeCrossoverPatchedCopy(sourceCXPath: URL, setProgress: @escaping (Double) -> Void, setLoading: @escaping (Bool) -> Void, isX87: Bool = false) async -> URL {
+func makeCrossoverPatchedCopy(sourceCXPath: URL, setProgress: @escaping (Double, String) -> Void, setLoading: @escaping (Bool) -> Void, isX87: Bool = false) async -> URL {
     let f = FileManager.default
     let name = isX87 ? PATCHED_CX_X87_APPNAME : PATCHED_CX_APPNAME
     let destUrl = f.homeDirectoryForCurrentUser.appendingPathComponent("Applications", isDirectory: true).appendingPathComponent(name)
-    let resources: [(res: String, dest: URL)] = [
-        (res: "ntdll.so", dest: "/lib/wine/x86_64-unix/ntdll.so"),
-        (res: "winedmo.so", dest: "/lib/wine/x86_64-unix/winedmo.so"),
-        (res: "d9vk/x32/d3d9.dll", dest: "/lib/wine/i386-windows/d3d9.dll"),
-        (res: "d9vk/x64/d3d9.dll", dest: "/lib/wine/x86_64-windows/d3d9.dll"),
-        (res: "winegstreamer.so", dest: "/lib/wine/x86_64-unix/winegstreamer.so"),
-//        (res: "libMoltenVK-experimental.dylib", dest: "/lib64/libMoltenVK.dylib"),
-    ].compactMap { item in
-        (res: item.res, dest: destUrl.appendingPathComponent(SHARED_SUPPORT_COMPONENT + item.dest))
-    }.filter {
-        resource in
-        isX87 ? true : !resource.res.contains("d3d9")
-    }
+    let resources = allResources
+        .map { item in
+            (res: item.res, dest: destUrl.appendingPathComponent(SHARED_SUPPORT_COMPONENT + item.dest))
+        }
+        .filter {
+            resource in
+            isX87 ? true : (!resource.res.contains("d3d9") || !resource.res.contains("ntdll.dll"))
+        }
+        .filter {
+            resource in
+            isX87 ? !resource.res.contains("ntdll.so.gcenx") : !resource.res.contains("ntdll.so.x87")
+        }
     do {
         // Make sure destination app doesn't exist and if it does, delete it
         if (f.fileExists(atPath: destUrl.path())) {
@@ -314,7 +288,7 @@ func makeCrossoverPatchedCopy(sourceCXPath: URL, setProgress: @escaping (Double)
                 let gstreamerDownloader = TarDownloader(
                     fromUrl: gstURL,
                     onProgress: { progress in
-                        setProgress(progress)
+                        setProgress(progress, "Downloading GStreamer")
                     },
                     onComplete: { srcUrl in
                         do {
@@ -328,6 +302,7 @@ func makeCrossoverPatchedCopy(sourceCXPath: URL, setProgress: @escaping (Double)
                     },
                     onError: { error in
                         console.error("Error while downloading GStreamer")
+                        setProgress(0, "Error while downloading GStreamer")
                         console.error(String(reflecting: error))
                         continuation.resume(throwing: error)
                     }
@@ -339,7 +314,7 @@ func makeCrossoverPatchedCopy(sourceCXPath: URL, setProgress: @escaping (Double)
                 let dxmtDownloader = TarDownloader(
                     fromUrl: dxmtURL,
                     onProgress: { progress in
-                        setProgress(progress)
+                        setProgress(progress, "Downloading DXMT")
                     },
                     onComplete: { srcURL in
                         do {
@@ -353,6 +328,7 @@ func makeCrossoverPatchedCopy(sourceCXPath: URL, setProgress: @escaping (Double)
                     },
                     onError: { error in
                         console.error("Error while downloading DXMT")
+                        setProgress(0, "Error while downloading DXMT")
                         console.error(String(reflecting: error))
                         continuation.resume(throwing: error)
                     }

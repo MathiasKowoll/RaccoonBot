@@ -161,24 +161,14 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, op
     
     console.warn("applying config changes to the bottle \(selectedBottle)...")
     
-    // update bottle config file
-    let optionsDictionary = [
-        "CX_GRAPHICS_BACKEND": options!.cxGraphicsBackend,
-        "WINEMSYNC": options!.wineMSync ? "1" : "0",
-        "MTL_HUD_ENABLED": options!.mtlHudEnabled ? "1" : "0"
-    ]
-    try editCXBottleConfigFile(selectedBottle: selectedBottle, options: optionsDictionary)
-    
     let bottleName = URL(string: selectedBottle)?.lastPathComponent ?? ""
     console.warn("attempting to run steam.exe on game id \(id)")
     let arguments = options != nil ? " " + options!.gameArguments : ""
     let x87cxAppURL = f.homeDirectoryForCurrentUser.appendingPathComponent("Applications", isDirectory: true).appendingPathComponent(PATCHED_CX_X87_APPNAME)
     let steamBootOptions = "-nochatui -nofriendsui -silent -no-browser -no-cef-sandbox -skipinitialbootstrap"
-    let wineEnvs = "CX_ROOT=\"\(options!.x87PatchEnabled ? x87cxAppURL.path() : cxAppPath)Contents/SharedSupport/CrossOver\" WINEPREFIX=\"\(URL(string: selectedBottle)?.path ?? "")\" WINEMSYNC=\(options!.wineMSync ? "1" : "0")"
+    let wineEnvs = "WINEDEBUG=-all CX_ROOT=\"\(options!.x87PatchEnabled ? x87cxAppURL.path() : cxAppPath)/Contents/SharedSupport/CrossOver\" WINEPREFIX=\"\(URL(string: selectedBottle)?.path ?? "")\" WINEMSYNC=\(options!.wineMSync ? "1" : "0")"
     
-    if(options!.dx9PatchEnabled) {
-        try cpyd8d9DLLs(to: bottleURL)
-    }
+//    try cpyd8d9DLLs(to: bottleURL, enable: options!.dx9PatchEnabled)
     
     let gameLaunchCommand = appExeURL != nil ? "\"\(appExeURL!.path(percentEncoded: false))\"" : "\"C:\\Program Files (x86)\\Steam\\Steam.exe\" \(steamBootOptions) -applaunch \(String(id))"
     if (options!.x87PatchEnabled) {
@@ -187,9 +177,9 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, op
             return
         }
         let workdirCommand = appExeURL != nil ? "cd \"\(appExeURL!.deletingLastPathComponent().path(percentEncoded: false))\" && " : ""
-        command = "\(workdirCommand)env \(getInlineEnvs(from: options!)) \(wineEnvs) \(x87cxAppURL.path())Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/wine \(gameLaunchCommand) \(arguments)"
+        command = "\(workdirCommand)env \(getInlineEnvs(from: options!) + wineEnvs) \(x87cxAppURL.path())Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/wine \(gameLaunchCommand) \(arguments)"
     } else {
-        command = "env \(getInlineEnvs(from: options!)) \(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \(gameLaunchCommand) \(arguments)"
+        command = "env \(getInlineEnvs(from: options!) + wineEnvs) \(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \(gameLaunchCommand) \(arguments)"
     }
     
     #if DEBUG

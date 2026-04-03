@@ -29,9 +29,15 @@ struct GameOptionsView: View {
                                 if !game!.isNative {
                                     Picker("Graphics Backend", selection: $gameOptions.cxGraphicsBackend) {
                                         Text("D3DMetal")
-                                            .tag("d3dmetal")
+                                            .tag(CXGraphicsBackend.d3dmetal.rawValue)
                                         Text("DXMT")
-                                            .tag("dxmt")
+                                            .tag(CXGraphicsBackend.dxmt.rawValue)
+                                        Text("Wine")
+                                            .tag(CXGraphicsBackend.wine.rawValue)
+                                        Text("DXVK")
+                                            .tag(CXGraphicsBackend.dxvk.rawValue)
+                                        Text("Auto")
+                                            .tag(CXGraphicsBackend.auto.rawValue)
                                     }
                                     .pickerStyle(.menu)
                                 }
@@ -42,14 +48,11 @@ struct GameOptionsView: View {
                                     Divider()
                                     Text("32Bits options")
                                     Toggle("Use X87 Patch", isOn: $gameOptions.x87PatchEnabled)
-                                    Toggle("Use DX9", isOn: $gameOptions.dx9PatchEnabled).onChange(of: gameOptions.dx9PatchEnabled) {
-                                        if(gameOptions.dx9PatchEnabled && !gameOptions.envVariables.contains("MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=1 DXVK_ASYNC=1 WINEDLLOVERRIDES=d3d9=n,b;d3d8=n,b")) {
-                                            gameOptions.envVariables = "MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=1 DXVK_ASYNC=1 WINEDLLOVERRIDES=d3d9=n,b;d3d8=n,b"
+                                    Toggle("Use DX9", isOn: $gameOptions.dx9PatchEnabled).onChange(of: gameOptions.dx9PatchEnabled) { oldValue, newValue in
+                                        if(newValue == true) {
+                                            gameOptions.cxGraphicsBackend = CXGraphicsBackend.wine.rawValue
                                         }
-                                        if(!gameOptions.dx9PatchEnabled && gameOptions.envVariables.contains("MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=1 DXVK_ASYNC=1 WINEDLLOVERRIDES=d3d9=n,b;d3d8=n,b")) {
-                                            gameOptions.envVariables = ""
-                                        }
-                                    }
+                                    }  // WINEDLLOVERRIDES=d3d9=n,b;d3d8=n,b has been removed
                                 }
                             }
                             Spacer()
@@ -60,6 +63,19 @@ struct GameOptionsView: View {
                                     Toggle("MSync", isOn: $gameOptions.wineMSync)
                                     Toggle("Enable SDL", isOn: $gameOptions.enableSDL)
                                     Toggle("Disable Hidraw", isOn: $gameOptions.disableHidraw)
+                                    Divider()
+                                    Text("Vulkan options")
+                                    Toggle("Enable UE4 Hack", isOn: $gameOptions.ue4Hack)
+                                    Toggle("MTL arg. buffers", isOn: $gameOptions.mvkArgBuff)
+                                    Picker("VK lib", selection: $gameOptions.vulkanLib) {
+                                        Text("Standard")
+                                            .tag("")
+                                        Text("Latest")
+                                            .tag("latest")
+                                        Text("Experimental")
+                                            .tag("experimental")
+                                    }
+                                    .pickerStyle(.menu)
                                 }
                             }
                         }
@@ -117,6 +133,7 @@ struct GameOptionsView: View {
                 }
                 
             }
+            .controlSize(.small)
             .formStyle(.columns)
             .toggleStyle(.switch)
         }

@@ -11,8 +11,9 @@ import Combine
 enum CXGraphicsBackend: String {
     case dxmt = "dxmt"
     case d3dmetal = "d3dmetal"
-    case wine = "wine"
+    case wine = "wined3d"
     case dxvk = "dxvk"
+    case auto = "auto"
 }
 
 enum OnOff: String {
@@ -34,8 +35,15 @@ struct GameOptionsData: Codable { // this is used for reading saved properties
     var dxmtMetalSpatialUpscaleFactor: Double
     var advertiseAVX: Bool
     var envVariables: String
-    var sdlEnabled: Bool
-    var hidrawDisabled: Bool
+    var enableSDL: Bool
+    var disableHidraw: Bool
+    var ue4Hack: Bool
+    var mvkArgBuff: Bool
+    var vulkanLib: String
+    var dxvk: String?
+    var wineEsync: String?
+    var d3dMEnableMetalFX: String?
+    var d3dSupportDXR: String?
     
     init(data: GameOptions) {
         self.cxGraphicsBackend = data.cxGraphicsBackend
@@ -49,8 +57,15 @@ struct GameOptionsData: Codable { // this is used for reading saved properties
         self.dxmtMetalSpatialUpscaleFactor = data.dxmtMetalSpatialUpscaleFactor
         self.advertiseAVX = data.advertiseAVX
         self.envVariables = data.envVariables
-        self.sdlEnabled = data.enableSDL
-        self.hidrawDisabled = data.disableHidraw
+        self.enableSDL = data.enableSDL
+        self.disableHidraw = data.disableHidraw
+        self.ue4Hack = data.ue4Hack
+        self.mvkArgBuff = data.mvkArgBuff
+        self.vulkanLib = data.vulkanLib
+        self.dxvk = data.dxvk
+        self.wineEsync = data.wineEsync
+        self.d3dMEnableMetalFX = data.d3dMEnableMetalFX
+        self.d3dSupportDXR = data.d3dSupportDXR
     }
 }
 
@@ -60,10 +75,6 @@ class GameOptions: ObservableObject { // this is used as form state
     @Published var mtlHudEnabled: Bool
     @Published var x87PatchEnabled: Bool
     @Published var dx9PatchEnabled: Bool
-    @Published var dxvk: String?
-    @Published var wineEsync: String?
-    @Published var d3dMEnableMetalFX: String?
-    @Published var d3dSupportDXR: String?
     @Published var gameArguments: String
     @Published var dxmtPreferredMaxFrameRate: Double
     @Published var dxmtMetalFXSpatial: Bool
@@ -72,17 +83,20 @@ class GameOptions: ObservableObject { // this is used as form state
     @Published var envVariables: String
     @Published var enableSDL: Bool
     @Published var disableHidraw: Bool
+    @Published var ue4Hack: Bool
+    @Published var mvkArgBuff: Bool
+    @Published var vulkanLib: String
+    @Published var dxvk: String?
+    @Published var wineEsync: String?
+    @Published var d3dMEnableMetalFX: String?
+    @Published var d3dSupportDXR: String?
     
-    init(cxGraphicsBackend: String = "d3dmetal", wineMSync: Bool = true, mtlHudEnabled: Bool = false, x87PatchEnabled: Bool = false, dx9PatchEnabled: Bool = false, dxvk: String? = nil, wineEsync: String? = nil, d3dMEnableMetalFX: String? = nil, d3dSupportDXR: String? = nil, gameArguments: String = "", dxmtPreferredMaxFrameRate: Double = 0, dxmtMetalFXSpatial: Bool = false, dxmtMetalSpatialUpscaleFactor: Double = 1.0, advertiseAVX: Bool = true, envVariables: String = "", sdlEnabled: Bool = true, hidrawDisabled: Bool = false) {
+    init(cxGraphicsBackend: String = "d3dmetal", wineMSync: Bool = true, mtlHudEnabled: Bool = false, x87PatchEnabled: Bool = false, dx9PatchEnabled: Bool = false, gameArguments: String = "", dxmtPreferredMaxFrameRate: Double = 0, dxmtMetalFXSpatial: Bool = false, dxmtMetalSpatialUpscaleFactor: Double = 1.0, advertiseAVX: Bool = true, envVariables: String = "", sdlEnabled: Bool = true, hidrawDisabled: Bool = false, ue4Hack: Bool = true, mvkArgBuff: Bool = false, vulkanLib: String = "latest", dxvk: String? = nil, wineEsync: String? = nil, d3dMEnableMetalFX: String? = nil, d3dSupportDXR: String? = nil) {
         self.cxGraphicsBackend = cxGraphicsBackend
         self.wineMSync = wineMSync
         self.mtlHudEnabled = mtlHudEnabled
         self.x87PatchEnabled = x87PatchEnabled
         self.dx9PatchEnabled = dx9PatchEnabled
-        self.dxvk = dxvk
-        self.wineEsync = wineEsync
-        self.d3dMEnableMetalFX = d3dMEnableMetalFX
-        self.d3dSupportDXR = d3dSupportDXR
         self.gameArguments = gameArguments
         self.dxmtMetalFXSpatial = dxmtMetalFXSpatial
         self.dxmtMetalSpatialUpscaleFactor = dxmtMetalSpatialUpscaleFactor
@@ -91,7 +105,15 @@ class GameOptions: ObservableObject { // this is used as form state
         self.envVariables = envVariables
         self.enableSDL = sdlEnabled
         self.disableHidraw = hidrawDisabled
+        self.ue4Hack = ue4Hack
+        self.mvkArgBuff = mvkArgBuff
+        self.vulkanLib = vulkanLib
+        self.dxvk = dxvk
+        self.wineEsync = wineEsync
+        self.d3dMEnableMetalFX = d3dMEnableMetalFX
+        self.d3dSupportDXR = d3dSupportDXR
     }
+    
     func set(data: GameOptionsData) {
         self.cxGraphicsBackend = data.cxGraphicsBackend
         self.wineMSync = data.wineMSync
@@ -104,8 +126,15 @@ class GameOptions: ObservableObject { // this is used as form state
         self.dxmtPreferredMaxFrameRate = data.dxmtPreferredMaxFrameRate
         self.advertiseAVX = data.advertiseAVX
         self.envVariables = data.envVariables
-        self.enableSDL = data.sdlEnabled
-        self.disableHidraw = data.hidrawDisabled
+        self.enableSDL = data.enableSDL
+        self.disableHidraw = data.disableHidraw
+        self.ue4Hack = data.ue4Hack
+        self.mvkArgBuff = data.mvkArgBuff
+        self.vulkanLib = data.vulkanLib
+        self.dxvk = data.dxvk
+        self.wineEsync = data.wineEsync
+        self.d3dMEnableMetalFX = data.d3dMEnableMetalFX
+        self.d3dSupportDXR = data.d3dSupportDXR
     }
 }
 
@@ -391,6 +420,7 @@ enum SortingOptions {
     case releaseDate
     case publisher
     case developer
+    case installed
 }
 
 class LibraryPageGlobals: ObservableObject {
@@ -419,21 +449,30 @@ class LibraryPageGlobals: ObservableObject {
     }
     
     var filteredGames: [Game] {
+        var games: [Game] = self.allGames
         if self.filter.isEmpty || self.filter.count < 3 {
-            return self.allGames
+            games = self.allGames
+        } else {
+            games = allGames.filter { item in
+                self.filter.isEmpty || item.name.lowercased().contains(self.filter.lowercased())
+            }
         }
-        return allGames.filter { item in
-            self.filter.isEmpty || item.name.lowercased().contains(self.filter.lowercased())
-        }.sorted { lhs, rhs in
+        return games.sorted { lhs, rhs in
             switch self.sortBy {
             case SortingOptions.name:
                 return lhs.name.lowercased() < rhs.name.lowercased()
-            case SortingOptions.releaseDate:
+            case .releaseDate:
                 return lhs.releaseDate.date < rhs.releaseDate.date
-            case SortingOptions.publisher:
+            case .publisher:
+                if(lhs.publishers.isEmpty) && (!rhs.publishers.isEmpty) { return false }
+                if(!lhs.publishers.isEmpty) && (rhs.publishers.isEmpty) { return true }
                 return lhs.publishers[0].lowercased() < rhs.publishers[0].lowercased()
-            case SortingOptions.developer:
+            case .developer:
+                if(lhs.developers.isEmpty) && (!rhs.developers.isEmpty) { return false }
+                if(!lhs.developers.isEmpty) && (rhs.developers.isEmpty) { return true }
                 return lhs.developers[0].lowercased() < rhs.developers[0].lowercased()
+            case .installed:
+                return lhs.isInstalled && !rhs.isInstalled
             }
         }
     }

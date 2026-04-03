@@ -29,8 +29,8 @@ https://github.com/italomandara/Procyon/issues/1
 
 Which is pretty much in line with the roadmap
 
-Thanks to: 
-@Lifeisawful https://github.com/Lifeisawful for rosettax87
-@Gcenx https://github.com/Gcenx for wine patched components and dxvk-macos
-@nastys https://github.com/nastys for the UE4 Moltenvk hack
-https://www.codeweavers.com for Crossover
+### Thanks to:
+- @Lifeisawful https://github.com/Lifeisawful for rosettax87
+- @Gcenx https://github.com/Gcenx for wine patched components and dxvk-macos
+- @nastys https://github.com/nastys for the UE4 Moltenvk hack
+- https://www.codeweavers.com for Crossover

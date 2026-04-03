@@ -3,6 +3,7 @@
 # Procyon
 
 A Steam game launcher for macOS that can run both Windows and MacOS Games.
+It's based on Crossover so you will need to download and install Crossover first
 
 - Replaces CXPatcher, will patch your copy of crossover and add a nice interface to launch steam games
 - You can configure the graphics backend and the vulcan backed along with advanced options for every game

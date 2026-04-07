@@ -46,14 +46,17 @@ private let dxvkRes: [(res: String, dest: String)] = WINE_DXVK_RESOURCES_PATHS.m
 }
 
 private let allResources = dxvkRes + [
-    (res: "ntdll.so.x87", dest: "/lib/wine/x86_64-unix/ntdll.so"),
-    (res: "ntdll.so.gcenx", dest: "/lib/wine/x86_64-unix/ntdll.so"),
-    (res: "winedmo.so", dest: "/lib/wine/x86_64-unix/winedmo.so"),
-    (res: "win32u.so", dest: "/lib/wine/x86_64-unix/win32u.so"),
-    (res: "wine/i386-windows/ntdll.dll", dest: "lib/wine/i386-windows/ntdll.dll"),
+    (res: "wine/x86_64-unix/winegstreamer.so", dest: "/lib/wine/x86_64-unix/winegstreamer.so"),
+    (res: "wine/x86_64-unix/ntdll.so", dest: "/lib/wine/x86_64-unix/ntdll.so"),
+    (res: "wine/x86_64-unix/winedmo.so", dest: "/lib/wine/x86_64-unix/winedmo.so"),
+    (res: "wine/x86_64-unix/win32u.so", dest: "/lib/wine/x86_64-unix/win32u.so"),
+    (res: "wine/i386-windows/ntdll.dll", dest: "/lib/wine/i386-windows/ntdll.dll"),
+    (res: "wine/x86_64-windows/ntdll.dll", dest: "/lib/wine/x86_64-windows/ntdll.dll"),
+    (res: "wine/i386-windows/wine32u.dll", dest: "/lib/wine/i386-windows/wine32u.dll"),
+    (res: "wine/x86_64-windows/wine32u.dll", dest: "/lib/wine/x86_64-windows/wine32u.dll"),
     (res: "d9vk/x32/d3d9.dll", dest: "/lib/wine/i386-windows/d3d9.dll"),
     (res: "d9vk/x64/d3d9.dll", dest: "/lib/wine/x86_64-windows/d3d9.dll"),
-    (res: "winegstreamer.so", dest: "/lib/wine/x86_64-unix/winegstreamer.so"),
+//    (res: "libMoltenVK-experimental.dylib", dest: "/lib64/libMoltenVK.dylib"),
 ]
 
 let WINE_WINEINF_PATH: String = "/share/wine/wine.inf"
@@ -121,8 +124,10 @@ func copyResource(name: String, destUrl: URL) throws {
             }
             try f.copyItem(at: resUrl, to: destUrl)
         } else {
-            console.error("Couldn't find \(name)")
+            console.error("Couldn't find destination \(destUrl.path())")
         }
+    } else {
+        console.error("Couldn't find source \(name)")
     }
 }
 

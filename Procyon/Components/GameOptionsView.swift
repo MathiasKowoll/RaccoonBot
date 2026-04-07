@@ -74,6 +74,8 @@ struct GameOptionsView: View {
                                             .tag("latest")
                                         Text("Experimental")
                                             .tag("experimental")
+//                                        Text("KosmicKrisp")
+//                                            .tag("kosmickrisp")
                                     }
                                     .pickerStyle(.menu)
                                 }

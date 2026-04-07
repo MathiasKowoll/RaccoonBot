@@ -142,6 +142,19 @@ func getInlineEnvs(from: GameOptions) -> String {
      "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS", "1"
      "MVK_CONFIG_USE_MTLHEAP", "2"
      MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=1 -> used by d9vk
+     
+     # 1. Point to your driver
+     export VK_ICD_FILENAMES="/Volumes/Card/code/mesa/build_x86/src/kosmickrisp/vulkan/kosmickrisp_mesa_icd.x86_64.json"
+
+     # 2. Tell the loader to ignore MoltenVK and use ONLY your driver
+     export VK_ICD_FILENAMES_ONLY=1
+
+     # 3. Disable the "Portability" check that confuses old DXVK
+     export VK_KHR_PORTABILITY_ENUMERATION=0
+
+     # 4. Force DXVK to accept the "Conformant" surface KosmicKrisp provides
+     export DXVK_WSI_DRIVER="vulkan"
+     export DXVK_CONFIG="dxvk.allowNativeVulkan = True"
      */
     func DoubleToFormattedStr(_ value: Double, _ digits: Int = 2) -> String {
         return String(value.formatted(.number.precision(.fractionLength(0...digits))))
@@ -173,10 +186,10 @@ func getInlineEnvs(from: GameOptions) -> String {
         if let url = Bundle.main.url(forResource: "libMoltenVK-experimental", withExtension: "dylib") {
             value += "CX_LIBVULKAN=\"\(url.path(percentEncoded: false))\" "
         }
-    case "kosmikkrisp":
-        if let url = Bundle.main.url(forResource: "libvulkan_kosmickrisp", withExtension: "dylib") {
-            value += "CX_LIBVULKAN=\"\(url.path(percentEncoded: false))\" "
-        }
+//    case "kosmickrisp":
+//        if let url = Bundle.main.url(forResource: "libvulkan_kosmickrisp", withExtension: "dylib") {
+//            value += "CX_LIBVULKAN=\"\(url.path(percentEncoded: false))\" "
+//        }
     default:
         break
     }

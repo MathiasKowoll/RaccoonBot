@@ -38,8 +38,10 @@ struct GamesList: View {
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 HStack {
-                    ProfileWidget()
-                    Divider()
+                    if(!appGlobals.selectedBottle.isEmpty){
+                        ProfileWidget()
+                        Divider()
+                    }
                     Button {
                         libraryPageGlobals.showOptions = true
                     } label: {

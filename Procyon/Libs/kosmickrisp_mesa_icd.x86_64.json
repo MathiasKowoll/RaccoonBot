@@ -1,0 +1,7 @@
+{
+    "ICD": {
+        "api_version": "1.3.348",
+        "library_path": "./libvulkan_kosmickrisp.dylib"
+    },
+    "file_format_version": "1.0.1"
+}

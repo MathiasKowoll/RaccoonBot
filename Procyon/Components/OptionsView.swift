@@ -13,9 +13,11 @@ struct OptionsView: View {
     @State var progress: Double = 0
     @State var progressLabel = "Processing..."
     @State var downloading: Bool = false
+    @State var shouldShowBottleSelector: Bool = false
     @EnvironmentObject var appGlobals: AppGlobals
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
     @MainActor var load: @Sendable () async -> Void
+    
     var body: some View {
         Modal(
             "Options",
@@ -23,6 +25,7 @@ struct OptionsView: View {
         ) {
             VStack (alignment: .leading){
                 Button(URL(string: appGlobals.cxAppPath ?? "")?.lastPathComponent ?? "Select a Crossover App...") {
+                    shouldShowBottleSelector = false
                     if let url = openFolderSelectorPanel(type: .application) {
                         appGlobals.selectedBottle = ""
                         bottles = getAllBottles(appDir: url)
@@ -33,7 +36,10 @@ struct OptionsView: View {
                             appGlobals.cxAppPath = patchedAppURL.path(percentEncoded: false)
                             persistUsrDefOptionString(key: "cxAppPath", value: patchedAppURL.relativePath)
                             persistUsrDefOptionString(key: "cxCompleteAppPath", value: patchedAppURL.path(percentEncoded: false))
+                            shouldShowBottleSelector = true
                         }
+                    } else {
+                        shouldShowBottleSelector = true
                     }
                 }
                 if(downloading){
@@ -41,7 +47,7 @@ struct OptionsView: View {
                         Text(progressLabel).font(.footnote)
                     }.padding(.top)
                 }
-                if(!bottles.isEmpty) {
+                if(shouldShowBottleSelector) {
                     HStack {
                         Picker("Select a bottle", selection: $appGlobals.selectedBottle) {
                             Text("No bottle selected").tag("")
@@ -64,25 +70,36 @@ struct OptionsView: View {
                             }
                         }
                     }
-                } else {
+                } else if(bottles.isEmpty) {
                     Text("No bottles found")
                     Text("Create a new bottle first").font(.footnote)
+                } else {
+                    ProgressView().progressViewStyle(.linear).frame(maxWidth: .infinity)
                 }
                 GameLibrariesList(load: load)
                 .padding(.vertical)
                 VStack(alignment: .leading) {
-                    ProminentButton("Open Crossover", image: "crossover-fill") {
-                        if let cxPath = appGlobals.cxAppPath {
-                            let url = URL(fileURLWithPath: cxPath)
-                            NSWorkspace.shared.open(url)
+                    if appGlobals.cxAppPath != nil {
+                        ProminentButton("Open Crossover", image: "crossover-fill") {
+                            if let cxPath = appGlobals.cxAppPath {
+                                let url = URL(fileURLWithPath: cxPath)
+                                let configuration = NSWorkspace.OpenConfiguration()
+                                configuration.environment = [
+                                    "CX_GRAPHICS_BACKEND": CXGraphicsBackend.d3dmetal.rawValue,
+                                    "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS": "0"
+                                ]
+                                NSWorkspace.shared.open(url, configuration: configuration)
+                            }
                         }
                     }
-                    ProminentButton("Open Steam", image: "steam-fill") {
-                        openSteam(cxAppPath: appGlobals.cxAppPath, selectedBottle: appGlobals.selectedBottle)
-                    }
-                    ProminentButton("Open current bottle", systemImage: "waterbottle"){
-                        if let selectedBottleURL = URL(string: appGlobals.selectedBottle){
-                            showFolder(url: selectedBottleURL)
+                    if appGlobals.selectedBottle != "" {
+                        ProminentButton("Open Steam", image: "steam-fill") {
+                            openSteam(cxAppPath: appGlobals.cxAppPath, selectedBottle: appGlobals.selectedBottle)
+                        }
+                        ProminentButton("Open current bottle", systemImage: "waterbottle"){
+                            if let selectedBottleURL = URL(string: appGlobals.selectedBottle){
+                                showFolder(url: selectedBottleURL)
+                            }
                         }
                     }
                     VStack(alignment: .leading) {
@@ -134,6 +151,9 @@ struct OptionsView: View {
                 console.log("loading paths for bottles")
                 bottles = getAllBottles(appDir: URL(fileURLWithPath: path))
                 console.log(bottles.debugDescription)
+            }
+            if(!bottles.isEmpty && appGlobals.cxAppPath != nil) {
+                shouldShowBottleSelector = true
             }
         }
     }

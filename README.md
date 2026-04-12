@@ -32,7 +32,7 @@ Which is pretty much in line with the roadmap
 ### Contributing:
 Everyone is welcome to contribute but please follow some basic rules:
 - No AI generated code: it is important that you read the codebase get a rough idea on how things are working (you can contact me on discord for clarifications) you can use AI but please no vibe coding.
-- No untested features, if you plan to add a PR please make sure it works before opening a PR
+- No untested features, if you plan to open a PR please make sure it works before.
 - If you don't know how to code in swift and SwiftUI it's ok, you can still test and give some high level debbuging information (errors, and possible solutions)
 
 ### Thanks to:

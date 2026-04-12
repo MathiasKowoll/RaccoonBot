@@ -14,9 +14,11 @@ struct OptionsView: View {
     @State var progressLabel = "Processing..."
     @State var downloading: Bool = false
     @State var shouldShowBottleSelector: Bool = false
+    @State var creatingBottle: Bool = false
     @EnvironmentObject var appGlobals: AppGlobals
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
     @MainActor var load: @Sendable () async -> Void
+    @State var createBtlPrc: Process?
     
     var body: some View {
         Modal(
@@ -36,10 +38,14 @@ struct OptionsView: View {
                             appGlobals.cxAppPath = patchedAppURL.path(percentEncoded: false)
                             persistUsrDefOptionString(key: "cxAppPath", value: patchedAppURL.relativePath)
                             persistUsrDefOptionString(key: "cxCompleteAppPath", value: patchedAppURL.path(percentEncoded: false))
-                            shouldShowBottleSelector = true
+                            if !bottles.isEmpty{
+                                shouldShowBottleSelector = true
+                            }
                         }
                     } else {
-                        shouldShowBottleSelector = true
+                        if !bottles.isEmpty{
+                            shouldShowBottleSelector = true
+                        }
                     }
                 }
                 if(downloading){
@@ -73,6 +79,40 @@ struct OptionsView: View {
                 } else if(bottles.isEmpty) {
                     Text("No bottles found")
                     Text("Create a new bottle first").font(.footnote)
+                    ProminentButton("Create new bottle", systemImage: "waterbottle") {
+                        if creatingBottle {
+                            return
+                        }
+                        if let cxAppPath = appGlobals.cxAppPath {
+                            creatingBottle = true
+                            createBtlPrc = try? createBottle(cxAppPath: cxAppPath)
+                            if let proc = createBtlPrc {
+                                proc.terminationHandler = { _ in
+                                    DispatchQueue.main.async {
+                                        creatingBottle = false
+                                        if let cxCompleteAppPath = readUsrDefOptionString(key: "cxCompleteAppPath") {
+                                            bottles = getAllBottles(appDir: URL(fileURLWithPath: cxCompleteAppPath))
+                                            shouldShowBottleSelector = true
+                                        } else {
+                                            console.error("Failed to load all bottles")
+                                        }
+                                    }
+                                }
+                            } else {
+                                creatingBottle = false
+                                console.error("Bottle creation failed")
+                            }
+                        } else {
+                            console.error("Can't create a bottle before bottle is selected")
+                        }
+                    }
+                    if creatingBottle {
+                        ProgressView().progressViewStyle(.linear).frame(maxWidth: .infinity)
+                        Button("Cancel") {
+                            createBtlPrc!.terminate()
+                            creatingBottle = false
+                        }
+                    }
                 } else {
                     ProgressView().progressViewStyle(.linear).frame(maxWidth: .infinity)
                 }

@@ -48,6 +48,8 @@ struct ProfileWidget: View {
                                 .frame(width: 40)
                             Text(fallbackProfileData.personaName).lineLimit(1)
                         }.frame(maxWidth: 150, alignment: .init(horizontal: .leading, vertical: .center))
+                    } else {
+                        Image(systemName: "person.crop.circle").resizable().scaledToFit().frame(width: 18, height: 18).padding(8)
                     }
                 }
             }

@@ -17,6 +17,7 @@ struct LibraryPage: View {
     @State private var progress: Double = 0
     @State private var selectedGame: SteamGame? = nil
     @State private var mntObserver: MountObserver?
+    @State private var showAddCustomGameView: Bool = false
     
     var body: some View {
         ZStack {
@@ -79,34 +80,42 @@ struct LibraryPage: View {
                     GameDetailView(game: $libraryPageGlobals.selectedGame)
                 })
             }
-            .overlay {
-                if (isLoading) {
-                    HStack(alignment: .bottom) {
-                        HStack(alignment: .center) {
-                            Image(.procyon).resizable()
-                                .scaledToFit()
-                                .frame(height: 50)
-                            VStack (alignment: .leading){
-                                Text("Loading your library…")
-                                    .font(.footnote)
-                                    .foregroundStyle(.white)
-                                ProgressView(value: progress, total: 100)
-                                    .progressViewStyle(.linear)
-                                    .frame(maxWidth: .infinity, maxHeight: 5)
-                            }
-                        }
-                        .padding(.horizontal, 10)
-                        .frame(width: 220, height: 60)
-                        .background(.accent.mix(with: .black, by: 0.6).opacity(0.9))
-                        .cornerRadius(20)
+            .sheet(isPresented: $showAddCustomGameView) {
+                Modal("Custom Game Editor", showModal: $showAddCustomGameView, scrollable: false)  {
+                    CustomGameView(isPresented: $showAddCustomGameView)
+                }
+            }
+            .overlay(alignment: .bottom) {
+                HStack(alignment: .bottom) {
+                    ProcyonToolbar(showAddCustomGameView: $showAddCustomGameView)
+                    Spacer()
+                    if (isLoading) {
+                        LoadingProgress(progress: $progress)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                    .padding()
-                    .transition(.opacity)
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .transition(.opacity)
+                .background {
+                    Rectangle()
+                        .fill(.ultraThinMaterial.opacity(0.5))
+                        .overlay(.procyonAccent.mix(with: .black, by: 0.4).opacity(0.5))
+                        .mask {
+                            LinearGradient(
+                                gradient: Gradient(stops: [
+                                    .init(color: .black.opacity(0.0), location: 0.0), // top = transparent
+                                    .init(color: .black.opacity(0.9), location: 0.5), // fade in
+                                    .init(color: .black.opacity(1.0), location: 1.0)              // bottom = solid
+                                ]),
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        }
                 }
             }
             .onAppear() {
                 isLoading = true // fixes missing library issue
+                try? FileManager.default.createDirectory(at: PROCYON_SUPPORT_FOLDER_URL.appendingPathComponent(DEFAULT_CXP_BOTTLES_FOLDER), withIntermediateDirectories: true)
                 try? stripEnvsInCXBottleConfigFile(selectedBottle: appGlobals.selectedBottle)
                 Task(priority: .background) {
                     await load()

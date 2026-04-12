@@ -204,7 +204,7 @@ struct GameDetailView: View {
                 .padding(.top, game!.movies == nil ? 30: -5)
                 .padding(.bottom, 30)
             }
-            .background(.accent.mix(with: .black, by: 0.6).opacity(0.9))
+            .background(.procyonAccent.mix(with: .black, by: 0.6).opacity(0.9))
             .frame(width: windowWidth - 100)
             .environmentObject(gameOptions)
         }

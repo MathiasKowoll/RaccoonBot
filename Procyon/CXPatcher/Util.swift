@@ -6,13 +6,15 @@
 //
 import Foundation
 
+let PROCYON_SUPPORT_FOLDER_URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!.appendingPathComponent("Procyon")
 let PATCHED_CX_APPNAME = "Crossover_patched.app"
 let PATCHED_CX_X87_APPNAME = "Crossover_patched_x87.app"
 private let DEFAULT_CXP_BOTTLES_ROOTPATH = "/Users/${USER}/"
-private let DEFAULT_CXP_BOTTLES_FOLDER = "CXPBottles"
+let DEFAULT_CXP_BOTTLES_FOLDER = "CXPBottles"
 //private let DEFAULT_CXP_BOTTLES_ROOTPATH = "/Users/${USER}/Application Support/Procyon/"
 //private let DEFAULT_CXP_BOTTLES_FOLDER = "Bottles"
-private let DEFAULT_CXP_BOTTLES_PATH = DEFAULT_CXP_BOTTLES_ROOTPATH + DEFAULT_CXP_BOTTLES_FOLDER
+//private let DEFAULT_CXP_BOTTLES_PATH = DEFAULT_CXP_BOTTLES_ROOTPATH + DEFAULT_CXP_BOTTLES_FOLDER
+private let DEFAULT_CXP_BOTTLES_PATH = PROCYON_SUPPORT_FOLDER_URL.appendingPathComponent(DEFAULT_CXP_BOTTLES_FOLDER).path(percentEncoded: false)
 private let CROSSOVER_MAIN_CONFIGURATION = "/etc/CrossOver.conf"
 private let WINE_RESOURCES_ROOT = "Crossover"
 private let SHARED_SUPPORT_COMPONENT = "Contents/SharedSupport/CrossOver"
@@ -52,8 +54,8 @@ private let allResources = dxvkRes + [
     (res: "wine/x86_64-unix/win32u.so", dest: "/lib/wine/x86_64-unix/win32u.so"),
     (res: "wine/i386-windows/ntdll.dll", dest: "/lib/wine/i386-windows/ntdll.dll"),
     (res: "wine/x86_64-windows/ntdll.dll", dest: "/lib/wine/x86_64-windows/ntdll.dll"),
-    (res: "wine/i386-windows/wine32u.dll", dest: "/lib/wine/i386-windows/wine32u.dll"),
-    (res: "wine/x86_64-windows/wine32u.dll", dest: "/lib/wine/x86_64-windows/wine32u.dll"),
+    (res: "wine/i386-windows/win32u.dll", dest: "/lib/wine/i386-windows/win32u.dll"),
+    (res: "wine/x86_64-windows/win32u.dll", dest: "/lib/wine/x86_64-windows/win32u.dll"),
     (res: "d9vk/x32/d3d9.dll", dest: "/lib/wine/i386-windows/d3d9.dll"),
     (res: "d9vk/x64/d3d9.dll", dest: "/lib/wine/x86_64-windows/d3d9.dll"),
 //    (res: "libMoltenVK-experimental.dylib", dest: "/lib64/libMoltenVK.dylib"),

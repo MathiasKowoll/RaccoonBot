@@ -21,7 +21,7 @@ struct AccentTag: View {
             .padding(.horizontal, 10)
             .padding(.top, 2)
             .padding(.bottom, 4)
-            .background(Color.accent)
+            .background(Color.procyonAccent)
             .clipShape(Capsule())
     }
 }

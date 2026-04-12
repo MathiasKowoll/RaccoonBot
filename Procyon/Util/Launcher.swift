@@ -152,7 +152,7 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, op
         regOptionsDictionary.keys.forEach { key in
             let value = regOptionsDictionary[key]!
             console.log("setting \(key) to \(value)")
-            controllersSection.setDword(forKey: key, value: value)
+            controllersSection.addOrSetDword(forKey: key, value: value)
         }
         try registry.save()
     } else {

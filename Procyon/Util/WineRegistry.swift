@@ -59,22 +59,32 @@ class WineRegSection {
         values[index].value.rawLine = "\"\(key)\"=\"\(stringValue)\""
     }
 
-    func setDword(forKey key: String, value: UInt32) {
-        guard let index = values.firstIndex(where: { $0.key == key }) else {
-            console.error("Couldn't find key \(key) when setting dword value")
-            return
-        }
-        values[index].value.type = .dword(value)
-        values[index].value.rawLine = "\"\(key)\"=dword:\(String(format: "%08x", value))"
-        console.log("Set \(key) to \(value)")
-    }
-
     func addOrSetValue(forKey key: String, stringValue: String) {
         if let index = values.firstIndex(where: { $0.key == key }) {
             values[index].value.type = .string(stringValue)
             values[index].value.rawLine = "\"\(key)\"=\"\(stringValue)\""
         } else {
             let val = WineRegValue(type: .string(stringValue), rawLine: "\"\(key)\"=\"\(stringValue)\"")
+            values.append((key: key, value: val))
+        }
+    }
+    
+    func setDword(forKey key: String, value: UInt32) {
+        guard let index = values.firstIndex(where: { $0.key == key }) else {
+            console.error("Couldn't find key \(key) when setting dword value")
+            console.log(String(reflecting: values))
+            return
+        }
+        values[index].value.type = .dword(value)
+        values[index].value.rawLine = "\"\(key)\"=dword:\(String(format: "%08x", value))"
+    }
+    
+    func addOrSetDword(forKey key: String, value: UInt32) {
+        if let index = values.firstIndex(where: { $0.key == key }) {
+            values[index].value.type = .dword(value)
+            values[index].value.rawLine = "\"\(key)\"=dword:\(String(format: "%08x", value))"
+        } else {
+            let val = WineRegValue(type: .dword(value), rawLine: "\"\(key)\"=\"\(String(format: "%08x", value))\"")
             values.append((key: key, value: val))
         }
     }

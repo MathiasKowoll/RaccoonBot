@@ -114,7 +114,7 @@ struct GameThumbnail: View {
                 }.foregroundStyle(.white)
                     .padding(.horizontal)
                 }
-            .background(.accent.mix(with: .black, by: 0.6).opacity(0.8))
+            .background(.procyonAccent.mix(with: .black, by: 0.6).opacity(0.8))
             .cornerRadius(30)
         }
         .buttonStyle(.plain)

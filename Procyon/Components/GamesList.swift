@@ -16,7 +16,6 @@ struct GamesList: View {
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
     @EnvironmentObject var appGlobals: AppGlobals
     @State private var showProfile: Bool = false
-    @State private var showAddCustomGameView: Bool = false
     
     var load: @Sendable () async -> Void
     
@@ -30,11 +29,6 @@ struct GamesList: View {
             .padding(.horizontal)
             .padding(.bottom)
         }
-        .sheet(isPresented: $showAddCustomGameView) {
-            Modal("Custom Game Editor", showModal: $showAddCustomGameView, scrollable: false)  {
-                CustomGameView(isPresented: $showAddCustomGameView)
-            }
-        }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 HStack {
@@ -47,13 +41,6 @@ struct GamesList: View {
                     } label: {
                         Image(systemName: "gear")
                     }
-                }
-            }
-            ToolbarItem(placement: .secondaryAction) {
-                Button {
-                    showAddCustomGameView = true
-                } label: {
-                    Image(systemName: "rectangle.badge.plus")
                 }
             }
             ToolbarItem(placement: .secondaryAction) {

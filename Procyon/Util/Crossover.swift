@@ -44,7 +44,7 @@ func getCXPatcherBottlesURL(appDir: URL)  throws -> URL {
     }
     // fallback if it doesn't find it in the config file (just in case)
     console.warn("Couldn't find CXPatcher bottles configuration")
-    let bottlePathForCXP: URL = base.appendingPathComponent("CXPBottles", isDirectory: true)
+    let bottlePathForCXP: URL = PROCYON_SUPPORT_FOLDER_URL.appendingPathComponent(DEFAULT_CXP_BOTTLES_FOLDER, isDirectory: true)
     return bottlePathForCXP
 }
 
@@ -55,11 +55,11 @@ func getAllBottles(appDir: URL) -> [URL] {
     do {
         var subfolders: [URL] = []
         
-        if(isCXPatched(appDir: appDir) || FORCE_IS_CXPATCHED) {
-            let bottlePathForCXP = try getCXPatcherBottlesURL(appDir: appDir)
+        if(FORCE_IS_CXPATCHED || isCXPatched(appDir: appDir)) {
+            let bottleURLForCXP = try getCXPatcherBottlesURL(appDir: appDir)
             console.log("app is patched with CXPatcher")
             do {
-                subfolders = try f.contentsOfDirectory(at: bottlePathForCXP, includingPropertiesForKeys: [.isDirectoryKey], options: [])
+                subfolders = try f.contentsOfDirectory(at: bottleURLForCXP, includingPropertiesForKeys: [.isDirectoryKey], options: [])
             } catch {
                 console.error(String(reflecting: error))
                 console.error("couldn't find the CXPatched bottles")
@@ -263,3 +263,18 @@ func getDrivesPaths(at: URL) -> CXDrives {
     }
 }
 
+func createBottle(cxAppPath: String, bottleName: String = "Steam", template: String = "win10_64") throws -> Process {
+    let proc = Process()
+    proc.executableURL = URL(fileURLWithPath: cxAppPath).appendingPathComponent("/Contents/SharedSupport/CrossOver/bin/cxbottle")
+    proc.arguments = ["--create", "--bottle", bottleName, "--template", template]
+    try proc.run()
+    return proc
+}
+
+func install(cxAppPath: String, bottleName: String = "Steam", template: String = "win10_64") throws -> Process {
+    let proc = Process()
+    proc.executableURL = URL(fileURLWithPath: cxAppPath).appendingPathComponent("/Contents/SharedSupport/CrossOver/bin/cxbottle")
+    proc.arguments = ["--create", "--bottle", bottleName, "--template", template]
+    try proc.run()
+    return proc
+}

@@ -131,7 +131,7 @@ func stripEnvsInCXBottleConfigFile(selectedBottle: String) throws {
 }
 
 func getDxmtConfigEnv(values: [String]) -> String {
-    return values.count == 0 ? "" : "DXMT_CONFIG=\"\(values.joined(separator: ";"))\""
+    return values.count == 0 ? "" : "DXMT_CONFIG=\"\(values.joined(separator: ";"))\" "
 }
 
 func getInlineEnvs(from: GameOptions) -> String {

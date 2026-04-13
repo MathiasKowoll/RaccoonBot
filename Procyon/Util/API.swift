@@ -255,7 +255,9 @@ final class SteamAPI {
         }
         console.cacheRelease("The following game's data cache was used", key: "gameCache")
         self.saveBlacklistCache()
-        return items
+        return items.filter { item in
+            !BLACKLIST.contains(String(describing: item.steamAppID))
+        }
     }
     func fetchOwnedGamesIDs(userID: String) async throws -> [String] {
         if(self.cacheOwnedGamesIDs.count > 0) {

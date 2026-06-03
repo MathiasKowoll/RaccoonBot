@@ -179,48 +179,108 @@ struct Game: Identifiable, Codable {
     let isFree: Bool
     let controllerSupport: String?
     let dlc: [Int]?
-
+    
     var detailedDescription: String
     var aboutTheGame: String
     var shortDescription: String
     let supportedLanguages: String?
-
+    
     var headerImage: String
     let capsuleImage: String
     let capsuleImageV5: String?
     let website: String?
-
+    
     let pcRequirements: Requirements?
     let macRequirements: Requirements?
     let linuxRequirements: Requirements?
-
+    
     let legalNotice: String?
     var developers: [String]
     var publishers: [String]
-
+    
     let priceOverview: PriceOverview?
     let packages: [Int]?
     let packageGroups: [PackageGroup]?
-
+    
     var platforms: Platforms
     let metacritic: Metacritic?
-
+    
     var categories: [Category]
     var genres: [Genre]?
-
+    
     let screenshots: [Screenshot]?
     let movies: [Movie]?
-
+    
     let recommendations: Recommendations?
     let achievements: Achievements?
     let releaseDate: ReleaseDate
     let supportInfo: SupportInfo?
-
+    
     let background: String?
     let backgroundRaw: String?
-
+    
     let contentDescriptors: ContentDescriptors?
     let ratings: [String: RatingBody]?
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case isNative = "is_native"
+        case downloadProgress = "download_progress"
+        case isInstalled = "is_installed"
+        case appNames = "app_names"
+        case appExeURL = "app_exe_url"
+        case isCustom = "is_custom"
+        
+        case type
+        case name
+        case steamAppID = "steam_app_id"
+        case requiredAge = "required_age"
+        case isFree = "is_free"
+        case controllerSupport = "controller_support"
+        case dlc
+        
+        case detailedDescription = "detailed_description"
+        case aboutTheGame = "about_the_game"
+        case shortDescription = "short_description"
+        case supportedLanguages = "supported_languages"
+        
+        case headerImage = "header_image"
+        case capsuleImage = "capsule_image"
+        case capsuleImageV5 = "capsule_image_v5"
+        case website
+        
+        case pcRequirements = "pc_requirements"
+        case macRequirements = "mac_requirements"
+        case linuxRequirements = "linux_requirements"
+        
+        case legalNotice = "legal_notice"
+        case developers
+        case publishers
+        
+        case priceOverview = "price_overview"
+        case packages
+        case packageGroups = "package_groups"
+        
+        case platforms
+        case metacritic
+        
+        case categories
+        case genres
+        
+        case screenshots
+        case movies
+        
+        case recommendations
+        case achievements
+        case releaseDate = "release_date"
+        case supportInfo = "support_info"
+        
+        case background
+        case backgroundRaw = "background_raw"
+        
+        case contentDescriptors = "content_descriptors"
+        case ratings
+    }
     
     init(from: SteamGame, id: String, isNative: Bool, downloadProgress: Double, isInstalled: Bool, appNames: [String], isCustom: Bool? = false) {
         self.id = id
@@ -413,6 +473,10 @@ extension Game {
         ratings: nil
     )
     static let emptyGame = Game(from: Game.steamEmptyGame, id: "example", isNative: true, downloadProgress: 100, isInstalled: true, appNames: ["test.exe"])
+}
+
+struct GameResponse: Codable, Sendable {
+    let data: Game
 }
 
 enum SortingOptions {

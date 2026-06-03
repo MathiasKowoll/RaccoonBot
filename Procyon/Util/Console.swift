@@ -13,7 +13,7 @@ let logger = Logger(subsystem: "CXPatcher", category: "util")
 class Console {
     var logMessages: [String] = []
     var items: [String: [String]] = [:]
-    var enableLogFile: Bool = debugEnabled == true
+    var enableLogFile: Bool = DEBUG_ENABLED == true
     let f = FileManager.default
     
     func cache(_ item: String, key: String) {

@@ -8,11 +8,23 @@
 import UniformTypeIdentifiers
 import Combine
 
+let AUTOFILL_CUSTOM_GAME_ENABLED: Bool = {
+    let env = ProcessInfo.processInfo.environment["PROCYON_AUTOFILL_CUSTOM_GAME_ENABLED"]?.lowercased()
+    switch env {
+    case "1", "true", "yes":
+        return true
+    case "0", "false", "no":
+        return false
+    default:
+        return false
+    }
+}()
+
 let DEFAULT_BOTTLE_PATH = "Library/Application Support/CrossOver/Bottles/"
 let BLACKLIST = [
     "228980", // Steamworks
 ]
-let debugEnabled: Bool = {
+let DEBUG_ENABLED: Bool = {
     let env = ProcessInfo.processInfo.environment["PROCYON_DEBUG"]?.lowercased()
     switch env {
     case "1", "true", "yes":

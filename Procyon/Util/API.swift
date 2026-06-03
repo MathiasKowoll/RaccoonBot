@@ -8,11 +8,12 @@
 import Foundation
 import Alamofire
 
-let apiKey = Bundle.main.object(forInfoDictionaryKey: "API_KEY") as! String
+var apiKey = Bundle.main.object(forInfoDictionaryKey: "API_KEY") as! String
 let pr = Bundle.main.object(forInfoDictionaryKey: "API_PROTOCOL") as! String
 let host = Bundle.main.object(forInfoDictionaryKey: "API_HOST") as! String
 let path = Bundle.main.object(forInfoDictionaryKey: "API_PATH") as! String
 let pathm = Bundle.main.object(forInfoDictionaryKey: "API_PATH_M") as! String
+let pathCustom = Bundle.main.object(forInfoDictionaryKey: "API_PATH_CUSTOM") as! String
 
 let baseAPIURL = "\(pr)://\(host)\(path)"
 let baseAPIMURL = "\(pr)://\(host)\(pathm)"
@@ -44,6 +45,7 @@ final class SteamAPI {
     private var cacheProfileData: UserInfo? = nil
     private var cache: [String: SteamGame] = [:]
     private var cacheOwnedGamesIDs: [String] = []
+    private let apiKey: String = Secrets.apiKey
     private var cacheBlacklistURL: URL {
         let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
         return dir.appendingPathComponent("ProcyonSteamCacheBlacklist.plist")
@@ -306,3 +308,25 @@ final class SteamAPI {
     }
 }
 
+final class CustomGameAPI {
+    var game: Game?
+    private var cache: [String: Game] = [:]
+    
+    init() {
+        //@TO DO: load cache
+    }
+    func fetch(hints: String) async throws -> Game? {
+        let urlString = "\(baseAPIURL)/custom"
+        let headers: HTTPHeaders = ["x-api-key": apiKey]
+        let data = try await AF.request(urlString, method: .post, parameters: ["hints": hints], headers: headers) { $0.timeoutInterval = 120 }
+            .validate(statusCode: 200..<300)
+            .serializingData()
+            .value
+        print("fetching custom game")
+        let root = try JSONDecoder().decode(GameResponse.self, from: data)
+        
+//        cache[appID] = root.data[0]
+//        saveGameCache()
+        return root.data
+    }
+}

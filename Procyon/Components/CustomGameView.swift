@@ -12,6 +12,7 @@ struct CustomGameView: View {
     @State private var text: String = ""
     @State private var game: Game = .emptyGame
     @State private var id: String = ""
+    @State private var isAutofilling: Bool = false
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
     @Binding var isPresented: Bool
     
@@ -22,9 +23,9 @@ struct CustomGameView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 15) {
             HStack(spacing: 20) {
-                VStack{
-                    GameThumbnail(item: game, isResizable: true)
-                }.frame(minWidth: 450)
+//                VStack{
+                    GameThumbnail(item: game, isResizable: false)
+//                }.frame(minWidth: 450)
                 VStack(alignment: .leading, spacing: 15) {
                     Picker("Select a Game", selection: $id) {
                         Text("New Game").tag("")
@@ -49,19 +50,49 @@ struct CustomGameView: View {
                         TextField("Header Image URL", text: $game.headerImage)
                     }
                     // Executable path
-                    Button(game.appExeURL?.path(percentEncoded: false) ?? "Select a Game App...") {
+                    Button(game.appExeURL?.lastPathComponent ?? "Select a Game App...") {
                         if let url = openFolderSelectorPanel(type: .executable) {
                             game.appExeURL = url
                             game.appNames.append(url.lastPathComponent)
-                            if(url.pathExtension == "exe") {
-                                game.isNative = false
-                            }
+                            game.isNative = url.pathExtension == "exe" ? false : true
                             if id == "" {
                                 game.id = url.path(percentEncoded: false)
                             }
                         }
                     }
                     .buttonStyle(.borderedProminent)
+                    if (AUTOFILL_CUSTOM_GAME_ENABLED && game.appExeURL != nil) {
+                        HStack {
+                            ProminentButton("Autofill Data", systemImage: "wand.and.sparkles") {
+                                if let url = game.appExeURL {
+                                    isAutofilling = true
+                                    Task {
+                                        let customGame = CustomGameAPI()
+                                        let hint = url.path(percentEncoded: false)
+                                        do {
+                                            let fetchedGame = try await customGame.fetch(hints: hint)
+                                            if fetchedGame != nil {
+                                                game = fetchedGame!
+                                            }
+                                        } catch {
+                                            print(error)
+                                        }
+                                        game.headerImage = "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/\(game.steamAppID)/header.jpg"
+                                        game.appExeURL = url
+                                        game.appNames.append(url.lastPathComponent)
+                                        game.isNative = url.pathExtension == "exe" ? false : true
+                                        if id == "" {
+                                            game.id = url.path(percentEncoded: false)
+                                        }
+                                        isAutofilling = false
+                                    }
+                                }
+                            }
+                            if(isAutofilling){
+                                ProgressView().controlSize(.small)
+                            }
+                        }
+                    }
                     Toggle("Is a Native Game", isOn: $game.isNative)
                     VStack(alignment: .leading){
                         Text("Supported Platforms")
@@ -87,7 +118,7 @@ struct CustomGameView: View {
                         }
                     }
                 }
-            }
+            }.frame(alignment: .top)
             // Descriptions
             HStack(alignment: .top, spacing: 20) {
                 VStack(alignment: .leading, spacing: 6) {

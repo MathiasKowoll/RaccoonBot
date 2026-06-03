@@ -1,2 +1,4 @@
 Config.xcconfig
 DerivedData/
+.derived-data-log-*
+Secrets.swift

@@ -30,7 +30,6 @@ struct OptionsView: View {
                     shouldShowBottleSelector = false
                     if let url = openFolderSelectorPanel(type: .application) {
                         appGlobals.selectedBottle = ""
-                        bottles = getAllBottles(appDir: url)
                         Task { @MainActor in
                             let patchedAppURL = await makeCrossoverPatchedCopy(sourceCXPath: url, setProgress: { p,m in progress = p; progressLabel = m  }, setLoading: { state in downloading = state })
                             progress = 0
@@ -41,6 +40,11 @@ struct OptionsView: View {
                             if !bottles.isEmpty{
                                 shouldShowBottleSelector = true
                             }
+                        }
+                        do {
+                            bottles = try getAllBottles(appDir: url)
+                        } catch {
+                            console.error(String(reflecting: error))
                         }
                     } else {
                         if !bottles.isEmpty{
@@ -77,33 +81,39 @@ struct OptionsView: View {
                         }
                     }
                 } else if(bottles.isEmpty) {
+                    if appGlobals.cxAppPath != nil {
                     Text("No bottles found")
                     Text("Create a new bottle first").font(.footnote)
-                    ProminentButton("Create new bottle", systemImage: "waterbottle") {
-                        if creatingBottle {
-                            return
-                        }
-                        if let cxAppPath = appGlobals.cxAppPath {
-                            creatingBottle = true
-                            createBtlPrc = try? createBottle(cxAppPath: cxAppPath)
-                            if let proc = createBtlPrc {
-                                proc.terminationHandler = { _ in
-                                    DispatchQueue.main.async {
-                                        creatingBottle = false
-                                        if let cxCompleteAppPath = readUsrDefOptionString(key: "cxCompleteAppPath") {
-                                            bottles = getAllBottles(appDir: URL(fileURLWithPath: cxCompleteAppPath))
-                                            shouldShowBottleSelector = true
-                                        } else {
-                                            console.error("Failed to load all bottles")
+                        ProminentButton("Create new bottle", systemImage: "waterbottle") {
+                            if creatingBottle {
+                                return
+                            }
+                            if let cxAppPath = appGlobals.cxAppPath {
+                                creatingBottle = true
+                                createBtlPrc = try? createBottle(cxAppPath: cxAppPath)
+                                if let proc = createBtlPrc {
+                                    proc.terminationHandler = { _ in
+                                        DispatchQueue.main.async {
+                                            creatingBottle = false
+                                            if let cxCompleteAppPath = readUsrDefOptionString(key: "cxCompleteAppPath") {
+                                                do{
+                                                    bottles = try getAllBottles(appDir: URL(fileURLWithPath: cxCompleteAppPath))
+                                                    shouldShowBottleSelector = true
+                                                } catch {
+                                                    console.error(String(reflecting: error))
+                                                }
+                                            } else {
+                                                console.error("Failed to load all bottles")
+                                            }
                                         }
                                     }
+                                } else {
+                                    creatingBottle = false
+                                    console.error("Bottle creation failed")
                                 }
                             } else {
-                                creatingBottle = false
-                                console.error("Bottle creation failed")
+                                console.error("Can't create a bottle before bottle is selected")
                             }
-                        } else {
-                            console.error("Can't create a bottle before bottle is selected")
                         }
                     }
                     if creatingBottle {
@@ -167,7 +177,7 @@ struct OptionsView: View {
                             TarDownloader.deleteAllDownloadCache()
                         }
                     }
-                    if(debugEnabled == true) {
+                    if(DEBUG_ENABLED == true) {
                         Divider().padding(.top, 10)
                         Text("Debug")
                             .padding(.vertical, 5)
@@ -187,13 +197,21 @@ struct OptionsView: View {
             .padding(.vertical)
         }
         .onAppear() {
+            let f = FileManager.default
             if let path = readUsrDefOptionString(key: "cxCompleteAppPath") {
                 console.log("loading paths for bottles")
-                bottles = getAllBottles(appDir: URL(fileURLWithPath: path))
+                if !f.fileExists(atPath: path) {
+                    appGlobals.cxAppPath = nil
+                }
+                do {
+                    bottles = try getAllBottles(appDir: URL(fileURLWithPath: path))
+                    if(!bottles.isEmpty && appGlobals.cxAppPath != nil) {
+                        shouldShowBottleSelector = true
+                    }
+                } catch {
+                    console.error(String(reflecting: error))
+                }
                 console.log(bottles.debugDescription)
-            }
-            if(!bottles.isEmpty && appGlobals.cxAppPath != nil) {
-                shouldShowBottleSelector = true
             }
         }
     }

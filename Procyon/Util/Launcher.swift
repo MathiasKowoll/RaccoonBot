@@ -166,7 +166,7 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, op
     let arguments = options != nil ? " " + options!.gameArguments : ""
     let x87cxAppURL = f.homeDirectoryForCurrentUser.appendingPathComponent("Applications", isDirectory: true).appendingPathComponent(PATCHED_CX_X87_APPNAME)
     let steamBootOptions = "-nochatui -nofriendsui -silent -no-browser -no-cef-sandbox -skipinitialbootstrap"
-    let wineEnvs = "WINEDEBUG=-all CX_ROOT=\"\(options!.x87PatchEnabled ? x87cxAppURL.path() : cxAppPath)/Contents/SharedSupport/CrossOver\" WINEPREFIX=\"\(URL(string: selectedBottle)?.path ?? "")\" WINEMSYNC=\(options!.wineMSync ? "1" : "0")"
+    let wineEnvs = "CX_ROOT=\"\(options!.x87PatchEnabled ? x87cxAppURL.path() : cxAppPath)/Contents/SharedSupport/CrossOver\" WINEPREFIX=\"\(URL(string: selectedBottle)?.path ?? "")\" WINEDEBUG=-all WINEMSYNC=\(options!.wineMSync ? "1" : "0")"
     
 //    try cpyd8d9DLLs(to: bottleURL, enable: options!.dx9PatchEnabled)
     

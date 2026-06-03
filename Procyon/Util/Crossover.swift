@@ -48,43 +48,39 @@ func getCXPatcherBottlesURL(appDir: URL)  throws -> URL {
     return bottlePathForCXP
 }
 
-func getAllBottles(appDir: URL) -> [URL] {
+func getAllBottles(appDir: URL) throws -> [URL] {
     let f = FileManager.default
     let FORCE_IS_CXPATCHED = true
     
-    do {
-        var subfolders: [URL] = []
-        
-        if(FORCE_IS_CXPATCHED || isCXPatched(appDir: appDir)) {
-            let bottleURLForCXP = try getCXPatcherBottlesURL(appDir: appDir)
-            console.log("app is patched with CXPatcher")
-            do {
-                subfolders = try f.contentsOfDirectory(at: bottleURLForCXP, includingPropertiesForKeys: [.isDirectoryKey], options: [])
-            } catch {
-                console.error(String(reflecting: error))
-                console.error("couldn't find the CXPatched bottles")
-            }
-        } else {
-            let bottlePath = getCXDefaultBottlesURL()
-            console.warn(bottlePath.absoluteString)
-            console.log("app is normal crossover")
-            do {
-                subfolders = try f.contentsOfDirectory(at: bottlePath, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles, .skipsPackageDescendants, .skipsSubdirectoryDescendants])
-            } catch {
-                console.error(String(reflecting: error))
-                console.error("couldn't find the crossover bottles in \(bottlePath.path(percentEncoded: false))")
-            }
+    
+    var subfolders: [URL] = []
+    
+    if(FORCE_IS_CXPATCHED || isCXPatched(appDir: appDir)) {
+        let bottleURLForCXP = try getCXPatcherBottlesURL(appDir: appDir)
+        console.log("app is patched with CXPatcher")
+        do {
+            subfolders = try f.contentsOfDirectory(at: bottleURLForCXP, includingPropertiesForKeys: [.isDirectoryKey], options: [])
+        } catch {
+            console.error(String(reflecting: error))
+            console.error("couldn't find the CXPatched bottles")
         }
-        console.warn("subfolders \(subfolders.debugDescription)")
-        let filtered = subfolders.filter { url in
-            (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
+    } else {
+        let bottlePath = getCXDefaultBottlesURL()
+        console.warn(bottlePath.absoluteString)
+        console.log("app is normal crossover")
+        do {
+            subfolders = try f.contentsOfDirectory(at: bottlePath, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles, .skipsPackageDescendants, .skipsSubdirectoryDescendants])
+        } catch {
+            console.error(String(reflecting: error))
+            console.error("couldn't find the crossover bottles in \(bottlePath.path(percentEncoded: false))")
         }
-        console.warn("filtered: \(filtered.debugDescription)")
-        return filtered
-    } catch {
-        console.error(String(reflecting: error))
     }
-    return []
+    console.warn("subfolders \(subfolders.debugDescription)")
+    let filtered = subfolders.filter { url in
+        (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
+    }
+    console.warn("filtered: \(filtered.debugDescription)")
+    return filtered
 }
 
 func modifyBottleSettingOptions(selectedBottle: String, options: [String: String]) {

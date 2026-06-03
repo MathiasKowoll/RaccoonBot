@@ -56,8 +56,8 @@ private let allResources = dxvkRes + [
     (res: "wine/x86_64-windows/ntdll.dll", dest: "/lib/wine/x86_64-windows/ntdll.dll"),
     (res: "wine/i386-windows/win32u.dll", dest: "/lib/wine/i386-windows/win32u.dll"),
     (res: "wine/x86_64-windows/win32u.dll", dest: "/lib/wine/x86_64-windows/win32u.dll"),
-    (res: "d9vk/x32/d3d9.dll", dest: "/lib/wine/i386-windows/d3d9.dll"),
-//    (res: "d9vk/x64/d3d9.dll", dest: "/lib/wine/x86_64-windows/d3d9.dll"),
+    (res: "d9vk/x32/d3d9_builtin.dll", dest: "/lib/wine/i386-windows/d3d9.dll"),
+    (res: "d9vk/x64/d3d9_builtin.dll", dest: "/lib/wine/x86_64-windows/d3d9.dll"),
 //    (res: "libMoltenVK-experimental.dylib", dest: "/lib64/libMoltenVK.dylib"),
 ]
 
@@ -265,14 +265,6 @@ func makeCrossoverPatchedCopy(sourceCXPath: URL, setProgress: @escaping (Double,
         .map { item in
             (res: item.res, dest: destUrl.appendingPathComponent(SHARED_SUPPORT_COMPONENT + item.dest))
         }
-        .filter {
-            resource in
-            isX87 ? true : (!resource.res.contains("d3d9") || !resource.res.contains("ntdll.dll"))
-        }
-        .filter {
-            resource in
-            isX87 ? !resource.res.contains("ntdll.so.gcenx") : !resource.res.contains("ntdll.so.x87")
-        }
     do {
         // Make sure destination app doesn't exist and if it does, delete it
         if (f.fileExists(atPath: destUrl.path())) {
@@ -284,8 +276,13 @@ func makeCrossoverPatchedCopy(sourceCXPath: URL, setProgress: @escaping (Double,
         if(f.fileExists(atPath: destUrl.path())) {
             // MARK: Step 1 copy resources
             for (res, dest) in resources {
-                console.log("Copying \(res) to \(dest.path())")
-                try copyResource(name: res, destUrl: dest)
+                if(isX87) {
+                    console.log("Copying \(res) to \(dest.path())")
+                    try copyResource(name: res, destUrl: dest)
+                } else if (!res.contains(/ntdll|d3d9|win32u/)){
+                    console.log("Copying \(res) to \(dest.path())")
+                    try copyResource(name: res, destUrl: dest)
+                }
             }
             // MARK: Step 2 download gstreamer
             let gstURL = try await getGstreamerDownloadURL()

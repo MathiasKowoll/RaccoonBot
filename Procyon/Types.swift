@@ -27,6 +27,7 @@ struct GameOptionsData: Codable { // this is used for reading saved properties
     var cxGraphicsBackend: String
     var wineMSync: Bool
     var mtlHudEnabled: Bool
+    var d3dMtl4Enabled: Bool
     var x87PatchEnabled: Bool
     var dx9PatchEnabled: Bool
     var gameArguments: String
@@ -44,6 +45,7 @@ struct GameOptionsData: Codable { // this is used for reading saved properties
     var wineEsync: String?
     var d3dMEnableMetalFX: String?
     var d3dSupportDXR: String?
+    var d3dMaxFPS: Double
     
     init(data: GameOptions) {
         self.cxGraphicsBackend = data.cxGraphicsBackend
@@ -66,6 +68,8 @@ struct GameOptionsData: Codable { // this is used for reading saved properties
         self.wineEsync = data.wineEsync
         self.d3dMEnableMetalFX = data.d3dMEnableMetalFX
         self.d3dSupportDXR = data.d3dSupportDXR
+        self.d3dMtl4Enabled = data.d3dMtl4Enabled
+        self.d3dMaxFPS = data.d3dMaxFPS
     }
 }
 
@@ -90,8 +94,10 @@ class GameOptions: ObservableObject { // this is used as form state
     @Published var wineEsync: String?
     @Published var d3dMEnableMetalFX: String?
     @Published var d3dSupportDXR: String?
+    @Published var d3dMtl4Enabled: Bool
+    @Published var d3dMaxFPS: Double
     
-    init(cxGraphicsBackend: String = "d3dmetal", wineMSync: Bool = true, mtlHudEnabled: Bool = false, x87PatchEnabled: Bool = false, dx9PatchEnabled: Bool = false, gameArguments: String = "", dxmtPreferredMaxFrameRate: Double = 0, dxmtMetalFXSpatial: Bool = false, dxmtMetalSpatialUpscaleFactor: Double = 1.0, advertiseAVX: Bool = true, envVariables: String = "", sdlEnabled: Bool = true, hidrawDisabled: Bool = false, ue4Hack: Bool = true, mvkArgBuff: Bool = false, vulkanLib: String = "latest", dxvk: String? = nil, wineEsync: String? = nil, d3dMEnableMetalFX: String? = nil, d3dSupportDXR: String? = nil) {
+    init(cxGraphicsBackend: String = "d3dmetal", wineMSync: Bool = true, mtlHudEnabled: Bool = false, d3dMtl4Enabled: Bool = false, x87PatchEnabled: Bool = false, dx9PatchEnabled: Bool = false, gameArguments: String = "", dxmtPreferredMaxFrameRate: Double = 0, dxmtMetalFXSpatial: Bool = false, dxmtMetalSpatialUpscaleFactor: Double = 1.0, advertiseAVX: Bool = true, envVariables: String = "", sdlEnabled: Bool = true, hidrawDisabled: Bool = false, ue4Hack: Bool = true, mvkArgBuff: Bool = false, vulkanLib: String = "latest", dxvk: String? = nil, wineEsync: String? = nil, d3dMEnableMetalFX: String? = nil, d3dMaxFPS: Double = 0, d3dSupportDXR: String? = nil) {
         self.cxGraphicsBackend = cxGraphicsBackend
         self.wineMSync = wineMSync
         self.mtlHudEnabled = mtlHudEnabled
@@ -112,6 +118,8 @@ class GameOptions: ObservableObject { // this is used as form state
         self.wineEsync = wineEsync
         self.d3dMEnableMetalFX = d3dMEnableMetalFX
         self.d3dSupportDXR = d3dSupportDXR
+        self.d3dMtl4Enabled = d3dMtl4Enabled
+        self.d3dMaxFPS = d3dMaxFPS
     }
     
     func set(data: GameOptionsData) {
@@ -135,6 +143,8 @@ class GameOptions: ObservableObject { // this is used as form state
         self.wineEsync = data.wineEsync
         self.d3dMEnableMetalFX = data.d3dMEnableMetalFX
         self.d3dSupportDXR = data.d3dSupportDXR
+        self.d3dMtl4Enabled = data.d3dMtl4Enabled
+        self.d3dMaxFPS = data.d3dMaxFPS
     }
 }
 

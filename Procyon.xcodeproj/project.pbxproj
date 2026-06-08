@@ -73,6 +73,7 @@
 				38E53BC32F68707F00C9FF59 /* Exceptions for "Procyon" folder in "Copy Bundle Resources" phase from "Procyon" target */,
 			);
 			explicitFolders = (
+				Libs/d3dMetal,
 				Libs/d9vk,
 				Libs/dxvk,
 				Libs/wine,
@@ -488,6 +489,11 @@
 				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
 				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/Procyon/Libs/gtpk/external",
+					"$(PROJECT_DIR)/Procyon/Libs/lib/external",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Procyon/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Procyon;
@@ -503,6 +509,8 @@
 					"$(PROJECT_DIR)/Procyon/Libs",
 					"$(PROJECT_DIR)/Procyon/Components",
 					"$(PROJECT_DIR)/Procyon/Libs/wine/x86_64-unix",
+					"$(PROJECT_DIR)/Procyon/Libs/gtpk/external",
+					"$(PROJECT_DIR)/Procyon/Libs/lib/external",
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = itmandar.Procyon;
@@ -550,6 +558,11 @@
 				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
 				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/Procyon/Libs/gtpk/external",
+					"$(PROJECT_DIR)/Procyon/Libs/lib/external",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Procyon/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Procyon;
@@ -565,6 +578,8 @@
 					"$(PROJECT_DIR)/Procyon/Libs",
 					"$(PROJECT_DIR)/Procyon/Components",
 					"$(PROJECT_DIR)/Procyon/Libs/wine/x86_64-unix",
+					"$(PROJECT_DIR)/Procyon/Libs/gtpk/external",
+					"$(PROJECT_DIR)/Procyon/Libs/lib/external",
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = itmandar.Procyon;

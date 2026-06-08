@@ -165,7 +165,9 @@ func getInlineEnvs(from: GameOptions) -> String {
         "DXVK_ASYNC=1",
 //        "MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=1", //slower, but more reliable
 //        "MVK_CONFIG_PREFILL_METAL_COMMAND_BUFFERS=3", //this actually slows down everything
-        "MVK_CONFIG_USE_MTLHEAP=2"
+        "MVK_CONFIG_USE_MTLHEAP=2",
+//        "D3DM_MTL4=1",
+//        "D3DM_MAX_FPS=60",
     ]
     value += defaults.joined(separator: " ") + " "
     value += from.mtlHudEnabled ? "MTL_HUD_ENABLED=1 " : ""
@@ -173,6 +175,8 @@ func getInlineEnvs(from: GameOptions) -> String {
     value += from.mvkArgBuff ? "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1 " : "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=0 "
     value += "ROSETTA_ADVERTISE_AVX=\(onOff(from.advertiseAVX)) "
     value += "CX_GRAPHICS_BACKEND=\"\(from.cxGraphicsBackend)\" "
+    value += from.d3dMtl4Enabled ? "D3DM_MTL4=1 " : ""
+    value += from.d3dMaxFPS != 0 ? "D3DM_MAX_FPS=\(from.d3dMaxFPS) " : ""
     switch (from.vulkanLib) {
     case "latest":
         if let url = Bundle.main.url(forResource: "libMoltenVK-latest", withExtension: "dylib") {

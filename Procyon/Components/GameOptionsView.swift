@@ -15,6 +15,10 @@ struct GameOptionsView: View {
         $gameOptions.dxmtPreferredMaxFrameRate.wrappedValue < 20.0 ? "Disabled" : "\($gameOptions.dxmtPreferredMaxFrameRate.wrappedValue)"
     }
     
+    var d3dMaxFPS: String {
+        $gameOptions.d3dMaxFPS.wrappedValue < 20.0 ? "Disabled" : "\($gameOptions.d3dMaxFPS.wrappedValue)"
+    }
+    
     var body: some View {
         let id = game!.steamAppID != 0 ? String(describing: game!.steamAppID) : String(describing: game!.id)
         let gameOptKey = namespacedKey("GameOptions", id)
@@ -113,6 +117,24 @@ struct GameOptionsView: View {
                                     )
                                     .help(localizedString(forKey: "metalFXSpatialHelp"))
                                 }
+                            }
+                        }
+                    }
+                    if(gameOptions.cxGraphicsBackend == "d3dmetal") {
+                        Divider()
+                        Section("D3DMetal Options") {
+                            Toggle("Metal 4 Backend", isOn: $gameOptions.d3dMtl4Enabled)
+                                .help(localizedString(forKey: "metal4Backend"))
+                                .disabled(ProcessInfo.processInfo.operatingSystemVersion.majorVersion < 27)
+                                .opacity(ProcessInfo.processInfo.operatingSystemVersion.majorVersion < 27 ? 0.5 : 1.0)
+                            VStack{
+                                Text(localizedString(forKey: "preferredMaxFrameRate", value: d3dMaxFPS))
+                                Slider(
+                                    value: $gameOptions.d3dMaxFPS,
+                                    in: 19...240,
+                                    step: 1.0
+                                )
+                                .help(localizedString(forKey: "preferredMaxFrameRateHelp"))
                             }
                         }
                     }

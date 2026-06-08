@@ -43,11 +43,20 @@ private let WINE_DXVK_RESOURCES_PATHS: [String] = [
     "dxvk/x86_64-windows/d3d11.dll",
 ]
 
+private let WINE_D3DM_RESOURCES_PATHS: [String] = [
+    "external",
+    "wine",
+]
+
+private let d3dmRes: [(res: String, dest: String)] = WINE_D3DM_RESOURCES_PATHS.map { path in
+    (res: "d3dMetal/" + path, dest: "/lib64/apple_gptk/" + path)
+}
+
 private let dxvkRes: [(res: String, dest: String)] = WINE_DXVK_RESOURCES_PATHS.map { path in
     (res: path, dest: "/lib/" + path)
 }
 
-private let allResources = dxvkRes + [
+private let allResources = dxvkRes + d3dmRes + [
     (res: "wine/x86_64-unix/winegstreamer.so", dest: "/lib/wine/x86_64-unix/winegstreamer.so"),
     (res: "wine/x86_64-unix/ntdll.so", dest: "/lib/wine/x86_64-unix/ntdll.so"),
     (res: "wine/x86_64-unix/winedmo.so", dest: "/lib/wine/x86_64-unix/winedmo.so"),

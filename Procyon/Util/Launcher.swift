@@ -73,7 +73,10 @@ func trackPlaying(apps: [String], then: @escaping () -> Void, onTimeout: @escapi
         try await Task.sleep(nanoseconds: pollInterval)
         let newTargets = isNative ? NSWorkspace.shared.runningApplications : NSWorkspace.shared.runningApplications.filter { app in
             guard let url = app.executableURL else { return false }
-            return url.lastPathComponent.lowercased().hasSuffix(".exe") && !targets.contains(where: { $0.processIdentifier == app.processIdentifier })
+            return
+                url.lastPathComponent.lowercased().hasSuffix(".exe") &&
+                !targets.contains(where: { $0.processIdentifier == app.processIdentifier }) &&
+                url.lastPathComponent.lowercased().contains("wineloader")
         }
         targets.append(contentsOf: newTargets)
         if(newTargets.contains { Set(nativeOrWineApps).contains($0.executableURL?.lastPathComponent) }) {

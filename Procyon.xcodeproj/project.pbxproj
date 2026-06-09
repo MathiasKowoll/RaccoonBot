@@ -46,6 +46,7 @@
 				Config.xcconfig,
 				Info.plist,
 				"Libs/libMoltenVK-experimental.dylib",
+				"Libs/libMoltenVK-experimental2.dylib",
 				"Libs/libMoltenVK-latest.dylib",
 				Libs/libvulkan_kosmickrisp.dylib,
 			);
@@ -59,6 +60,7 @@
 			buildPhase = 383306822F2BE63D00228E6C /* Resources */;
 			membershipExceptions = (
 				"Libs/libMoltenVK-experimental.dylib",
+				"Libs/libMoltenVK-experimental2.dylib",
 				"Libs/libMoltenVK-latest.dylib",
 				Libs/libvulkan_kosmickrisp.dylib,
 			);

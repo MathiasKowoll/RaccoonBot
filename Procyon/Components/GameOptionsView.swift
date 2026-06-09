@@ -78,6 +78,8 @@ struct GameOptionsView: View {
                                             .tag("latest")
                                         Text("Experimental")
                                             .tag("experimental")
+                                        Text("Experimental Detroit Edition")
+                                            .tag("experimental2")
 //                                        Text("KosmicKrisp")
 //                                            .tag("kosmickrisp")
                                     }

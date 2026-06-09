@@ -186,6 +186,10 @@ func getInlineEnvs(from: GameOptions) -> String {
         if let url = Bundle.main.url(forResource: "libMoltenVK-experimental", withExtension: "dylib") {
             value += "CX_LIBVULKAN=\"\(url.path(percentEncoded: false))\" "
         }
+    case "experimental2":
+        if let url = Bundle.main.url(forResource: "libMoltenVK-experimental2", withExtension: "dylib") {
+            value += "CX_LIBVULKAN=\"\(url.path(percentEncoded: false))\" "
+        }
 //    case "kosmickrisp":
 //        if let url = Bundle.main.url(forResource: "libvulkan_kosmickrisp", withExtension: "dylib") {
 //            value += "CX_LIBVULKAN=\"\(url.path(percentEncoded: false))\" "

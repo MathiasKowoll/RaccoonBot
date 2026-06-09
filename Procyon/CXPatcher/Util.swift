@@ -45,7 +45,18 @@ private let WINE_DXVK_RESOURCES_PATHS: [String] = [
 
 private let WINE_D3DM_RESOURCES_PATHS: [String] = [
     "external",
-    "wine",
+    "wine/d3d10.so",
+    "wine/d3d11.so",
+    "wine/d3d12.so",
+    "wine/dxgi.so",
+    "wine/nvapi64.so",
+    "wine/nvngx-on-metalfx.so",
+    "wine/d3d10.dll",
+    "wine/d3d11.dll",
+    "wine/d3d12.dll",
+    "wine/dxgi.dll",
+    "wine/nvapi64.dll",
+    "wine/nvngx-on-metalfx.dll",
 ]
 
 private let d3dmRes: [(res: String, dest: String)] = WINE_D3DM_RESOURCES_PATHS.map { path in
@@ -53,7 +64,7 @@ private let d3dmRes: [(res: String, dest: String)] = WINE_D3DM_RESOURCES_PATHS.m
 }
 
 private let dxvkRes: [(res: String, dest: String)] = WINE_DXVK_RESOURCES_PATHS.map { path in
-    (res: path, dest: "/lib/" + path)
+    path.contains("nvngx-on-metalfx") ? (res: path, dest: "/lib/" + path.replacingOccurrences(of: "nvngx-on-metalfx", with: "nvngx-on-metalfx")) : (res: path, dest: "/lib/" + path)
 }
 
 private let allResources = dxvkRes + d3dmRes + [

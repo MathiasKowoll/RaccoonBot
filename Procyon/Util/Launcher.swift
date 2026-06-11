@@ -129,7 +129,37 @@ func openSteam(cxAppPath: String?, selectedBottle: String?) {
     }
 }
 
+func copyMoltenVK(cxAppPath: String, vulkanLibID: String) throws -> Void {
+    let cxURL = URL(fileURLWithPath: cxAppPath)
+    let moltenVKDest = cxURL.appendingPathComponent(SHARED_SUPPORT_COMPONENT + "/lib64/libMoltenVK.dylib")
+    console.log(moltenVKDest.path())
+    switch (vulkanLibID) {
+    case "latest":
+        console.log(Bundle.main.url(forResource: "libMoltenVK-latest", withExtension: "dylib")?.path() ?? "")
+        try copyResource(name: "libMoltenVK-latest.dylib", destUrl: moltenVKDest)
+    case "experimental":
+        console.log(Bundle.main.url(forResource: "libMoltenVK-experimental", withExtension: "dylib")?.path() ?? "")
+        try copyResource(name: "libMoltenVK-experimental.dylib", destUrl: moltenVKDest)
+    case "experimental2":
+        console.log(Bundle.main.url(forResource: "libMoltenVK-experimental2", withExtension: "dylib")?.path() ?? "")
+        try copyResource(name: "libMoltenVK-experimental2.dylib", destUrl: moltenVKDest)
+    case "experimental3":
+        console.log(Bundle.main.url(forResource: "libMoltenVK-experimental3", withExtension: "dylib")?.path() ?? "")
+        try copyResource(name: "libMoltenVK-experimental3.dylib", destUrl: moltenVKDest)
+//    case "kosmickrisp":
+//        if let url = Bundle.main.url(forResource: "libvulkan_kosmickrisp", withExtension: "dylib") {
+//             try copyResource(name: "libMoltenVK-experimental2.dylib", destUrl: cxURL)
+//        }
+    default:
+        try restoreOrig(destUrl: moltenVKDest)
+    }
+}
+
 func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, options: GameOptions? = nil, appExeURL: URL? = nil) async throws -> Void {
+    console.log("options: \(options.debugDescription)")
+    if let vulkanLibID = options?.vulkanLib {
+        try copyMoltenVK(cxAppPath: cxAppPath, vulkanLibID: vulkanLibID)
+    }
     guard let bottleURL = URL(string: selectedBottle) else {
         console.error("Invalid bottle URL: \(selectedBottle)")
         return

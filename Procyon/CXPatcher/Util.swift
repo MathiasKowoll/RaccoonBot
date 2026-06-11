@@ -17,7 +17,7 @@ let DEFAULT_CXP_BOTTLES_FOLDER = "CXPBottles"
 private let DEFAULT_CXP_BOTTLES_PATH = PROCYON_SUPPORT_FOLDER_URL.appendingPathComponent(DEFAULT_CXP_BOTTLES_FOLDER).path(percentEncoded: false)
 private let CROSSOVER_MAIN_CONFIGURATION = "/etc/CrossOver.conf"
 private let WINE_RESOURCES_ROOT = "Crossover"
-private let SHARED_SUPPORT_COMPONENT = "Contents/SharedSupport/CrossOver"
+let SHARED_SUPPORT_COMPONENT = "Contents/SharedSupport/CrossOver"
 let SHARED_SUPPORT_PATH = "/" + SHARED_SUPPORT_COMPONENT
 private let INFO_PLIST_PATH = "Contents/Info.plist"
 struct PathMap {
@@ -150,6 +150,21 @@ func copyResource(name: String, destUrl: URL) throws {
         }
     } else {
         console.error("Couldn't find source \(name)")
+    }
+}
+
+func restoreOrig(destUrl: URL) throws {
+    let f = FileManager.default
+    let orig = destUrl.appendingPathExtension("orig")
+    if(f.fileExists(atPath: destUrl.path()) && f.fileExists(atPath: orig.path())) {
+        try f.removeItem(at: destUrl)
+    } else {
+        console.error("Couldn't find destination \(destUrl.path())")
+    }
+    if(f.fileExists(atPath: orig.path())) {
+        try f.moveItem(at: orig, to: destUrl)
+    } else {
+        console.error("Couldn't find original \(orig.path())")
     }
 }
 

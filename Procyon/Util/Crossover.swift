@@ -165,7 +165,7 @@ func getInlineEnvs(from: GameOptions) -> String {
         "DXVK_ASYNC=1",
 //        "MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=1", //slower, but more reliable
 //        "MVK_CONFIG_PREFILL_METAL_COMMAND_BUFFERS=3", //this actually slows down everything
-        "MVK_CONFIG_USE_MTLHEAP=2",
+//        "MVK_CONFIG_USE_MTLHEAP=2",
 //        "D3DM_MTL4=1",
 //        "D3DM_MAX_FPS=60",
     ]
@@ -177,26 +177,26 @@ func getInlineEnvs(from: GameOptions) -> String {
     value += "CX_GRAPHICS_BACKEND=\"\(from.cxGraphicsBackend)\" "
     value += from.d3dMtl4Enabled ? "D3DM_MTL4=1 " : ""
     value += from.d3dMaxFPS != 0 ? "D3DM_MAX_FPS=\(from.d3dMaxFPS) " : ""
-    switch (from.vulkanLib) {
-    case "latest":
-        if let url = Bundle.main.url(forResource: "libMoltenVK-latest", withExtension: "dylib") {
-            value += "CX_LIBVULKAN=\"\(url.path(percentEncoded: false))\" "
-        }
-    case "experimental":
-        if let url = Bundle.main.url(forResource: "libMoltenVK-experimental", withExtension: "dylib") {
-            value += "CX_LIBVULKAN=\"\(url.path(percentEncoded: false))\" "
-        }
-    case "experimental2":
-        if let url = Bundle.main.url(forResource: "libMoltenVK-experimental2", withExtension: "dylib") {
-            value += "CX_LIBVULKAN=\"\(url.path(percentEncoded: false))\" "
-        }
-//    case "kosmickrisp":
-//        if let url = Bundle.main.url(forResource: "libvulkan_kosmickrisp", withExtension: "dylib") {
-//            value += "CX_LIBVULKAN=\"\(url.path(percentEncoded: false))\" "
-//        }
-    default:
-        break
-    }
+//    switch (from.vulkanLib) {
+//        case "latest":
+//            if let url = Bundle.main.url(forResource: "libMoltenVK-latest", withExtension: "dylib") {
+//                value += "CX_LIBVULKAN=\"\(url.path(percentEncoded: false))\" "
+//            }
+//        case "experimental":
+//            if let url = Bundle.main.url(forResource: "libMoltenVK-experimental", withExtension: "dylib") {
+//                value += "CX_LIBVULKAN=\"\(url.path(percentEncoded: false))\" "
+//            }
+//        case "experimental2":
+//            if let url = Bundle.main.url(forResource: "libMoltenVK-experimental2", withExtension: "dylib") {
+//                value += "CX_LIBVULKAN=\"\(url.path(percentEncoded: false))\" "
+//            }
+//        //    case "kosmickrisp":
+//        //        if let url = Bundle.main.url(forResource: "libvulkan_kosmickrisp", withExtension: "dylib") {
+//        //            value += "CX_LIBVULKAN=\"\(url.path(percentEncoded: false))\" "
+//        //        }
+//        default:
+//            break
+//    }
     let dxmtMetalFXSpatial = from.dxmtMetalFXSpatial ? "DXMT_METALFX_SPATIAL_SWAPCHAIN=1 " : ""
     value += dxmtMetalFXSpatial
     

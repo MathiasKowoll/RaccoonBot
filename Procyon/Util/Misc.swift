@@ -20,6 +20,8 @@ let AUTOFILL_CUSTOM_GAME_ENABLED: Bool = {
     }
 }()
 
+let LIB_ROOT = "lib64"
+
 let DEFAULT_BOTTLE_PATH = "Library/Application Support/CrossOver/Bottles/"
 let BLACKLIST = [
     "228980", // Steamworks
@@ -48,12 +50,13 @@ func prettyPrinted(dict: Dictionary<String, Any>) -> String {
 func addSteamFolderPaths(_ url: URL) {
     do {
         if (try getIDsFromFolder(dest: url).isEmpty) {
-            console.warn("\(url) Folder is empty")
+            console.warn("\(url) folder is empty")
             return
         }
     } catch {
-        console.warn("Failed to validate steam folder")
+        console.warn("Failed to validate steam folder \(url.path())")
         console.error(String(reflecting: error))
+//        console.error(String(reflecting: error))
     }
     do {
         try persistFolderAccess(url: url)
@@ -99,16 +102,20 @@ func getIDsFromFolder(dest: URL) throws -> [String] {
     /**
      scans a folder and returns an array of steam games ids
      */
-    try withSecurityScope(for: dest) {
+//    try withSecurityScope(for: dest) {
         let f = FileManager.default
         let urls = try f.contentsOfDirectory(at: dest, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants, .skipsPackageDescendants])
         return urls
-            .filter { $0.pathExtension == "acf"}
-            .map {
-                extractAppIDRegex(from: $0.lastPathComponent) ?? "0"
-            }
-            .filter { !BLACKLIST.contains($0) }
-    } ?? []
+        .filter { acfFileURL in
+            acfFileURL.pathExtension == "acf"
+        }
+        .map { acfFileURL in
+            extractAppIDRegex(from: acfFileURL.lastPathComponent) ?? "0"
+        }
+        .filter {
+            gameID in !BLACKLIST.contains(gameID)
+        }
+//    } ?? []
 }
 
 func getIsNative(fromURL: URL) -> Bool {

@@ -140,12 +140,9 @@ func copyMoltenVK(cxAppPath: String, vulkanLibID: String) throws -> Void {
     case "experimental":
         console.log(Bundle.main.url(forResource: "libMoltenVK-experimental", withExtension: "dylib")?.path() ?? "")
         try copyResource(name: "libMoltenVK-experimental.dylib", destUrl: moltenVKDest)
-    case "experimental2":
-        console.log(Bundle.main.url(forResource: "libMoltenVK-experimental2", withExtension: "dylib")?.path() ?? "")
-        try copyResource(name: "libMoltenVK-experimental2.dylib", destUrl: moltenVKDest)
-    case "experimental3":
-        console.log(Bundle.main.url(forResource: "libMoltenVK-experimental3", withExtension: "dylib")?.path() ?? "")
-        try copyResource(name: "libMoltenVK-experimental3.dylib", destUrl: moltenVKDest)
+    case "dbh":
+        console.log(Bundle.main.url(forResource: "libMoltenVK-dbh", withExtension: "dylib")?.path() ?? "")
+        try copyResource(name: "libMoltenVK-dbh.dylib", destUrl: moltenVKDest)
 //    case "kosmickrisp":
 //        if let url = Bundle.main.url(forResource: "libvulkan_kosmickrisp", withExtension: "dylib") {
 //             try copyResource(name: "libMoltenVK-experimental2.dylib", destUrl: cxURL)

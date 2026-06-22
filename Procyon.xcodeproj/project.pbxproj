@@ -45,6 +45,7 @@
 			membershipExceptions = (
 				Config.xcconfig,
 				Info.plist,
+				"Libs/libMoltenVK-dbh.dylib",
 				"Libs/libMoltenVK-experimental.dylib",
 				"Libs/libMoltenVK-latest.dylib",
 				Libs/libvulkan_kosmickrisp.dylib,
@@ -58,6 +59,7 @@
 			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
 			buildPhase = 383306822F2BE63D00228E6C /* Resources */;
 			membershipExceptions = (
+				"Libs/libMoltenVK-dbh.dylib",
 				"Libs/libMoltenVK-experimental.dylib",
 				"Libs/libMoltenVK-latest.dylib",
 				Libs/libvulkan_kosmickrisp.dylib,

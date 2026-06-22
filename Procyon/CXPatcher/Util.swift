@@ -65,7 +65,7 @@ private let d3dmRes: [(res: String, dest: String)] = WINE_D3DM_RESOURCES_PATHS.m
 }
 
 private let dxvkRes: [(res: String, dest: String)] = WINE_DXVK_RESOURCES_PATHS.map { path in
-    path.contains("nvngx-on-metalfx") ? (res: path, dest: "/lib/" + path.replacingOccurrences(of: "nvngx-on-metalfx", with: "nvngx-on-metalfx")) : (res: path, dest: "/lib/" + path)
+    (res: path, dest: "/lib/" + path)
 }
 
 private let allResources = dxvkRes + d3dmRes + [
@@ -79,7 +79,6 @@ private let allResources = dxvkRes + d3dmRes + [
     (res: "wine/x86_64-windows/win32u.dll", dest: "/lib/wine/x86_64-windows/win32u.dll"),
     (res: "d9vk/x32/d3d9_builtin.dll", dest: "/lib/wine/i386-windows/d3d9.dll"),
     (res: "d9vk/x64/d3d9_builtin.dll", dest: "/lib/wine/x86_64-windows/d3d9.dll"),
-//    (res: "libMoltenVK-experimental.dylib", dest: "/\(LIB_ROOT)/libMoltenVK.dylib"),
 ]
 
 let WINE_WINEINF_PATH: String = "/share/wine/wine.inf"

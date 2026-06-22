@@ -20,7 +20,7 @@ let AUTOFILL_CUSTOM_GAME_ENABLED: Bool = {
     }
 }()
 
-let LIB_ROOT = "lib64"
+let LIB_ROOT = "lib"
 
 let DEFAULT_BOTTLE_PATH = "Library/Application Support/CrossOver/Bottles/"
 let BLACKLIST = [

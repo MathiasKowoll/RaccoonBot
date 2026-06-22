@@ -65,21 +65,20 @@ private let d3dmRes: [(res: String, dest: String)] = WINE_D3DM_RESOURCES_PATHS.m
 }
 
 private let dxvkRes: [(res: String, dest: String)] = WINE_DXVK_RESOURCES_PATHS.map { path in
-    path.contains("nvngx-on-metalfx") ? (res: path, dest: "/lib/" + path.replacingOccurrences(of: "nvngx-on-metalfx", with: "nvngx-on-metalfx")) : (res: path, dest: "/lib/" + path)
+    (res: path, dest: "/lib/" + path)
 }
 
-private let allResources = dxvkRes + d3dmRes + [
-    (res: "wine/x86_64-unix/winegstreamer.so", dest: "/lib/wine/x86_64-unix/winegstreamer.so"),
-    (res: "wine/x86_64-unix/ntdll.so", dest: "/lib/wine/x86_64-unix/ntdll.so"),
-    (res: "wine/x86_64-unix/winedmo.so", dest: "/lib/wine/x86_64-unix/winedmo.so"),
-    (res: "wine/x86_64-unix/win32u.so", dest: "/lib/wine/x86_64-unix/win32u.so"),
-    (res: "wine/i386-windows/ntdll.dll", dest: "/lib/wine/i386-windows/ntdll.dll"),
-    (res: "wine/x86_64-windows/ntdll.dll", dest: "/lib/wine/x86_64-windows/ntdll.dll"),
-    (res: "wine/i386-windows/win32u.dll", dest: "/lib/wine/i386-windows/win32u.dll"),
-    (res: "wine/x86_64-windows/win32u.dll", dest: "/lib/wine/x86_64-windows/win32u.dll"),
-    (res: "d9vk/x32/d3d9_builtin.dll", dest: "/lib/wine/i386-windows/d3d9.dll"),
-    (res: "d9vk/x64/d3d9_builtin.dll", dest: "/lib/wine/x86_64-windows/d3d9.dll"),
-//    (res: "libMoltenVK-experimental.dylib", dest: "/\(LIB_ROOT)/libMoltenVK.dylib"),
+private let allResources = d3dmRes + [
+//    (res: "wine/x86_64-unix/winegstreamer.so", dest: "/lib/wine/x86_64-unix/winegstreamer.so"),
+//    (res: "wine/x86_64-unix/ntdll.so", dest: "/lib/wine/x86_64-unix/ntdll.so"),
+//    (res: "wine/x86_64-unix/winedmo.so", dest: "/lib/wine/x86_64-unix/winedmo.so"),
+//    (res: "wine/x86_64-unix/win32u.so", dest: "/lib/wine/x86_64-unix/win32u.so"),
+//    (res: "wine/i386-windows/ntdll.dll", dest: "/lib/wine/i386-windows/ntdll.dll"),
+//    (res: "wine/x86_64-windows/ntdll.dll", dest: "/lib/wine/x86_64-windows/ntdll.dll"),
+//    (res: "wine/i386-windows/win32u.dll", dest: "/lib/wine/i386-windows/win32u.dll"),
+//    (res: "wine/x86_64-windows/win32u.dll", dest: "/lib/wine/x86_64-windows/win32u.dll"),
+//    (res: "d9vk/x32/d3d9_builtin.dll", dest: "/lib/wine/i386-windows/d3d9.dll"),
+//    (res: "d9vk/x64/d3d9_builtin.dll", dest: "/lib/wine/x86_64-windows/d3d9.dll"),
 ]
 
 let WINE_WINEINF_PATH: String = "/share/wine/wine.inf"
@@ -321,35 +320,35 @@ func makeCrossoverPatchedCopy(sourceCXPath: URL, setProgress: @escaping (Double,
                 }
             }
             // MARK: Step 2 download gstreamer
-            let gstURL = try await getGstreamerDownloadURL()
+//            let gstURL = try await getGstreamerDownloadURL()
             let (url: dxmtURL, versionTag: dxmtVersion) = try await getDXMTDownloadURL()
-            console.log("Gstreamer download url: \(gstURL)")
-            try await withCheckedThrowingContinuation { continuation in
-                let gstreamerDownloader = TarDownloader(
-                    fromUrl: gstURL,
-                    onProgress: { progress in
-                        setProgress(progress, "Downloading GStreamer")
-                    },
-                    onComplete: { srcUrl in
-                        do {
-                            try installGstreamer(srcUrl: srcUrl, destUrl: destUrl )
-                            continuation.resume()
-                        } catch {
-                            console.error(String(reflecting: error))
-                            continuation.resume(throwing: error)
-                        }
-                        setLoading(false)
-                    },
-                    onError: { error in
-                        console.error("Error while downloading GStreamer")
-                        setProgress(0, "Error while downloading GStreamer")
-                        console.error(String(reflecting: error))
-                        continuation.resume(throwing: error)
-                    }
-                )
-                setLoading(true)
-                gstreamerDownloader.download()
-            }
+//            console.log("Gstreamer download url: \(gstURL)")
+//            try await withCheckedThrowingContinuation { continuation in
+//                let gstreamerDownloader = TarDownloader(
+//                    fromUrl: gstURL,
+//                    onProgress: { progress in
+//                        setProgress(progress, "Downloading GStreamer")
+//                    },
+//                    onComplete: { srcUrl in
+//                        do {
+//                            try installGstreamer(srcUrl: srcUrl, destUrl: destUrl )
+//                            continuation.resume()
+//                        } catch {
+//                            console.error(String(reflecting: error))
+//                            continuation.resume(throwing: error)
+//                        }
+//                        setLoading(false)
+//                    },
+//                    onError: { error in
+//                        console.error("Error while downloading GStreamer")
+//                        setProgress(0, "Error while downloading GStreamer")
+//                        console.error(String(reflecting: error))
+//                        continuation.resume(throwing: error)
+//                    }
+//                )
+//                setLoading(true)
+//                gstreamerDownloader.download()
+//            }
             try await withCheckedThrowingContinuation { continuation in
                 let dxmtDownloader = TarDownloader(
                     fromUrl: dxmtURL,

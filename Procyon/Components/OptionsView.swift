@@ -33,7 +33,7 @@ struct OptionsView: View {
                         Task { @MainActor in
                             let patchedAppURL = await makeCrossoverPatchedCopy(sourceCXPath: url, setProgress: { p,m in progress = p; progressLabel = m  }, setLoading: { state in downloading = state })
                             progress = 0
-                            await makeX87CrossoverPatchedCopy(sourceCXPath: url, patchedApp: patchedAppURL)
+//                            await makeX87CrossoverPatchedCopy(sourceCXPath: url, patchedApp: patchedAppURL)
                             appGlobals.cxAppPath = patchedAppURL.path(percentEncoded: false)
                             persistUsrDefOptionString(key: "cxAppPath", value: patchedAppURL.relativePath)
                             persistUsrDefOptionString(key: "cxCompleteAppPath", value: patchedAppURL.path(percentEncoded: false))

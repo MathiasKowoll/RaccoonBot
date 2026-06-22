@@ -103,7 +103,7 @@ func getGstreamerDownloadURL() async throws -> URL {
 func installGstreamer (srcUrl: URL,destUrl: URL ) throws {
     let f = FileManager.default
     let src = srcUrl.appendingPathComponent("GStreamer.framework")
-    let dst = destUrl.appendingPathComponent("Contents/SharedSupport/CrossOver/lib64/")
+    let dst = destUrl.appendingPathComponent("Contents/SharedSupport/CrossOver/\(LIB_ROOT)/")
     try f.copyItem(at: src, to: dst.appendingPathComponent("GStreamer.framework"))
     if f.fileExists(atPath: dst.appendingPathComponent("GStreamer.framework/.gitignore").path) { // need to remove this
         try f.removeItem(at: dst.appendingPathComponent("GStreamer.framework/.gitignore"))

@@ -45,22 +45,23 @@ private let WINE_DXVK_RESOURCES_PATHS: [String] = [
 
 private let WINE_D3DM_RESOURCES_PATHS: [String] = [
     "external",
-    "wine/d3d10.so",
-    "wine/d3d11.so",
-    "wine/d3d12.so",
-    "wine/dxgi.so",
-    "wine/nvapi64.so",
-    "wine/nvngx-on-metalfx.so",
-    "wine/d3d10.dll",
-    "wine/d3d11.dll",
-    "wine/d3d12.dll",
-    "wine/dxgi.dll",
-    "wine/nvapi64.dll",
-    "wine/nvngx-on-metalfx.dll",
+    "wine/x86_64-unix/d3d10.so",
+    "wine/x86_64-unix/d3d11.so",
+    "wine/x86_64-unix/d3d12.so",
+    "wine/x86_64-unix/dxgi.so",
+    "wine/x86_64-unix/nvapi64.so",
+    "wine/x86_64-unix/nvngx-on-metalfx.so",
+    "wine/x86_64-windows/d3d10.dll",
+    "wine/x86_64-windows/d3d11.dll",
+    "wine/x86_64-windows/d3d12.dll",
+    "wine/x86_64-windows/dxgi.dll",
+    "wine/x86_64-windows/nvapi64.dll",
+    "wine/x86_64-windows/nvngx-on-metalfx.dll",
 ]
 
 private let d3dmRes: [(res: String, dest: String)] = WINE_D3DM_RESOURCES_PATHS.map { path in
-    (res: "d3dMetal/" + path, dest: "/lib64/apple_gptk/" + path)
+    let destPath = path.replacingOccurrences(of: "nvngx-on-metalfx", with: "nvngx")
+    return (res: "d3dMetal/" + path, dest: "/\(LIB_ROOT)/apple_gptk/" + destPath)
 }
 
 private let dxvkRes: [(res: String, dest: String)] = WINE_DXVK_RESOURCES_PATHS.map { path in
@@ -78,7 +79,7 @@ private let allResources = dxvkRes + d3dmRes + [
     (res: "wine/x86_64-windows/win32u.dll", dest: "/lib/wine/x86_64-windows/win32u.dll"),
     (res: "d9vk/x32/d3d9_builtin.dll", dest: "/lib/wine/i386-windows/d3d9.dll"),
     (res: "d9vk/x64/d3d9_builtin.dll", dest: "/lib/wine/x86_64-windows/d3d9.dll"),
-//    (res: "libMoltenVK-experimental.dylib", dest: "/lib64/libMoltenVK.dylib"),
+//    (res: "libMoltenVK-experimental.dylib", dest: "/\(LIB_ROOT)/libMoltenVK.dylib"),
 ]
 
 let WINE_WINEINF_PATH: String = "/share/wine/wine.inf"
@@ -144,10 +145,10 @@ func copyResource(name: String, destUrl: URL) throws {
             } else {
                 try f.removeItem(at: destUrl)
             }
-            try f.copyItem(at: resUrl, to: destUrl)
         } else {
-            console.error("Couldn't find destination \(destUrl.path())")
+            console.warn("Couldn't find destination \(destUrl.path())")
         }
+        try f.copyItem(at: resUrl, to: destUrl)
     } else {
         console.error("Couldn't find source \(name)")
     }

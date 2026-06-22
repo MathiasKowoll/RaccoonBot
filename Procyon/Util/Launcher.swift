@@ -131,7 +131,7 @@ func openSteam(cxAppPath: String?, selectedBottle: String?) {
 
 func copyMoltenVK(cxAppPath: String, vulkanLibID: String) throws -> Void {
     let cxURL = URL(fileURLWithPath: cxAppPath)
-    let moltenVKDest = cxURL.appendingPathComponent(SHARED_SUPPORT_COMPONENT + "/lib64/libMoltenVK.dylib")
+    let moltenVKDest = cxURL.appendingPathComponent(SHARED_SUPPORT_COMPONENT + "/\(LIB_ROOT)/libMoltenVK.dylib")
     console.log(moltenVKDest.path())
     switch (vulkanLibID) {
     case "latest":

@@ -115,7 +115,7 @@ struct LibraryPage: View {
             }
             .onAppear() {
                 isLoading = true // fixes missing library issue
-                try? FileManager.default.createDirectory(at: PROCYON_SUPPORT_FOLDER_URL.appendingPathComponent(DEFAULT_CXP_BOTTLES_FOLDER), withIntermediateDirectories: true)
+                try? FileManager.default.createDirectory(at: CX_SUPPORT_FOLDER_URL.appendingPathComponent(DEFAULT_CXP_BOTTLES_FOLDER), withIntermediateDirectories: true)
                 try? stripEnvsInCXBottleConfigFile(selectedBottle: appGlobals.selectedBottle)
                 Task(priority: .background) {
                     await load()

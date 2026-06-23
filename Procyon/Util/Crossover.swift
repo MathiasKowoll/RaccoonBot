@@ -49,7 +49,7 @@ func getCXPatcherBottlesURL(appDir: URL)  throws -> URL {
     
     // fallback if it doesn't find it in the config file (just in case)
     console.warn("Couldn't find CXPatcher bottles configuration: " + confPath.absoluteString)
-    let bottlePathForCXP: URL = PROCYON_SUPPORT_FOLDER_URL.appendingPathComponent(DEFAULT_CXP_BOTTLES_FOLDER, isDirectory: true)
+    let bottlePathForCXP: URL = CX_SUPPORT_FOLDER_URL.appendingPathComponent(DEFAULT_CXP_BOTTLES_FOLDER, isDirectory: true)
     return bottlePathForCXP
 }
 

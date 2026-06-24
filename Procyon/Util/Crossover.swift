@@ -181,7 +181,9 @@ func getInlineEnvs(from: GameOptions) -> String {
     value += "ROSETTA_ADVERTISE_AVX=\(onOff(from.advertiseAVX)) "
     value += "CX_GRAPHICS_BACKEND=\"\(from.cxGraphicsBackend)\" "
     value += from.d3dMtl4Enabled ? "D3DM_MTL4=1 " : ""
-    value += from.d3dMaxFPS != 0 ? "D3DM_MAX_FPS=\(from.d3dMaxFPS) " : ""
+    if from.d3dMaxFPS > 20 {
+        value += "D3DM_MAX_FPS=\(DoubleToFormattedStr(from.d3dMaxFPS)) "
+    }
 //    switch (from.vulkanLib) {
 //        case "latest":
 //            if let url = Bundle.main.url(forResource: "libMoltenVK-latest", withExtension: "dylib") {

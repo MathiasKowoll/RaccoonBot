@@ -70,7 +70,7 @@ private let dxvkRes: [(res: String, dest: String)] = WINE_DXVK_RESOURCES_PATHS.m
     (res: path, dest: "/lib/" + path)
 }
 
-private let allResources = d3dmRes + [
+private let allResources = d3dmRes + dxvkRes + [
 //    (res: "wine/x86_64-unix/winegstreamer.so", dest: "/lib/wine/x86_64-unix/winegstreamer.so"),
 //    (res: "wine/x86_64-unix/ntdll.so", dest: "/lib/wine/x86_64-unix/ntdll.so"),
 //    (res: "wine/x86_64-unix/winedmo.so", dest: "/lib/wine/x86_64-unix/winedmo.so"),

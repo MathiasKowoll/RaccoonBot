@@ -601,6 +601,7 @@ final class AppGlobals: ObservableObject {
     @Published var selectedBottle: String = ""
     @Published var userID: String? = nil
     @Published var cxAppPath: String?
+    @Published var windowsSteamFolder: URL?
     
     init(selectedBottle: String? = "", cxAppPath: String? = nil) {
         self.selectedBottle = readUsrDefOptionString(key: "selectedBottle") ?? ""

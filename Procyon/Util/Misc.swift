@@ -166,16 +166,15 @@ func getSteamUserID (usingBottlePath: URL) -> String? {
     return users?.keys.first?.description
 }
 
-func getSteamUserDataFallback (usingBottlePath: URL) -> UserInfo? {
-    let steamLoginUsersPath = usingBottlePath.appendingPathComponent(DEFAULT_STEAM_WINE_PATH)
-        .appendingPathComponent("loginusers.vdf")
+func getSteamUserDataFallback (usingPath: URL) -> UserInfo? {
+    let steamLoginUsersPath = usingPath.appendingPathComponent("loginusers.vdf")
     guard let steamSettingsFile = try? String(contentsOfFile: steamLoginUsersPath.path(percentEncoded: false), encoding: .utf8) else { return nil }
     let parsed = parseVDFToDict(from: steamSettingsFile)
     let users = parsed["users"] as? [String: Any]
     if let key = users?.keys.first {
         let user = users![key] as? [String: Any]
         let personaName = user?["PersonaName"] as? String ?? ""
-        let avatar = usingBottlePath
+        let avatar = usingPath
             .appendingPathComponent(DEFAULT_STEAM_WINE_PATH)
             .appendingPathComponent("avatarcache")
             .appendingPathComponent(key)

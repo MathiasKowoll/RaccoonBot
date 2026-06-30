@@ -55,8 +55,16 @@ struct ContentView: View {
             }
         )
         .onAppear() {
+            if let steamPath = readUsrDefOptionString(key: "windowsSteamFolder") {
+                console.log("fetching steam path")
+                appGlobals.windowsSteamFolder = URL(string: steamPath)
+                console.log(path.debugDescription)
+            } else {
+                console.log("windowsSteamFolder not set")
+            }
             if(appGlobals.selectedBottle != ""){
-                appGlobals.userID = getSteamUserID(usingBottlePath: URL(string: appGlobals.selectedBottle)!)
+                let usingURL = appGlobals.windowsSteamFolder?.appendingPathComponent("config", isDirectory: true) ?? URL(string: appGlobals.selectedBottle)!.appendingPathComponent(DEFAULT_STEAM_WINE_CONFIG_PATH)
+                appGlobals.userID = getSteamUserID(usingURL: usingURL)
             }
         }
     }

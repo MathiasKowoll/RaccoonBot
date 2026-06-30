@@ -114,12 +114,12 @@ func quitWine(cxAppPath: String, bottleName: String) async throws -> Void {
     try safeShell("\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) wineserver -k")
 }
 
-func openSteam(cxAppPath: String?, selectedBottle: String?) {
+func openSteam(cxAppPath: String?, selectedBottle: String?, SteamX86AppPath: String) {
     if cxAppPath == nil || selectedBottle == nil {
         return
     }
     if let bottleName = URL(string: selectedBottle!)?.lastPathComponent {
-        let steamLaunchCommand = "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=0 CX_GRAPHICS_BACKEND=\"\(CXGraphicsBackend.d3dmetal.rawValue)\" \(cxAppPath!)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \"C:\\Program Files (x86)\\Steam\\Steam.exe\""
+        let steamLaunchCommand = "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=0 CX_GRAPHICS_BACKEND=\"\(CXGraphicsBackend.d3dmetal.rawValue)\" \(cxAppPath!)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \"\(SteamX86AppPath)\""
         do {
             try safeShell(steamLaunchCommand)
             console.log(steamLaunchCommand)
@@ -152,7 +152,7 @@ func copyMoltenVK(cxAppPath: String, vulkanLibID: String) throws -> Void {
     }
 }
 
-func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, options: GameOptions? = nil, appExeURL: URL? = nil) async throws -> Void {
+func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, steamExePath: String, options: GameOptions? = nil, appExeURL: URL? = nil) async throws -> Void {
     console.log("options: \(options.debugDescription)")
     if let vulkanLibID = options?.vulkanLib {
         try copyMoltenVK(cxAppPath: cxAppPath, vulkanLibID: vulkanLibID)
@@ -200,7 +200,7 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, op
     
 //    try cpyd8d9DLLs(to: bottleURL, enable: options!.dx9PatchEnabled)
     
-    let gameLaunchCommand = appExeURL != nil ? "\"\(appExeURL!.path(percentEncoded: false))\"" : "\"C:\\Program Files (x86)\\Steam\\Steam.exe\" \(steamBootOptions) -applaunch \(String(id))"
+    let gameLaunchCommand = appExeURL != nil ? "\"\(appExeURL!.path(percentEncoded: false))\"" : "\"\(steamExePath)\" \(steamBootOptions) -applaunch \(String(id))"
     if (options!.x87PatchEnabled) {
         if(!f.fileExists(atPath: x87cxAppURL.path())) {
             console.error("Couldn't find \(x87cxAppURL.path())")

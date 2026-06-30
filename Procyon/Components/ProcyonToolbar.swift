@@ -39,7 +39,8 @@ struct ProcyonToolbar: View {
             if appGlobals.selectedBottle != "" {
                 Divider()
                 Button {
-                    openSteam(cxAppPath: appGlobals.cxAppPath, selectedBottle: appGlobals.selectedBottle)
+                    let steamX86AppPath = appGlobals.windowsSteamFolder?.appendingPathComponent("Steam.exe").path(percentEncoded: false) ?? "C:\\Program Files (x86)\\Steam\\Steam.exe"
+                    openSteam(cxAppPath: appGlobals.cxAppPath, selectedBottle: appGlobals.selectedBottle, SteamX86AppPath: steamX86AppPath)
                 } label: {
                     Image("steam-fill").resizable().scaledToFit().frame(width: iconSize, height: iconSize)
                 }

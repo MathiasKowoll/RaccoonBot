@@ -38,7 +38,7 @@ struct ProfileWidget: View {
                 .buttonStyle(.plain)
             } else {
                 if let bottlePath = URL(string: appGlobals.selectedBottle) {
-                    if let fallbackProfileData = getSteamUserDataFallback(usingPath: appGlobals.windowsSteamFolder ?? bottlePath.appendingPathComponent(DEFAULT_STEAM_WINE_PATH)) {
+                    if let fallbackProfileData = getSteamUserDataFallback(usingPath: appGlobals.windowsSteamFolder ?? bottlePath.appendingPathComponent(DEFAULT_STEAM_WINE_CONFIG_PATH)) {
                         HStack {
                             KFImage(URL(string: fallbackProfileData.avatar))
                                 .resizable()

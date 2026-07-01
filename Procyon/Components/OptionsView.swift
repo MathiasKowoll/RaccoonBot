@@ -135,7 +135,7 @@ struct OptionsView: View {
                                 let url = URL(fileURLWithPath: cxPath)
                                 let configuration = NSWorkspace.OpenConfiguration()
                                 configuration.environment = [
-                                    "CX_GRAPHICS_BACKEND": CXGraphicsBackend.d3dmetal.rawValue,
+                                    "CX_GRAPHICS_BACKEND": "d3dmetal",
                                     "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS": "0"
                                 ]
                                 NSWorkspace.shared.open(url, configuration: configuration)

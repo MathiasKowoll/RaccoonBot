@@ -119,7 +119,7 @@ func openSteam(cxAppPath: String?, selectedBottle: String?, SteamX86AppPath: Str
         return
     }
     if let bottleName = URL(string: selectedBottle!)?.lastPathComponent {
-        let steamLaunchCommand = "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=0 CX_GRAPHICS_BACKEND=\"\(CXGraphicsBackend.d3dmetal.rawValue)\" \(cxAppPath!)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \"\(SteamX86AppPath)\""
+        let steamLaunchCommand = "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=0 CX_GRAPHICS_BACKEND=\"d3dmetal\" \(cxAppPath!)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \"\(SteamX86AppPath)\""
         do {
             try safeShell(steamLaunchCommand)
             console.log(steamLaunchCommand)

@@ -32,16 +32,9 @@ struct GameOptionsView: View {
                             VStack(alignment: .trailing){
                                 if !game!.isNative {
                                     Picker("Graphics Backend", selection: $gameOptions.cxGraphicsBackend) {
-                                        Text("D3DMetal")
-                                            .tag(CXGraphicsBackend.d3dmetal.rawValue)
-                                        Text("DXMT")
-                                            .tag(CXGraphicsBackend.dxmt.rawValue)
-                                        Text("Wine")
-                                            .tag(CXGraphicsBackend.wine.rawValue)
-                                        Text("DXVK")
-                                            .tag(CXGraphicsBackend.dxvk.rawValue)
-                                        Text("Auto")
-                                            .tag(CXGraphicsBackend.auto.rawValue)
+                                        ForEach(cxGraphicsBackend, id: \.id) { (id, label) in
+                                            Text(label).tag(id)
+                                        }
                                     }
                                     .pickerStyle(.menu)
                                 }
@@ -54,7 +47,7 @@ struct GameOptionsView: View {
                                     Toggle("Use X87 Patch", isOn: $gameOptions.x87PatchEnabled)
                                     Toggle("Use DX9", isOn: $gameOptions.dx9PatchEnabled).onChange(of: gameOptions.dx9PatchEnabled) { oldValue, newValue in
                                         if(newValue == true) {
-                                            gameOptions.cxGraphicsBackend = CXGraphicsBackend.wine.rawValue
+                                            gameOptions.cxGraphicsBackend = "wine"
                                         }
                                     }  // WINEDLLOVERRIDES=d3d9=n,b;d3d8=n,b has been removed
                                 }

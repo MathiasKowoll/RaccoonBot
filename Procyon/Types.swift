@@ -8,13 +8,13 @@
 import Foundation
 import Combine
 
-enum CXGraphicsBackend: String {
-    case dxmt = "dxmt"
-    case d3dmetal = "d3dmetal"
-    case wine = "wined3d"
-    case dxvk = "dxvk"
-    case auto = "auto"
-}
+let cxGraphicsBackend: [(id: String, label: String)] = [
+    (id: "dxmt", label: "DXMT"),
+    (id: "d3dmetal", label: "D3Dmetal"),
+    (id: "wined3d", label: "Wine"),
+    (id: "dxvk", label: "DXVK"),
+    (id: "auto", label: "Auto")
+]
 
 enum OnOff: String {
     case off = "0"

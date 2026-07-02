@@ -20,6 +20,9 @@ private let WINE_RESOURCES_ROOT = "Crossover"
 let SHARED_SUPPORT_COMPONENT = "Contents/SharedSupport/CrossOver"
 let SHARED_SUPPORT_PATH = "/" + SHARED_SUPPORT_COMPONENT
 private let INFO_PLIST_PATH = "Contents/Info.plist"
+
+let OSVersion = ProcessInfo.processInfo.operatingSystemVersion.majorVersion
+
 struct PathMap {
     var src: String
     var dst: String

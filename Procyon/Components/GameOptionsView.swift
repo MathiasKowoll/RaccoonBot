@@ -31,12 +31,7 @@ struct GameOptionsView: View {
                             
                             VStack(alignment: .trailing){
                                 if !game!.isNative {
-                                    Picker("Graphics Backend", selection: $gameOptions.cxGraphicsBackend) {
-                                        ForEach(cxGraphicsBackend, id: \.id) { (id, label) in
-                                            Text(label).tag(id)
-                                        }
-                                    }
-                                    .pickerStyle(.menu)
+                                    DropDown(options: cxGraphicsBackend, label: "Graphics Backend", value: $gameOptions.cxGraphicsBackend)
                                 }
                                 Divider()
                                 TextField("Game arguments", text: $gameOptions.gameArguments)
@@ -64,18 +59,7 @@ struct GameOptionsView: View {
                                     Text("Vulkan options")
                                     Toggle("Enable UE4 Hack", isOn: $gameOptions.ue4Hack)
                                     Toggle("MTL arg. buffers", isOn: $gameOptions.mvkArgBuff)
-                                    Picker("VK lib", selection: $gameOptions.vulkanLib) {
-                                        Text("Standard")
-                                            .tag("")
-                                        Text("Latest")
-                                            .tag("latest")
-                                        Text("Experimental")
-                                            .tag("experimental")
-                                        Text("Detroit Become Human")
-                                            .tag("dbh")
-//                                        Text("KosmicKrisp")
-//                                            .tag("kosmickrisp")
-                                    }
+                                    DropDown(options: cxVulkanBackend, label: "VK lib", value: $gameOptions.vulkanLib)
                                     .pickerStyle(.menu)
                                 }
                             }

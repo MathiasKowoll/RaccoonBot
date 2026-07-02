@@ -13,9 +13,31 @@ struct DropDown: View {
     @Binding var value: String
     
     var body: some View {
-        Picker(label, selection: $value) {
-            ForEach(options, id: \.id) { (id, label) in
-                Text(label).tag(id)
+        if OSVersion < 27 {
+            Picker(label, selection: $value) {
+                ForEach(options, id: \.id) { (id, label) in
+                    Text(label).tag(id)
+                }
+            }
+        } else {
+            HStack {
+                Text("Graphics Backend").lineLimit(1)
+                Menu {
+                    ForEach(options, id: \.id) { (id, label) in
+                        Button {
+                            value = id
+                        } label: {
+                            if value == id {
+                                Label(label, systemImage: "checkmark")
+                            } else {
+                                Text(label)
+                            }
+                        }
+                    }
+                } label: {
+                    Text(options.first(where: { $0.id == value })?.label ?? "Select")
+                }
+                .fixedSize()
             }
         }
     }

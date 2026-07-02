@@ -12,7 +12,8 @@ typealias DropdownOptions = [(id: String, label: String)]
 
 let cxGraphicsBackend: DropdownOptions = [
     (id: "dxmt", label: "DXMT"),
-    (id: "d3dmetal", label: "D3Dmetal"),
+    (id: "d3dmetal3", label: "D3Dmetal3"),
+    (id: "d3dmetal4", label: "D3Dmetal4"),
     (id: "wined3d", label: "Wine"),
     (id: "dxvk", label: "DXVK"),
     (id: "auto", label: "Auto")

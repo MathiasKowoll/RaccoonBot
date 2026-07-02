@@ -99,7 +99,7 @@ struct GameOptionsView: View {
                             }
                         }
                     }
-                    if(gameOptions.cxGraphicsBackend == "d3dmetal") {
+                    if(gameOptions.cxGraphicsBackend == "d3dmetal4") {
                         Divider()
                         Section("D3DMetal Options") {
                             Toggle("Metal 4 Backend", isOn: $gameOptions.d3dMtl4Enabled)

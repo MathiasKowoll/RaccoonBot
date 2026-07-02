@@ -174,12 +174,13 @@ func getInlineEnvs(from: GameOptions) -> String {
 //        "D3DM_MTL4=1",
 //        "D3DM_MAX_FPS=60",
     ]
+    let cxGraphicsBackend = from.cxGraphicsBackend.contains("d3dmetal") ? "d3dmetal" : from.cxGraphicsBackend
     value += defaults.joined(separator: " ") + " "
     value += from.mtlHudEnabled ? "MTL_HUD_ENABLED=1 " : ""
     value += from.ue4Hack ? "MVK_CONFIG_UE4_HACK_ENABLED=1 NAS_DISABLE_UE4_HACK=0 " : "MVK_CONFIG_UE4_HACK_ENABLED=0 NAS_DISABLE_UE4_HACK=1 "
     value += from.mvkArgBuff ? "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1 " : "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=0 "
     value += "ROSETTA_ADVERTISE_AVX=\(onOff(from.advertiseAVX)) "
-    value += "CX_GRAPHICS_BACKEND=\"\(from.cxGraphicsBackend)\" "
+    value += "CX_GRAPHICS_BACKEND=\"\(cxGraphicsBackend)\" "
     value += from.d3dMtl4Enabled ? "D3DM_MTL4=1 " : ""
     if from.d3dMaxFPS > 20 {
         value += "D3DM_MAX_FPS=\(DoubleToFormattedStr(from.d3dMaxFPS)) "

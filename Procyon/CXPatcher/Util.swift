@@ -73,7 +73,8 @@ private let dxvkRes: [(res: String, dest: String)] = WINE_DXVK_RESOURCES_PATHS.m
     (res: path, dest: "/lib/" + path)
 }
 
-private let allResources = d3dmRes + dxvkRes + [
+
+private let allResources = dxvkRes + [
 //    (res: "wine/x86_64-unix/winegstreamer.so", dest: "/lib/wine/x86_64-unix/winegstreamer.so"),
 //    (res: "wine/x86_64-unix/ntdll.so", dest: "/lib/wine/x86_64-unix/ntdll.so"),
 //    (res: "wine/x86_64-unix/winedmo.so", dest: "/lib/wine/x86_64-unix/winedmo.so"),
@@ -295,12 +296,28 @@ func fetchLatestRelease(from path: String) async throws -> String {
     return json["tag_name"] as! String
 }
 
+func installd3dMetal(at: URL, version: String) throws -> Void {
+    let d3dmRes: [(res: String, dest: String)] = WINE_D3DM_RESOURCES_PATHS.map { path in
+        let destPath = path.replacingOccurrences(of: "nvngx-on-metalfx", with: "nvngx")
+        return (res: "d3dMetal\(version)/" + path, dest: "/\(LIB_ROOT)/apple_gptk/" + destPath)
+    }
+    
+    let resources = d3dmRes
+        .map { item in
+            (res: item.res, dest: at.appendingPathComponent(SHARED_SUPPORT_COMPONENT).appendingPathComponent(item.dest))
+        }
+    
+    for (res, dest) in resources {
+        console.log("Copying \(res) to \(dest.path())")
+        try copyResource(name: res, destUrl: dest)
+    }
+}
 
 @discardableResult
 func makeCrossoverPatchedCopy(sourceCXPath: URL, setProgress: @escaping (Double, String) -> Void, setLoading: @escaping (Bool) -> Void, isX87: Bool = false) async -> URL {
     let f = FileManager.default
     let name = isX87 ? PATCHED_CX_X87_APPNAME : PATCHED_CX_APPNAME
-    let destUrl = f.homeDirectoryForCurrentUser.appendingPathComponent("Applications", isDirectory: true).appendingPathComponent(name)
+    let destUrl = f.homeDirectoryForCurrentUser.appendingPathComponent("Applications").appendingPathComponent(name)
     let resources = allResources
         .map { item in
             (res: item.res, dest: destUrl.appendingPathComponent(SHARED_SUPPORT_COMPONENT + item.dest))

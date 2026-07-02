@@ -37,7 +37,7 @@ struct OptionsView: View {
                             appGlobals.cxAppPath = patchedAppURL.path(percentEncoded: false)
                             persistUsrDefOptionString(key: "cxAppPath", value: patchedAppURL.relativePath)
                             persistUsrDefOptionString(key: "cxCompleteAppPath", value: patchedAppURL.path(percentEncoded: false))
-                            if !bottles.isEmpty{
+                            if !bottles.isEmpty {
                                 shouldShowBottleSelector = true
                             }
                         }
@@ -69,9 +69,12 @@ struct OptionsView: View {
                             }
                         }.onChange(of: appGlobals.selectedBottle) { oldValue, newValue in
                             if(newValue != "") {
+                                appGlobals.windowsSteamFolder = URL(string: newValue)?.appendingPathComponent(DEFAULT_STEAM_WINE_PATH)
+                                persistUsrDefOptionString(key: "windowsSteamFolder", value: appGlobals.windowsSteamFolder!.path(percentEncoded: false))
                                 libraryPageGlobals.folders.removeAll()
                                 resetPersistedFolderAccess()
-                                let steamLibrariesURLs = getSteamLibraryFolders(from: URL(string: newValue)!)
+                                let from = appGlobals.windowsSteamFolder?.appendingPathComponent("config") ?? URL(string: newValue)!.appendingPathComponent(DEFAULT_STEAM_WINE_CONFIG_PATH)
+                                let steamLibrariesURLs = getSteamLibraryFolders(bottleURL: URL(string: newValue)!,from: from)
                                 steamLibrariesURLs.forEach { url in
                                     validateAddSteamFolder(url, to: &libraryPageGlobals.folders)
                                 }
@@ -129,28 +132,23 @@ struct OptionsView: View {
                 GameLibrariesList(load: load)
                 .padding(.vertical)
                 VStack(alignment: .leading) {
-                    if appGlobals.cxAppPath != nil {
-                        ProminentButton("Open Crossover", image: "crossover-fill") {
-                            if let cxPath = appGlobals.cxAppPath {
-                                let url = URL(fileURLWithPath: cxPath)
-                                let configuration = NSWorkspace.OpenConfiguration()
-                                configuration.environment = [
-                                    "CX_GRAPHICS_BACKEND": "d3dmetal",
-                                    "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS": "0"
-                                ]
-                                NSWorkspace.shared.open(url, configuration: configuration)
-                            }
-                        }
-                    }
                     if appGlobals.selectedBottle != "" {
-                        ProminentButton("Open Steam", image: "steam-fill") {
-                            openSteam(cxAppPath: appGlobals.cxAppPath, selectedBottle: appGlobals.selectedBottle)
-                        }
-                        ProminentButton("Open current bottle", systemImage: "waterbottle"){
-                            if let selectedBottleURL = URL(string: appGlobals.selectedBottle){
-                                showFolder(url: selectedBottleURL)
+                        ProminentButton("Set Steam path", image: "steam-fill") {
+                            if let bottlePath = URL(string: appGlobals.selectedBottle) {
+                                if let url = openFolderSelectorPanel(type: .directory, initialDirectory: bottlePath.appendingPathComponent("drive_c"), title: "Select your Steam folder (where steam.exe is located)") {
+                                    let fallbackPath = bottlePath.appendingPathComponent(DEFAULT_STEAM_WINE_PATH).path(percentEncoded: false)
+                                    appGlobals.windowsSteamFolder = url
+                                    persistUsrDefOptionString(key: "windowsSteamFolder", value: appGlobals.windowsSteamFolder?.path(percentEncoded: false) ?? fallbackPath)
+                                    let from = appGlobals.windowsSteamFolder?.appendingPathComponent("config") ?? URL(string: appGlobals.selectedBottle)!.appendingPathComponent(DEFAULT_STEAM_WINE_CONFIG_PATH)
+                                    let steamLibrariesURLs = getSteamLibraryFolders(bottleURL: URL(string: appGlobals.selectedBottle)! ,from: from)
+                                    steamLibrariesURLs.forEach { url in
+                                        validateAddSteamFolder(url, to: &libraryPageGlobals.folders)
+                                    }
+                                    Task { await load() }
+                                }
                             }
                         }
+                        Text("\(appGlobals.windowsSteamFolder?.path(percentEncoded: false) ?? "Not set")")
                     }
                     VStack(alignment: .leading) {
                         Divider().padding(.top, 10)

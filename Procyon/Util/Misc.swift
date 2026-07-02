@@ -154,29 +154,29 @@ func safeShellWithOutput(_ command: String) throws -> String {
     return output
 }
 
-let DEFAULT_STEAM_MAC_PATH = "/Library/Application Support/Steam/config/"
-let DEFAULT_STEAM_WINE_PATH = "/drive_c/Program Files (x86)/Steam/config/"
+let DEFAULT_STEAM_MAC_PATH = "/Library/Application Support/Steam/"
+let DEFAULT_STEAM_MAC_CONFIG_PATH = DEFAULT_STEAM_MAC_PATH + "config/"
+let DEFAULT_STEAM_WINE_PATH = "/drive_c/Program Files (x86)/Steam/"
+let DEFAULT_STEAM_WINE_CONFIG_PATH = DEFAULT_STEAM_WINE_PATH + "config/"
 
-func getSteamUserID (usingBottlePath: URL) -> String? {
-    let steamLoginUsersPath = usingBottlePath.appendingPathComponent(DEFAULT_STEAM_WINE_PATH)
-        .appendingPathComponent("loginusers.vdf")
+func getSteamUserID (usingURL: URL) -> String? {
+    let steamLoginUsersPath = usingURL.appendingPathComponent("loginusers.vdf")
     guard let steamSettingsFile = try? String(contentsOfFile: steamLoginUsersPath.path(percentEncoded: false), encoding: .utf8) else { return nil }
     let parsed = parseVDFToDict(from: steamSettingsFile)
     let users = parsed["users"] as? [String: Any]
     return users?.keys.first?.description
 }
 
-func getSteamUserDataFallback (usingBottlePath: URL) -> UserInfo? {
-    let steamLoginUsersPath = usingBottlePath.appendingPathComponent(DEFAULT_STEAM_WINE_PATH)
-        .appendingPathComponent("loginusers.vdf")
+func getSteamUserDataFallback (usingPath: URL) -> UserInfo? {
+    let steamLoginUsersPath = usingPath.appendingPathComponent("loginusers.vdf")
     guard let steamSettingsFile = try? String(contentsOfFile: steamLoginUsersPath.path(percentEncoded: false), encoding: .utf8) else { return nil }
     let parsed = parseVDFToDict(from: steamSettingsFile)
     let users = parsed["users"] as? [String: Any]
     if let key = users?.keys.first {
         let user = users![key] as? [String: Any]
         let personaName = user?["PersonaName"] as? String ?? ""
-        let avatar = usingBottlePath
-            .appendingPathComponent(DEFAULT_STEAM_WINE_PATH)
+        let avatar = usingPath
+            .appendingPathComponent(DEFAULT_STEAM_WINE_CONFIG_PATH)
             .appendingPathComponent("avatarcache")
             .appendingPathComponent(key)
             .appendingPathExtension("png")
@@ -204,14 +204,13 @@ func getSteamUserDataFallback (usingBottlePath: URL) -> UserInfo? {
     return nil
 }
 
-func getSteamLibraryFolders(from: URL) -> [URL] {
+func getSteamLibraryFolders(bottleURL: URL, from: URL) -> [URL] {
     let f = FileManager.default
     var steamLibraries: [URL] = []
-    let drives = getBottleDrives(bottleURL: from)
+    let drives = getBottleDrives(bottleURL: bottleURL)
     console.log("drives: \(String(describing: drives))")
     let steamSettingsPaths = [
-        from.appendingPathComponent(DEFAULT_STEAM_WINE_PATH)
-            .appendingPathComponent("libraryfolders.vdf"),
+        from.appendingPathComponent("libraryfolders.vdf"),
         f.homeDirectoryForCurrentUser
             .appendingPathComponent(DEFAULT_STEAM_MAC_PATH)
             .appendingPathComponent("libraryfolders.vdf")

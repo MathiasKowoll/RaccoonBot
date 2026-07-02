@@ -8,11 +8,14 @@
 import UniformTypeIdentifiers
 import AppKit
 
-func openFolderSelectorPanel(type: UTType = .folder) -> URL? {
+func openFolderSelectorPanel(type: UTType = .folder, initialDirectory: URL? = nil, title: String? = nil) -> URL? {
     let panel = NSOpenPanel()
-    panel.title = "Select a Steam library folder (steamapps)";
+    panel.title = title ?? (type == .folder ? "Select a folder" : "Select a file");
     panel.allowsMultipleSelection = false;
     panel.canChooseDirectories = true;
     panel.allowedContentTypes = [type]
+    if let initialDirectory {
+        panel.directoryURL = initialDirectory
+    }
     return panel.runModal() == .OK ? panel.url?.absoluteURL : nil
 }

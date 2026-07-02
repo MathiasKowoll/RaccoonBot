@@ -212,7 +212,7 @@ func getSteamLibraryFolders(bottleURL: URL, from: URL) -> [URL] {
     let steamSettingsPaths = [
         from.appendingPathComponent("libraryfolders.vdf"),
         f.homeDirectoryForCurrentUser
-            .appendingPathComponent(DEFAULT_STEAM_MAC_PATH)
+            .appendingPathComponent(DEFAULT_STEAM_MAC_CONFIG_PATH)
             .appendingPathComponent("libraryfolders.vdf")
     ].filter{ f.fileExists(atPath: $0.path(percentEncoded: false)) }
     for steamSettingsPath in steamSettingsPaths {

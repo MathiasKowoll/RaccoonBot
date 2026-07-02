@@ -201,6 +201,16 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
 //    try cpyd8d9DLLs(to: bottleURL, enable: options!.dx9PatchEnabled)
     
     let gameLaunchCommand = appExeURL != nil ? "\"\(appExeURL!.path(percentEncoded: false))\"" : "\"\(steamExePath)\" \(steamBootOptions) -applaunch \(String(id))"
+    let cxAppURL = URL(fileURLWithPath: cxAppPath)
+    switch (options!.cxGraphicsBackend) {
+        case "d3dmetal4":
+            try installd3dMetal(at: cxAppURL, version: "4")
+        case "d3dmetal3":
+            try installd3dMetal(at: cxAppURL, version: "3")
+        default:
+            try  installd3dMetal(at: cxAppURL, version: "3")
+    }
+    
     if (options!.x87PatchEnabled) {
         if(!f.fileExists(atPath: x87cxAppURL.path())) {
             console.error("Couldn't find \(x87cxAppURL.path())")

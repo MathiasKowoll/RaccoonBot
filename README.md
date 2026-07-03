@@ -53,7 +53,7 @@ open The options panel again,
 unselect and re-select the bottle from the dropdown, and procyoon should find your folders if you have steam for mac, it should be able to detect your mac steam folders too, you should see procyon analyzing your game libraries, wait until complete 
 
 
-### Contributing:
+# Contributing:
 Everyone is welcome to contribute but please follow some basic rules:
 - No AI generated code: it is important that you read the codebase get a rough idea on how things are working (you can contact me on discord for clarifications) you can use AI but please no vibe coding.
 - No untested features, if you plan to open a PR please make sure it works before.

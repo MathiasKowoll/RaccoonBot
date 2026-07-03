@@ -33,8 +33,9 @@ Which is pretty much in line with the roadmap
 Unfortunately there are still some steps that needed to be done manually:
 
 ## step 1:
-Choose  Procyon for crossover 26 (patched) -> https://github.com/italomandara/Procyon/releases/download/PRE2/Procyon.app.zip
-Or Procyon for crossover preview (light patched) -> https://github.com/italomandara/Procyon/releases/download/PRE2/Procyon.Preview.app.zip
+Choose  Procyon for crossover 26 (patched) -> Procyon.app.zip
+
+Or Procyon for crossover preview (light patched) -> Procyon.Preview.app.zip
 
 ## step 2:
 open The options panel,

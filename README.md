@@ -30,7 +30,7 @@ https://github.com/italomandara/Procyon/issues/1
 Which is pretty much in line with the roadmap
 
 # Instructions
-Unfortunately there are still some steps that needed to be done manually:
+Unfortunately there are still some steps that are needed to be done manually:
 
 ## step 1:
 Choose  Procyon for crossover 26 (patched) -> Procyon.app.zip

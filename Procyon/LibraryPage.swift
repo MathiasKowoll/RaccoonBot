@@ -75,6 +75,9 @@ struct LibraryPage: View {
             .sheet(isPresented: $libraryPageGlobals.showOptions) {
                 OptionsView(load: load)
             }
+            .sheet(isPresented: $libraryPageGlobals.showTools) {
+                ToolsView(load: load)
+            }
             .sheet(isPresented: $libraryPageGlobals.showDetailView) {
                 Modal(showModal: $libraryPageGlobals.showDetailView, collapse: true, content:  {
                     GameDetailView(game: $libraryPageGlobals.selectedGame)

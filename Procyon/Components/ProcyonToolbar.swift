@@ -53,6 +53,14 @@ struct ProcyonToolbar: View {
                     Image(systemName: "waterbottle").resizable().scaledToFit().frame(width: iconSize, height: iconSize)
                 }
             }
+            Divider()
+            Button {
+                if let selectedBottleURL = URL(string: appGlobals.selectedBottle){
+                    libraryPageGlobals.showTools = true
+                }
+            } label: {
+                Image(systemName: "wrench.adjustable.fill").resizable().scaledToFit().frame(width: iconSize, height: iconSize)
+            }
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 15)

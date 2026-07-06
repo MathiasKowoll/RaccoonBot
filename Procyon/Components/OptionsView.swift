@@ -19,6 +19,7 @@ struct OptionsView: View {
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
     @MainActor var load: @Sendable () async -> Void
     @State var createBtlPrc: Process?
+    @State var cleard3dmCacheStatus: DeleteStatus = DeleteStatus.idle
     
     var body: some View {
         Modal(
@@ -149,45 +150,6 @@ struct OptionsView: View {
                             }
                         }
                         Text("\(appGlobals.windowsSteamFolder?.path(percentEncoded: false) ?? "Not set")")
-                    }
-                    VStack(alignment: .leading) {
-                        Divider().padding(.top, 10)
-                        Text("Cache management")
-                            .padding(.vertical, 5)
-                        ProminentButton("Delete Owned games cache", systemImage: "trash") {
-                            api.deleteOwnedGamesIDsCache()
-                            libraryPageGlobals.gamesMeta.removeAll()
-                            Task {
-                                await load()
-                            }
-                            libraryPageGlobals.showOptions = false
-                        }
-                        ProminentButton("Delete cache", systemImage: "trash") {
-                            api.deleteGameCache()
-                            api.deleteBlacklistCache()
-                            libraryPageGlobals.games.removeAll()
-                            Task {
-                                await load()
-                            }
-                            libraryPageGlobals.showOptions = false
-                        }
-                        ProminentButton("Delete all downloads cache", systemImage: "trash") {
-                            TarDownloader.deleteAllDownloadCache()
-                        }
-                    }
-                    if(DEBUG_ENABLED == true) {
-                        Divider().padding(.top, 10)
-                        Text("Debug")
-                            .padding(.vertical, 5)
-                        VStack(alignment: .leading) {
-                            ProminentButton("Start Logging", systemImage: "ant") {
-                                console.enableLogFile = true
-                            }
-                            Spacer()
-                            ProminentButton("Download logs", systemImage: "square.and.arrow.down") {
-                                console.saveLogs()
-                            }
-                        }
                     }
                 }
             }

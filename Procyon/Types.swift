@@ -512,6 +512,7 @@ class LibraryPageGlobals: ObservableObject {
     @Published var gamesMeta: [GamesMeta] = []
     @Published var folders: [String] = []
     @Published var showOptions: Bool = false
+    @Published var showTools: Bool = false
     @Published var filter: String = ""
     @Published var showDetailView = false
     @Published var selectedGame: Game? = nil

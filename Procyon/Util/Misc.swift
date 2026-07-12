@@ -284,7 +284,42 @@ func getAppNames(isNative: Bool, gameURL: URL?) -> [String] {
     return results
 }
 
-func getGameTracker(appNames: [String], cxAppPath: String, bottleName: String, onLoad: @escaping () -> Void, onTerminate: @escaping () -> Void, isNative: Bool) async throws -> TerminationObserver {
+class SteamCloudSyncWatcher {
+    var steamID: String
+    let steamPath: String
+    var logPath: String {
+        return "\(steamPath)/logs/cloud_log.txt"
+    }
+//    should look like this 'C:\Program Files (x86)\Steam\logs\cloud_log.txt'
+    
+    init (steamID: String, steamPath: String) {
+        self.steamID = steamID
+        self.steamPath = steamPath
+    }
+    
+    func waitForSteamCloudSync() async throws {
+        let appIDMarker = "[AppID \(self.steamID)]"
+        let successMSG = "Successfully synced"
+        let deadline = Date().addingTimeInterval(60)
+        var polling = true
+        while polling {
+            let content = try String(contentsOfFile: logPath, encoding: .utf8)
+            if(Date() > deadline) {
+                console.log("\(self.steamID): Cloud sync timed out")
+                polling = false
+            }
+            for fileContentLine in content.split(separator: "\n") {
+                if(fileContentLine.contains(appIDMarker) && fileContentLine.contains(successMSG)) {
+                    console.log("\(self.steamID): Cloud sync complete")
+                    polling = false
+                }
+            }
+        }
+        return
+    }
+}
+
+func getGameTracker(appNames: [String], cxAppPath: String, bottleName: String, onLoad: @escaping () -> Void, onTerminate: @escaping () -> Void, isNative: Bool, steamID: Int?, steamPath: String) async throws -> TerminationObserver {
     let tOb = TerminationObserver(then: { output in
         console.log(output.userInfo?.description ?? "no userInfo")
         let terminatedAppProcessName = output.userInfo?[AnyHashable("NSApplicationName")] as? String ?? "unknown"
@@ -293,10 +328,42 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottleName: String, o
         if (appNames.contains(terminatedAppName) || appNames.contains(terminatedAppProcessName)) {
             console.log("\(appNames) -> \(terminatedAppName) or \(terminatedAppProcessName) has been terminated, closing steam...")
             Task {
-                try await quitSteam(cxAppPath: cxAppPath, bottleName: bottleName, isNative: isNative)
-                if (!isNative) {
-                    try await closeWineActivities()
+                if(!isNative && steamID != nil){ // SteamCloudSyncWatcher isn't for native steam games
+                    let cloudSyncWatcher = SteamCloudSyncWatcher(steamID: String(steamID!), steamPath: steamPath)
+                    try await cloudSyncWatcher.waitForSteamCloudSync()
                 }
+                try await quitSteam(cxAppPath: cxAppPath, bottleName: bottleName, isNative: isNative)
+                try await closeWineActivities()
+                onTerminate()
+                console.log("onTerminate() was called")
+            }
+        }
+    })
+    try await trackPlaying(apps: appNames, then: {
+        console.log("found game \(appNames.joined(separator: ", ")), loading...")
+        onLoad()
+    }, onTimeout: {
+        console.log("\(appNames.joined(separator: ", ")), timeout...")
+        onTerminate()
+    }, isNative: isNative)
+    return tOb
+}
+
+func getGameTracker(appNames: [String], cxAppPath: String, bottleName: String, onLoad: @escaping () -> Void, onTerminate: @escaping () -> Void, isNative: Bool, steamID: Int, steamPath: String) async throws -> TerminationObserver {
+    let tOb = TerminationObserver(then: { output in
+        console.log(output.userInfo?.description ?? "no userInfo")
+        let terminatedAppProcessName = output.userInfo?[AnyHashable("NSApplicationName")] as? String ?? "unknown"
+        let terminatedAppPath = output.userInfo?[AnyHashable("NSApplicationPath")] as? String ?? "unknown"
+        let terminatedAppName = String(terminatedAppPath.split(separator: "/").last ?? "unknown")
+        if (appNames.contains(terminatedAppName) || appNames.contains(terminatedAppProcessName)) {
+            console.log("\(appNames) -> \(terminatedAppName) or \(terminatedAppProcessName) has been terminated, closing steam...")
+            Task {
+                if(!isNative){
+                    let cloudSyncWatcher = SteamCloudSyncWatcher(steamID: String(steamID), steamPath: steamPath)
+                    try await cloudSyncWatcher.waitForSteamCloudSync()
+                }
+                try await quitSteam(cxAppPath: cxAppPath, bottleName: bottleName, isNative: isNative)
+                try await closeWineActivities()
                 onTerminate()
                 console.log("onTerminate() was called")
             }

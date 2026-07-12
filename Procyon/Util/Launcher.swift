@@ -58,12 +58,8 @@ func closeWineActivities() async throws {
 
 func trackPlaying(apps: [String], then: @escaping () -> Void, onTimeout: @escaping () -> Void, isNative: Bool) async throws -> Void {
     let pollInterval: UInt64 = 500_000_000
-    let gracePeriod: UInt64 = 60_000_000_000 // after 60 seconds give up tracking
+    let gracePeriod: UInt64 = 70_000_000_000 // after 70 seconds give up tracking
     var elapsed: UInt64 = 0
-    var targets = isNative ? NSWorkspace.shared.runningApplications : NSWorkspace.shared.runningApplications.filter { app in
-        guard let url = app.executableURL else { return false }
-        return url.lastPathComponent.lowercased().hasSuffix(".exe")
-    }
     
     var nativeOrWineApps: [String] {
         isNative ? apps + apps.map { $0.replacingOccurrences(of: ".app", with: "") } : apps
@@ -71,18 +67,11 @@ func trackPlaying(apps: [String], then: @escaping () -> Void, onTimeout: @escapi
     
     while (elapsed < gracePeriod) {
         try await Task.sleep(nanoseconds: pollInterval)
-        let newTargets = isNative ? NSWorkspace.shared.runningApplications : NSWorkspace.shared.runningApplications.filter { app in
-            guard let url = app.executableURL else { return false }
-            return
-                url.lastPathComponent.lowercased().hasSuffix(".exe") &&
-                !targets.contains(where: { $0.processIdentifier == app.processIdentifier }) &&
-                url.lastPathComponent.lowercased().contains("wineloader")
-        }
-        targets.append(contentsOf: newTargets)
-        if(newTargets.contains { Set(nativeOrWineApps).contains($0.executableURL?.lastPathComponent) }) {
-            if(!isNative) { // attempts to "select" the app if for some reason it isn't (happens with wine/crossover)
-                newTargets.first(where: { Set(nativeOrWineApps).contains($0.executableURL?.lastPathComponent) })!.activate(options: [.activateAllWindows])
-            }
+    
+        let appNames = NSWorkspace.shared.runningApplications
+            .map{ app in app.executableURL?.lastPathComponent ?? "none" }
+            .filter { lastpathcomponent in lastpathcomponent.contains(".exe")}
+        if (appNames.contains {Set(nativeOrWineApps).contains($0)}) {
             then()
             return
         }
@@ -119,7 +108,7 @@ func openSteam(cxAppPath: String?, selectedBottle: String?, SteamX86AppPath: Str
         return
     }
     if let bottleName = URL(string: selectedBottle!)?.lastPathComponent {
-        let steamLaunchCommand = "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=0 CX_GRAPHICS_BACKEND=\"d3dmetal\" \(cxAppPath!)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \"\(SteamX86AppPath)\""
+        let steamLaunchCommand = "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=0 CX_GRAPHICS_BACKEND=\"auto\" \(cxAppPath!)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \"\(SteamX86AppPath)\""
         do {
             try safeShell(steamLaunchCommand)
             console.log(steamLaunchCommand)

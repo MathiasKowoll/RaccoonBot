@@ -130,7 +130,10 @@ struct GameHeader: View {
                         libraryPageGlobals.setLoader(state: false) // if doesn't get loaded i need to close the loader
                         libraryPageGlobals.playingID = nil
                         tObserver = nil
-                    }, isNative: game!.isNative)
+                    },
+                                                         isNative: game!.isNative,
+                                                         steamID: game!.isCustom! ? nil : game!.steamAppID,
+                                                         steamPath: appGlobals.windowsSteamFolder?.path(percentEncoded: false) ?? "")
                 }
                 if(game!.isNative) {
                     try await launchNativeGame(id: String(game!.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions, appExeURL: game!.appExeURL)

@@ -131,9 +131,9 @@ struct GameHeader: View {
                         libraryPageGlobals.playingID = nil
                         tObserver = nil
                     },
-                                                         isNative: game!.isNative,
-                                                         steamID: game!.isCustom! ? nil : game!.steamAppID,
-                                                         steamPath: appGlobals.windowsSteamFolder?.path(percentEncoded: false) ?? "")
+                     isNative: game!.isNative,
+                     steamID: game!.isCustom == true ? nil : game!.steamAppID,
+                     steamPath: appGlobals.windowsSteamFolder?.path(percentEncoded: false) ?? "")
                 }
                 if(game!.isNative) {
                     try await launchNativeGame(id: String(game!.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions, appExeURL: game!.appExeURL)

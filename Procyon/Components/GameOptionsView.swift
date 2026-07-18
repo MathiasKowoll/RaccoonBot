@@ -10,6 +10,7 @@ import SwiftUI
 struct GameOptionsView: View {
     @Binding var game: Game?
     @EnvironmentObject var gameOptions: GameOptions
+    @State var isLoading = false
     
     var preferredMaxFrameRate: String {
         $gameOptions.dxmtPreferredMaxFrameRate.wrappedValue < 20.0 ? "Disabled" : "\($gameOptions.dxmtPreferredMaxFrameRate.wrappedValue)"
@@ -28,7 +29,6 @@ struct GameOptionsView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     Section("Generic options") {
                         HStack(alignment: .top, spacing: 20) {
-                            
                             VStack(alignment: .trailing){
                                 if !game!.isNative {
                                     DropDown(options: cxGraphicsBackend, label: "Graphics Backend", value: $gameOptions.cxGraphicsBackend)
@@ -132,6 +132,19 @@ struct GameOptionsView: View {
                             console.log("resetting")
                             gameOptions.set(data: GameOptionsData(data: GameOptions()))
                         }
+                        Spacer()
+                        ProminentButton("Auto configure", systemImage: "wand.and.sparkles", isLoading: isLoading) {
+                            Task {
+                                isLoading = true
+                                do {
+                                    try await autoconfig()
+                                } catch {
+                                    // display error on the UI
+                                    isLoading = false
+                                }
+                                isLoading = false
+                            }
+                        }
                     }.padding(.top)
                 }
                 
@@ -144,6 +157,16 @@ struct GameOptionsView: View {
         .onAppear() {
             if let data: GameOptionsData = readUsrDefData(key: gameOptKey) {
                 self.gameOptions.set(data: data)
+            }
+        }
+    }
+    
+    @MainActor
+    private func autoconfig() async throws {
+        if let id = game?.steamAppID {
+            print(id)
+            if let autoconfigData = try await api.fetchAutoConfig(steamID: String(id)) {
+                gameOptions.importAutoConfig(data: autoconfigData)
             }
         }
     }

@@ -35,28 +35,28 @@ enum OnOff: String {
 typealias CXDrives = [String: URL]
 
 struct GameOptionsData: Codable { // this is used for reading saved properties
-    var cxGraphicsBackend: String
-    var wineMSync: Bool
-    var mtlHudEnabled: Bool
-    var d3dMtl4Enabled: Bool
-    var x87PatchEnabled: Bool
-    var dx9PatchEnabled: Bool
-    var gameArguments: String
-    var dxmtPreferredMaxFrameRate: Double
-    var dxmtMetalFXSpatial: Bool
-    var dxmtMetalSpatialUpscaleFactor: Double
-    var advertiseAVX: Bool
-    var envVariables: String
-    var enableSDL: Bool
-    var disableHidraw: Bool
-    var ue4Hack: Bool
-    var mvkArgBuff: Bool
-    var vulkanLib: String
+    var cxGraphicsBackend: String?
+    var wineMSync: Bool?
+    var mtlHudEnabled: Bool?
+    var d3dMtl4Enabled: Bool?
+    var x87PatchEnabled: Bool?
+    var dx9PatchEnabled: Bool?
+    var gameArguments: String?
+    var dxmtPreferredMaxFrameRate: Double?
+    var dxmtMetalFXSpatial: Bool?
+    var dxmtMetalSpatialUpscaleFactor: Double?
+    var advertiseAVX: Bool?
+    var envVariables: String?
+    var enableSDL: Bool?
+    var disableHidraw: Bool?
+    var ue4Hack: Bool?
+    var mvkArgBuff: Bool?
+    var vulkanLib: String?
     var dxvk: String?
     var wineEsync: String?
     var d3dMEnableMetalFX: String?
     var d3dSupportDXR: String?
-    var d3dMaxFPS: Double
+    var d3dMaxFPS: Double?
     
     init(data: GameOptions) {
         self.cxGraphicsBackend = data.cxGraphicsBackend
@@ -134,28 +134,52 @@ class GameOptions: ObservableObject { // this is used as form state
     }
     
     func set(data: GameOptionsData) {
-        self.cxGraphicsBackend = data.cxGraphicsBackend
-        self.wineMSync = data.wineMSync
-        self.mtlHudEnabled = data.mtlHudEnabled
-        self.x87PatchEnabled = data.x87PatchEnabled
-        self.dx9PatchEnabled = data.dx9PatchEnabled
-        self.gameArguments = data.gameArguments
-        self.dxmtMetalFXSpatial = data.dxmtMetalFXSpatial
-        self.dxmtMetalSpatialUpscaleFactor = data.dxmtMetalSpatialUpscaleFactor
-        self.dxmtPreferredMaxFrameRate = data.dxmtPreferredMaxFrameRate
-        self.advertiseAVX = data.advertiseAVX
-        self.envVariables = data.envVariables
-        self.enableSDL = data.enableSDL
-        self.disableHidraw = data.disableHidraw
-        self.ue4Hack = data.ue4Hack
-        self.mvkArgBuff = data.mvkArgBuff
-        self.vulkanLib = data.vulkanLib
-        self.dxvk = data.dxvk
-        self.wineEsync = data.wineEsync
-        self.d3dMEnableMetalFX = data.d3dMEnableMetalFX
-        self.d3dSupportDXR = data.d3dSupportDXR
-        self.d3dMtl4Enabled = data.d3dMtl4Enabled
-        self.d3dMaxFPS = data.d3dMaxFPS
+        self.cxGraphicsBackend = data.cxGraphicsBackend ?? "auto"
+        self.wineMSync = data.wineMSync ?? true
+        self.mtlHudEnabled = data.mtlHudEnabled ?? false
+        self.x87PatchEnabled = data.x87PatchEnabled ?? false
+        self.dx9PatchEnabled = data.dx9PatchEnabled ?? false
+        self.gameArguments = data.gameArguments ?? ""
+        self.dxmtMetalFXSpatial = data.dxmtMetalFXSpatial ?? false
+        self.dxmtMetalSpatialUpscaleFactor = data.dxmtMetalSpatialUpscaleFactor ?? 1.0
+        self.dxmtPreferredMaxFrameRate = data.dxmtPreferredMaxFrameRate ?? 0
+        self.advertiseAVX = data.advertiseAVX ?? true
+        self.envVariables = data.envVariables ?? ""
+        self.enableSDL = data.enableSDL ?? true
+        self.disableHidraw = data.disableHidraw ?? false
+        self.ue4Hack = data.ue4Hack ?? true
+        self.mvkArgBuff = data.mvkArgBuff ?? true
+        self.vulkanLib = data.vulkanLib ?? "standard"
+        self.dxvk = data.dxvk ?? ""
+        self.wineEsync = data.wineEsync ?? ""
+        self.d3dMEnableMetalFX = data.d3dMEnableMetalFX ?? ""
+        self.d3dSupportDXR = data.d3dSupportDXR ?? ""
+        self.d3dMtl4Enabled = data.d3dMtl4Enabled ?? false
+        self.d3dMaxFPS = data.d3dMaxFPS ?? 0
+    }
+    func importAutoConfig(data: GameOptionsData) {
+        if let v = data.cxGraphicsBackend { self.cxGraphicsBackend = v }
+        if let v = data.wineMSync { self.wineMSync = v }
+        if let v = data.mtlHudEnabled { self.mtlHudEnabled = v }
+        if let v = data.x87PatchEnabled { self.x87PatchEnabled = v }
+        if let v = data.dx9PatchEnabled { self.dx9PatchEnabled = v }
+        if let v = data.gameArguments { self.gameArguments = v }
+        if let v = data.dxmtMetalFXSpatial { self.dxmtMetalFXSpatial = v }
+        if let v = data.dxmtMetalSpatialUpscaleFactor { self.dxmtMetalSpatialUpscaleFactor = v }
+        if let v = data.dxmtPreferredMaxFrameRate { self.dxmtPreferredMaxFrameRate = v }
+        if let v = data.advertiseAVX { self.advertiseAVX = v }
+        if let v = data.envVariables { self.envVariables = v }
+        if let v = data.enableSDL { self.enableSDL = v }
+        if let v = data.disableHidraw { self.disableHidraw = v }
+        if let v = data.ue4Hack { self.ue4Hack = v }
+        if let v = data.mvkArgBuff { self.mvkArgBuff = v }
+        if let v = data.vulkanLib { self.vulkanLib = v }
+        if let v = data.dxvk { self.dxvk = v }
+        if let v = data.wineEsync { self.wineEsync = v }
+        if let v = data.d3dMEnableMetalFX { self.d3dMEnableMetalFX = v }
+        if let v = data.d3dSupportDXR { self.d3dSupportDXR = v }
+        if let v = data.d3dMtl4Enabled { self.d3dMtl4Enabled = v }
+        if let v = data.d3dMaxFPS { self.d3dMaxFPS = v }
     }
 }
 

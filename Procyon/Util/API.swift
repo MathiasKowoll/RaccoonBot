@@ -44,6 +44,7 @@ final class SteamAPI {
     private var cacheBlacklist: [String] = BLACKLIST
     private var cacheProfileData: UserInfo? = nil
     private var cache: [String: SteamGame] = [:]
+    private var autoConfigCache: [String: GameOptionsData] = [:]
     private var cacheOwnedGamesIDs: [String] = []
     private let apiKey: String = Secrets.apiKey
     private var cacheBlacklistURL: URL {
@@ -301,6 +302,29 @@ final class SteamAPI {
             self.cacheProfileData = profileData[0]
             self.saveProfileDataCache()
             return profileData[0]
+        } catch {
+            console.error(String(reflecting: error))
+            return nil
+        }
+    }
+    func fetchAutoConfig(steamID: String) async throws -> GameOptionsData? {
+        if let cached = self.autoConfigCache[steamID] {
+            console.log("Using cached user data")
+            return cached
+        }
+        let urlString = "\(baseAPIURL)/settings/?steamID=\(steamID)"
+        let headers: HTTPHeaders = ["x-api-key": apiKey]
+        do {
+            let data = try await AF.request(urlString, method: .get, headers: headers)
+                .validate(statusCode: 200..<300)
+                .serializingData()
+                .value
+            
+            let root = try JSONDecoder().decode(GameOptionsDataResponse.self, from: data)
+            let autoConfigData = root.data
+            self.autoConfigCache[steamID]  = autoConfigData
+            self.saveProfileDataCache()
+            return autoConfigData
         } catch {
             console.error(String(reflecting: error))
             return nil

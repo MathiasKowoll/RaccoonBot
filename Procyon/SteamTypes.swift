@@ -348,3 +348,8 @@ struct UserInfo: Codable {
 struct UserInfoResponse: Codable {
     let data: [UserInfo]
 }
+
+struct GameOptionsDataResponse: Codable {
+    let data: GameOptionsData
+}
+

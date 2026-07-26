@@ -41,6 +41,9 @@ struct OptionsView: View {
                             if !bottles.isEmpty {
                                 shouldShowBottleSelector = true
                             }
+                            if (DEBUG_ENABLED) {
+                                console.saveLogs()
+                            }
                         }
                         do {
                             bottles = try getAllBottles(appDir: url)

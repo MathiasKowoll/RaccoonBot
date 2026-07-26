@@ -126,6 +126,11 @@ func getIsNative(fromURL: URL) -> Bool {
 }
 
 func safeShell(_ command: String) throws {
+    if(DEBUG_ENABLED) {
+        let log = try safeShellWithOutput(command)
+        console.log(log)
+        return
+    }
     let task = Process()
     
     task.standardInput = FileHandle.nullDevice

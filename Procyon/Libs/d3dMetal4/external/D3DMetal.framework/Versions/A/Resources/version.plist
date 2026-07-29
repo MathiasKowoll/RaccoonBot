@@ -3,14 +3,14 @@
 <plist version="1.0">
 <dict>
 	<key>BuildVersion</key>
-	<string>8</string>
+	<string>2</string>
 	<key>CFBundleShortVersionString</key>
-	<string>4.0b1</string>
+	<string>4.0b2</string>
 	<key>CFBundleVersion</key>
-	<string>4.0b1</string>
+	<string>4.0b2</string>
 	<key>ProjectName</key>
 	<string>D3DRendererMetal</string>
 	<key>SourceVersion</key>
-	<string>33014000000000</string>
+	<string>33024000000000</string>
 </dict>
 </plist>

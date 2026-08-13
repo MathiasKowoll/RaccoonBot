@@ -324,7 +324,7 @@ class SteamCloudSyncWatcher {
     }
 }
 
-func getGameTracker(appNames: [String], cxAppPath: String, bottleName: String, onLoad: @escaping () -> Void, onTerminate: @escaping () -> Void, isNative: Bool, steamID: Int?, steamPath: String) async throws -> TerminationObserver {
+func getGameTracker(appNames: [String], cxAppPath: String, bottleName: String, onLoad: @escaping (_ appName: String) -> Void, onTerminate: @escaping () -> Void, isNative: Bool, steamID: Int?, steamPath: String) async throws -> TerminationObserver {
     let tOb = TerminationObserver(then: { output in
         console.log(output.userInfo?.description ?? "no userInfo")
         let terminatedAppProcessName = output.userInfo?[AnyHashable("NSApplicationName")] as? String ?? "unknown"
@@ -344,9 +344,9 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottleName: String, o
             }
         }
     })
-    try await trackPlaying(apps: appNames, then: {
+    try await trackPlaying(apps: appNames, then: { appNames in
         console.log("found game \(appNames.joined(separator: ", ")), loading...")
-        onLoad()
+        onLoad(appNames[0])
     }, onTimeout: {
         console.log("\(appNames.joined(separator: ", ")), timeout...")
         onTerminate()
@@ -354,7 +354,7 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottleName: String, o
     return tOb
 }
 
-func getGameTracker(appNames: [String], cxAppPath: String, bottleName: String, onLoad: @escaping () -> Void, onTerminate: @escaping () -> Void, isNative: Bool, steamID: Int, steamPath: String) async throws -> TerminationObserver {
+func getGameTracker(appNames: [String], cxAppPath: String, bottleName: String, onLoad: @escaping (_ game: String) -> Void, onTerminate: @escaping () -> Void, isNative: Bool, steamID: Int, steamPath: String) async throws -> TerminationObserver {
     let tOb = TerminationObserver(then: { output in
         console.log(output.userInfo?.description ?? "no userInfo")
         let terminatedAppProcessName = output.userInfo?[AnyHashable("NSApplicationName")] as? String ?? "unknown"
@@ -374,9 +374,9 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottleName: String, o
             }
         }
     })
-    try await trackPlaying(apps: appNames, then: {
+    try await trackPlaying(apps: appNames, then: { appNames in
         console.log("found game \(appNames.joined(separator: ", ")), loading...")
-        onLoad()
+        onLoad(appNames[0])
     }, onTimeout: {
         console.log("\(appNames.joined(separator: ", ")), timeout...")
         onTerminate()

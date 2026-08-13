@@ -56,7 +56,7 @@ func closeWineActivities() async throws {
     }
 }
 
-func trackPlaying(apps: [String], then: @escaping () -> Void, onTimeout: @escaping () -> Void, isNative: Bool) async throws -> Void {
+func trackPlaying(apps: [String], then: @escaping (_ matching: [String]) -> Void, onTimeout: @escaping () -> Void, isNative: Bool) async throws -> Void {
     let pollInterval: UInt64 = 500_000_000
     let gracePeriod: UInt64 = 70_000_000_000 // after 70 seconds give up tracking
     var elapsed: UInt64 = 0
@@ -72,7 +72,7 @@ func trackPlaying(apps: [String], then: @escaping () -> Void, onTimeout: @escapi
             .map{ app in app.executableURL?.lastPathComponent ?? "none" }
             .filter { lastpathcomponent in lastpathcomponent.contains(".exe")}
         if (appNames.contains {Set(nativeOrWineApps).contains($0)}) {
-            then()
+            then(appNames)
             return
         }
         elapsed += pollInterval

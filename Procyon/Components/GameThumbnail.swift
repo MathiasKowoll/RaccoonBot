@@ -140,10 +140,11 @@ struct GameThumbnail: View {
                     console.warn("failed to retrieve game options")
                 }
                 Task(priority: .background) {
-                    tObserver = try await getGameTracker(appNames: updatedItem.appNames, cxAppPath: appGlobals.cxAppPath!, bottleName: appGlobals.selectedBottle, onLoad: {
+                    tObserver = try await getGameTracker(appNames: updatedItem.appNames, cxAppPath: appGlobals.cxAppPath!, bottleName: appGlobals.selectedBottle, onLoad: { appName in 
                         libraryPageGlobals.playingID = item.id
                         DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
                             libraryPageGlobals.setLoader(state: false)
+                            activateApp(appName)
                         }
                     }, onTerminate: {
                         libraryPageGlobals.setLoader(state: false) // if doesn't get loaded i need to close the loader

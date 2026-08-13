@@ -5,6 +5,7 @@
 //  Created by Italo Mandara on 26/03/2026.
 //
 import Foundation
+import AppKit
 
 //let PROCYON_SUPPORT_FOLDER_URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!.appendingPathComponent("Procyon")
 let CX_SUPPORT_FOLDER_URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!.appendingPathComponent("CrossOver")
@@ -311,6 +312,14 @@ func installd3dMetal(at: URL, version: String) throws -> Void {
         console.log("Copying \(res) to \(dest.path())")
         try copyResource(name: res, destUrl: dest)
     }
+}
+
+func activateApp(_ gameName: String) -> Void {
+    //do nothing
+    let app = NSWorkspace().runningApplications.first(where: { gameName.contains($0.localizedName ?? "none")})
+    console.log("attempting to put your game in the foreground")
+    console.log(app?.executableURL?.lastPathComponent ?? app?.localizedName ?? "couldn't get app")
+    app?.activate(options: .activateAllWindows)
 }
 
 @discardableResult

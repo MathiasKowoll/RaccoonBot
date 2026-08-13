@@ -171,7 +171,7 @@ func getInlineEnvs(from: GameOptions) -> String {
 //        "MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=1", //slower, but more reliable
 //        "MVK_CONFIG_PREFILL_METAL_COMMAND_BUFFERS=3", //this actually slows down everything
 //        "MVK_CONFIG_USE_MTLHEAP=2",
-//        "D3DM_MTL4=1",
+//        "D3DM_MTL4=0",
 //        "D3DM_MAX_FPS=60",
     ]
     let cxGraphicsBackend = from.cxGraphicsBackend.contains("d3dmetal") ? "d3dmetal" : from.cxGraphicsBackend
@@ -181,7 +181,7 @@ func getInlineEnvs(from: GameOptions) -> String {
     value += from.mvkArgBuff ? "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1 " : "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=0 "
     value += "ROSETTA_ADVERTISE_AVX=\(onOff(from.advertiseAVX)) "
     value += "CX_GRAPHICS_BACKEND=\"\(cxGraphicsBackend)\" "
-    value += from.d3dMtl4Enabled ? "D3DM_MTL4=1 " : ""
+    value += "D3DM_MTL4=\(from.d3dMtl4Enabled ? "1" : "0") "
     if from.d3dMaxFPS > 20 {
         value += "D3DM_MAX_FPS=\(DoubleToFormattedStr(from.d3dMaxFPS)) "
     }

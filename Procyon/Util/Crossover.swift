@@ -135,7 +135,7 @@ func getDxmtConfigEnv(values: [String]) -> String {
     return values.count == 0 ? "" : "DXMT_CONFIG=\"\(values.joined(separator: ";"))\" "
 }
 
-func getInlineEnvs(from: GameOptions) -> String {
+func getInlineEnvs(from: GameOptions, cxAppPath: String? = nil) -> String {
     /**
      @TO DO:
      "MVK_CONFIG_FAST_MATH", "1"
@@ -164,7 +164,7 @@ func getInlineEnvs(from: GameOptions) -> String {
         return value != nil && value == true ? "1" : "0"
     }
     var value = from.envVariables == "" ? "" : "\(from.envVariables) "
-    let defaults = [
+    var defaults = [
         "D3DM_ENABLE_METALFX=1",
         "DXMT_ENABLE_NVEXT=1",
         "DXVK_ASYNC=1",
@@ -174,6 +174,13 @@ func getInlineEnvs(from: GameOptions) -> String {
 //        "D3DM_MTL4=0",
 //        "D3DM_MAX_FPS=60",
     ]
+    if let cxpath = cxAppPath  {
+        defaults += [
+            "GST_PLUGIN_SYSTEM_PATH=\(cxpath)/Contents/SharedSupport/CrossOver/lib64/GStreamer.framework/Versions/Current/lib/gstreamer-1.0",
+            "GST_PLUGIN_PATH=\(cxpath)/Contents/SharedSupport/CrossOver/lib64/GStreamer.framework/Versions/Current/lib/gstreamer-1.0",
+            "GST_PLUGIN_SCANNER=\(cxpath)/Contents/SharedSupport/CrossOver/lib64/GStreamer.framework/Versions/Current/bin/gst-plugin-scanner",
+        ]
+    }
     let cxGraphicsBackend = from.cxGraphicsBackend.contains("d3dmetal") ? "d3dmetal" : from.cxGraphicsBackend
     value += defaults.joined(separator: " ") + " "
     value += from.mtlHudEnabled ? "MTL_HUD_ENABLED=1 " : ""

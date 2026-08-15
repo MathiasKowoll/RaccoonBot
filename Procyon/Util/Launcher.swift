@@ -56,36 +56,6 @@ func closeWineActivities() async throws {
     }
 }
 
-func trackPlaying(apps: [String], then: @escaping (_ matching: [String]) -> Void, onTimeout: @escaping () -> Void, isNative: Bool) async throws -> Void {
-    let pollInterval: UInt64 = 500_000_000
-    let gracePeriod: UInt64 = 70_000_000_000 // after 70 seconds give up tracking
-    var elapsed: UInt64 = 0
-    
-    var nativeOrWineApps: [String] {
-        isNative ? apps + apps.map { $0.replacingOccurrences(of: ".app", with: "") } : apps
-    }
-    
-    while (elapsed < gracePeriod) {
-        try await Task.sleep(nanoseconds: pollInterval)
-    
-        let appNames = NSWorkspace.shared.runningApplications
-            .map{ app in app.executableURL?.lastPathComponent ?? "none" }
-            .filter { lastpathcomponent in lastpathcomponent.contains(".exe")}
-        if (appNames.contains {Set(nativeOrWineApps).contains($0)}) {
-            then(appNames)
-            return
-        }
-        elapsed += pollInterval
-    }
-    if(elapsed < gracePeriod){
-        console.warn("\(nativeOrWineApps.description) crashed")
-    } else {
-        console.warn("couldn't find apps \(nativeOrWineApps.description) within the allowed grace period elapsed: \(elapsed/1_000_000_000)s ")
-    }
-    console.log("starting timeout callback...")
-    onTimeout()
-}
-
 func quitSteam(cxAppPath: String, bottleName: String, isNative: Bool) async throws -> Void {
     console.log("quitting steam...")
     if(isNative) {
@@ -206,9 +176,9 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
             return
         }
         let workdirCommand = appExeURL != nil ? "cd \"\(appExeURL!.deletingLastPathComponent().path(percentEncoded: false))\" && " : ""
-        command = "\(workdirCommand)env \(getInlineEnvs(from: options!) + wineEnvs) \(x87cxAppURL.path())Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/wine \(gameLaunchCommand) \(arguments)"
+        command = "\(workdirCommand)env \(getInlineEnvs(from: options!, cxAppPath: cxAppPath) + wineEnvs) \(x87cxAppURL.path())Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/wine \(gameLaunchCommand) \(arguments)"
     } else {
-        command = "env \(getInlineEnvs(from: options!) + wineEnvs) \(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \(gameLaunchCommand) \(arguments)"
+        command = "env \(getInlineEnvs(from: options!, cxAppPath: cxAppPath) + wineEnvs) \(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \(gameLaunchCommand) \(arguments)"
     }
     
     #if DEBUG

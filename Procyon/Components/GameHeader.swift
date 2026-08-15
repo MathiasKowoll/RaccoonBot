@@ -124,7 +124,9 @@ struct GameHeader: View {
                     tObserver = try await getGameTracker(appNames: game!.appNames, cxAppPath: appGlobals.cxAppPath!, bottleName: appGlobals.selectedBottle, onLoad: { appName in
                         DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
                             libraryPageGlobals.setLoader(state: false)
-                            activateApp(appName)
+                            Task {
+                                activateApp(appName)
+                            }
                         }
                         libraryPageGlobals.playingID = game!.id
                     }, onTerminate: {

@@ -144,7 +144,9 @@ struct GameThumbnail: View {
                         libraryPageGlobals.playingID = item.id
                         DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
                             libraryPageGlobals.setLoader(state: false)
-                            activateApp(appName)
+                            Task {
+                                activateApp(appName)
+                            }
                         }
                     }, onTerminate: {
                         libraryPageGlobals.setLoader(state: false) // if doesn't get loaded i need to close the loader

@@ -7,6 +7,7 @@
 
 import UniformTypeIdentifiers
 import Combine
+import AppKit
 
 let AUTOFILL_CUSTOM_GAME_ENABLED: Bool = {
     let env = ProcessInfo.processInfo.environment["PROCYON_AUTOFILL_CUSTOM_GAME_ENABLED"]?.lowercased()
@@ -289,17 +290,24 @@ func getAppNames(isNative: Bool, gameURL: URL?) -> [String] {
     return results
 }
 
-class SteamCloudSyncWatcher {
+class SteamLogWatcher {
     var steamID: String
-    let steamPath: String
+    var steamPath: String
+    var fileName: String
     var logPath: String {
-        return "\(steamPath)/logs/cloud_log.txt"
+        return "\(steamPath)/logs/\(fileName)"
     }
-//    should look like this 'C:\Program Files (x86)\Steam\logs\cloud_log.txt'
     
-    init (steamID: String, steamPath: String) {
+    init (steamID: String, steamPath: String, fileName: String) {
         self.steamID = steamID
         self.steamPath = steamPath
+        self.fileName = fileName
+    }
+}
+
+class SteamCloudSyncWatcher: SteamLogWatcher {
+    init (steamID: String, steamPath: String) {
+        super.init(steamID: steamID, steamPath: steamPath, fileName: "cloud_log.txt")
     }
     
     func waitForSteamCloudSync() async throws {
@@ -308,6 +316,7 @@ class SteamCloudSyncWatcher {
         let deadline = Date().addingTimeInterval(60)
         var polling = true
         while polling {
+            try await Task.sleep(nanoseconds: 100_000_000)
             let content = try String(contentsOfFile: logPath, encoding: .utf8)
             if(Date() > deadline) {
                 console.log("\(self.steamID): Cloud sync timed out")
@@ -321,6 +330,66 @@ class SteamCloudSyncWatcher {
             }
         }
         return
+    }
+}
+
+class SteamLaunchWatcher: SteamLogWatcher {
+    init (steamID: String, steamPath: String) {
+        super.init(steamID: steamID, steamPath: steamPath, fileName: "gameprocess_log.txt")
+    }
+    
+    func getGameExe() async throws -> String {
+        let appIDMarker = "AppID \(self.steamID) adding PID"
+        var appExe = ""
+        let deadline = Date().addingTimeInterval(90)
+        var polling = true
+        let pattern = /[^\\]+\.exe/
+        while polling {
+            try await Task.sleep(nanoseconds: 1_000_000_000)
+            do {
+                let content = try String(contentsOfFile: logPath, encoding: .utf8)
+                for fileContentLine in content.split(separator: "[") {
+                    if(fileContentLine.contains(appIDMarker)) {
+                        let match = fileContentLine.firstMatch(of: pattern)
+                        print(fileContentLine)
+                        appExe = String(match?.output ?? "not found")
+                        polling = false
+                    }
+                }
+                console.log("File \(self.fileName) found")
+            } catch {
+                console.error(String(describing: error))
+                console.error("File \(self.fileName) seems missing, retrying...")
+            }
+            if(Date() > deadline) {
+                console.log("\(self.steamID): App name fetching timed out")
+                polling = false
+            }
+        }
+        return appExe
+    }
+    
+    func trackLaunch() async throws -> String {
+        var polling = true
+        var returnedValue = ""
+        let appName = try await getGameExe()
+        let deadline = Date().addingTimeInterval(90)
+        console.log("App name found: \(appName)")
+        while polling {
+            try await Task.sleep(nanoseconds: 1_000_000_000)
+            if(Date() > deadline) {
+                console.log("\(self.steamID): Launch tracking timed out")
+                polling = false
+            }
+            let appNames = NSWorkspace.shared.runningApplications
+                .flatMap{ app in [app.executableURL?.lastPathComponent ?? "none", app.bundleURL?.lastPathComponent ?? "none"] }
+                .filter { lastpathcomponent in lastpathcomponent.contains(".exe")}
+            if appNames.contains(appName) {
+                returnedValue = appName
+                polling = false
+            }
+        }
+        return returnedValue
     }
 }
 
@@ -344,45 +413,51 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottleName: String, o
             }
         }
     })
-    try await trackPlaying(apps: appNames, then: { appNames in
-        console.log("found game \(appNames.joined(separator: ", ")), loading...")
-        onLoad(appNames[0])
-    }, onTimeout: {
-        console.log("\(appNames.joined(separator: ", ")), timeout...")
-        onTerminate()
-    }, isNative: isNative)
+    if let steamID = steamID {
+        do {
+            let appName = try await SteamLaunchWatcher(steamID: String(steamID), steamPath: steamPath).trackLaunch()
+            if appName != "" {
+                console.log("found game \(appName), loading...")
+                onLoad(appName)
+            }
+        } catch {
+            console.log("\(appNames.joined(separator: ", ")), timeout...")
+            onTerminate()
+        }
+    }
     return tOb
 }
 
-func getGameTracker(appNames: [String], cxAppPath: String, bottleName: String, onLoad: @escaping (_ game: String) -> Void, onTerminate: @escaping () -> Void, isNative: Bool, steamID: Int, steamPath: String) async throws -> TerminationObserver {
-    let tOb = TerminationObserver(then: { output in
-        console.log(output.userInfo?.description ?? "no userInfo")
-        let terminatedAppProcessName = output.userInfo?[AnyHashable("NSApplicationName")] as? String ?? "unknown"
-        let terminatedAppPath = output.userInfo?[AnyHashable("NSApplicationPath")] as? String ?? "unknown"
-        let terminatedAppName = String(terminatedAppPath.split(separator: "/").last ?? "unknown")
-        if (appNames.contains(terminatedAppName) || appNames.contains(terminatedAppProcessName)) {
-            console.log("\(appNames) -> \(terminatedAppName) or \(terminatedAppProcessName) has been terminated, closing steam...")
-            Task {
-                if(!isNative){
-                    let cloudSyncWatcher = SteamCloudSyncWatcher(steamID: String(steamID), steamPath: steamPath)
-                    try await cloudSyncWatcher.waitForSteamCloudSync()
-                }
-                try await quitSteam(cxAppPath: cxAppPath, bottleName: bottleName, isNative: isNative)
-                try await closeWineActivities()
-                onTerminate()
-                console.log("onTerminate() was called")
-            }
-        }
-    })
-    try await trackPlaying(apps: appNames, then: { appNames in
-        console.log("found game \(appNames.joined(separator: ", ")), loading...")
-        onLoad(appNames[0])
-    }, onTimeout: {
-        console.log("\(appNames.joined(separator: ", ")), timeout...")
-        onTerminate()
-    }, isNative: isNative)
-    return tOb
-}
+//func getGameTracker(appNames: [String], cxAppPath: String, bottleName: String, onLoad: @escaping (_ game: String) -> Void, onTerminate: @escaping () -> Void, isNative: Bool, steamID: Int, steamPath: String) async throws -> TerminationObserver {
+//    let tOb = TerminationObserver(then: { output in
+//        console.log(output.userInfo?.description ?? "no userInfo")
+//        let terminatedAppProcessName = output.userInfo?[AnyHashable("NSApplicationName")] as? String ?? "unknown"
+//        let terminatedAppPath = output.userInfo?[AnyHashable("NSApplicationPath")] as? String ?? "unknown"
+//        let terminatedAppName = String(terminatedAppPath.split(separator: "/").last ?? "unknown")
+//        if (appNames.contains(terminatedAppName) || appNames.contains(terminatedAppProcessName)) {
+//            console.log("\(appNames) -> \(terminatedAppName) or \(terminatedAppProcessName) has been terminated, closing steam...")
+//            Task {
+//                if(!isNative){
+//                    let cloudSyncWatcher = SteamCloudSyncWatcher(steamID: String(steamID), steamPath: steamPath)
+//                    try await cloudSyncWatcher.waitForSteamCloudSync()
+//                }
+//                try await quitSteam(cxAppPath: cxAppPath, bottleName: bottleName, isNative: isNative)
+//                try await closeWineActivities()
+//                onTerminate()
+//                console.log("onTerminate() was called")
+//            }
+//        }
+//    })
+//    do {
+//        let appName = try await SteamLaunchWatcher(steamID: String(steamID), steamPath: steamPath).trackLaunch()
+//        console.log("found game \(appName), loading...")
+//        onLoad(appName)
+//    } catch {
+//        console.log("\(appNames.joined(separator: ", ")), timeout...")
+//        onTerminate()
+//    }
+//    return tOb
+//}
 
 func isSameFile(_ file1URL: URL, _ file2URL: URL) -> Bool {
     let f = FileManager.default

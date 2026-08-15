@@ -105,7 +105,7 @@ struct GameOptionsView: View {
                             Toggle("Metal 4 Backend", isOn: $gameOptions.d3dMtl4Enabled)
                                 .help(localizedString(forKey: "metal4Backend"))
                                 .disabled(OSVersion < 27)
-                                .opacity(ProcessInfo.processInfo.operatingSystemVersion.majorVersion < 27 ? 0.5 : 1.0)
+                                .opacity(OSVersion < 27 ? 0.5 : 1.0)
                             VStack{
                                 Text(localizedString(forKey: "preferredMaxFrameRate", value: d3dMaxFPS))
                                 Slider(

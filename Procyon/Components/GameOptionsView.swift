@@ -158,6 +158,9 @@ struct GameOptionsView: View {
             if let data: GameOptionsData = readUsrDefData(key: gameOptKey) {
                 self.gameOptions.set(data: data)
             }
+            if !cxGraphicsBackend.contains(where: { $0.id == self.gameOptions.cxGraphicsBackend }) {
+                self.gameOptions.cxGraphicsBackend = "auto"
+            }
         }
     }
     

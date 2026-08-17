@@ -159,7 +159,7 @@ struct GameOptionsView: View {
                 self.gameOptions.set(data: data)
             }
             if !cxGraphicsBackend.contains(where: { $0.id == self.gameOptions.cxGraphicsBackend }) {
-                self.gameOptions.cxGraphicsBackend = "auto"
+                self.gameOptions.cxGraphicsBackend = "d3dmetal4"
             }
         }
     }

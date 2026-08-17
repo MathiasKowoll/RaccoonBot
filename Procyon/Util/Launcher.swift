@@ -17,13 +17,25 @@ func closeWineActivities() async throws {
     
     // Capture the target apps first to avoid the list changing while iterating
     let targets = NSWorkspace.shared.runningApplications.filter { app in
-        guard let url = app.executableURL else { return false }
-        return url.lastPathComponent.lowercased().hasSuffix(".exe") || url.lastPathComponent.lowercased().contains("wine")
+        if let bundleURL = app.bundleURL {
+            return bundleURL.lastPathComponent.lowercased().hasSuffix(".exe") || bundleURL.lastPathComponent.lowercased().contains("wine")
+        }
+        if let executableURL = app.executableURL {
+            return (
+                executableURL.lastPathComponent.lowercased().hasSuffix(".exe") || executableURL.lastPathComponent.lowercased().contains("wine")
+            )
+        }
+        return false
     }
-
+    print(
+        NSWorkspace.shared.runningApplications.flatMap({
+            [$0.localizedName ?? "-" , $0.bundleURL?.lastPathComponent ?? "-", $0.executableURL?.lastPathComponent ?? "-"]
+        })
+    )
+    print(targets.debugDescription)
     // Send terminate to all matching apps
     for app in targets {
-        if let name = app.executableURL?.lastPathComponent {
+        if let name = (app.executableURL != nil ? app.executableURL : app.bundleURL)?.lastPathComponent {
             console.warn("terminating \(name)")
         }
         app.terminate()

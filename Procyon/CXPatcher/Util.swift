@@ -319,7 +319,7 @@ func activateApp(_ gameName: String) -> Void {
     let app = NSWorkspace().runningApplications.first(where: { gameName.contains($0.localizedName ?? "none")})
     console.log("attempting to put your game in the foreground")
     console.log(app?.executableURL?.lastPathComponent ?? app?.localizedName ?? "couldn't get app")
-    app?.activate(options: .activateAllWindows)
+    app?.activate()
 }
 
 @discardableResult

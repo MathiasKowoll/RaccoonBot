@@ -26,11 +26,12 @@ private func game(_ script: String, exe: String = "") -> MGVFGame {
     MGVFGame(name: script.replacingOccurrences(of: "install-", with: ""),
              script: script, exe: exe, files: ["proxy.dll"],
              carrier: "carrier.dll", keptAs: "carrier_real.dll",
-             carrierDir: "", why: "test", writesRegistry: false)
+             carrierDir: "", why: "test", writesRegistry: false,
+             backend: nil, gptk: nil, env: nil)
 }
 
 private func manifest(_ games: [MGVFGame]) -> MGVFManifest {
-    MGVFManifest(schema: 2, version: "v0", commit: "test", games: games)
+    MGVFManifest(schema: 2, version: "v0", commit: "test", games: games, scopeWarning: nil)
 }
 
 private func makeFolder(_ build: (URL) throws -> Void) throws -> String {
@@ -204,5 +205,51 @@ struct MGVFStateTests {
                                   directory: URL(fileURLWithPath: "/tmp"),
                                   store: MemoryStore())
         #expect(await catalog.state(forFolder: folder) == .noFix)
+    }
+}
+
+struct MGVFRecommendedOptionsTests {
+
+    private func entry(backend: String?, gptk: String?, env: [String: String]? = nil) -> MGVFGame {
+        MGVFGame(name: "t", script: "s.sh", exe: "t.exe", files: [],
+                 carrier: "c.dll", keptAs: "c_real.dll", carrierDir: "", why: "",
+                 writesRegistry: false, backend: backend, gptk: gptk, env: env)
+    }
+
+    @MainActor
+    private func options(_ game: MGVFGame) -> GameOptionsData? {
+        let c = MGVFCoordinator()
+        c.setEntryForTesting(game)
+        return c.recommendedOptions
+    }
+
+    @MainActor
+    @Test func pinsTheGenerationATitleRequires() {
+        // Life is Strange needs 4 and Procyon's default branch installs 3, so
+        // this pair had been receiving the generation that breaks them.
+        #expect(options(entry(backend: "d3dmetal", gptk: "4"))?.cxGraphicsBackend == "d3dmetal4")
+        #expect(options(entry(backend: "d3dmetal", gptk: "3"))?.cxGraphicsBackend == "d3dmetal3")
+    }
+
+    @MainActor
+    @Test func leavesTheChoiceAloneWhenEitherGenerationServes() {
+        // Empty is an answer: the catalogue reports a generation only where it
+        // is a requirement. Pinning one for a title that does not care is worse
+        // than not touching it.
+        #expect(options(entry(backend: "d3dmetal", gptk: nil)) == nil)
+        #expect(options(entry(backend: nil, gptk: nil)) == nil)
+    }
+
+    @MainActor
+    @Test func dxmtIsOneChoiceNotTwo() {
+        #expect(options(entry(backend: "dxmt", gptk: nil))?.cxGraphicsBackend == "dxmt")
+        #expect(options(entry(backend: "dxmt", gptk: "3"))?.cxGraphicsBackend == "dxmt")
+    }
+
+    @MainActor
+    @Test func carriesEnvironmentOnlyWhenThereIsSome() {
+        #expect(options(entry(backend: nil, gptk: nil, env: [:])) == nil)
+        let withEnv = options(entry(backend: nil, gptk: nil, env: ["D3DM_MTL4": "0"]))
+        #expect(withEnv?.envVariables == "D3DM_MTL4=0")
     }
 }

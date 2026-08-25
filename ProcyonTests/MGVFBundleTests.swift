@@ -128,7 +128,7 @@ struct MGVFManifestTests {
 
         // A newer contract is refused rather than read on a best-effort basis:
         // a field that changed meaning would otherwise be acted on anyway.
-        let future = good.replacingOccurrences(of: "\"schema\":2", with: "\"schema\":3")
+        let future = good.replacingOccurrences(of: "\"schema\":2", with: "\"schema\":4")
         try future.write(to: dir.appendingPathComponent("manifest.json"), atomically: true, encoding: .utf8)
         #expect(throws: MGVFBundleError.self) { _ = try bundle.manifest(at: dir) }
     }
@@ -196,10 +196,9 @@ struct MGVFUpdateCheckTests {
     }
 
     @Test func doesNotAskAgainWithinTheInterval() async {
-        let bundle = MGVFBundle()
-        let previous = bundle.lastCheck
-        defer { bundle.lastCheck = previous }
-
+        // Its own defaults: two tests sharing UserDefaults.standard raced, and
+        // Swift Testing runs them in parallel.
+        let bundle = MGVFBundle(defaults: UserDefaults(suiteName: UUID().uuidString)!)
         bundle.lastCheck = Date()
         let status = await bundle.checkForUpdate(minimumInterval: 3600, now: Date())
         #expect(status == .throttled)
@@ -214,11 +213,9 @@ struct MGVFUpdateCheckTests {
         // failed depending on the network, which tests nothing.
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [AlwaysFailingProtocol.self]
-        let bundle = MGVFBundle(session: URLSession(configuration: configuration))
-
-        let previous = bundle.lastCheck
+        let bundle = MGVFBundle(session: URLSession(configuration: configuration),
+                                defaults: UserDefaults(suiteName: UUID().uuidString)!)
         bundle.lastCheck = nil
-        defer { bundle.lastCheck = previous }
 
         let status = await bundle.checkForUpdate(force: true)
         if case .unknown = status {} else { Issue.record("expected unknown, got \(status)") }

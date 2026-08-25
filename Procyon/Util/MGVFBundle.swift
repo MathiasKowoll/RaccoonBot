@@ -51,6 +51,20 @@ struct MGVFGame: Codable, Hashable {
     /// Whether the fix also needs a DLL override in the bottle's registry.
     let writesRegistry: Bool
 
+    // Schema 3. Optional so a schema 2 bundle still decodes.
+    //
+    // Empty is an answer, not a gap: the fixes repository reports a generation
+    // only where it is a REQUIREMENT. A title measured as working on both
+    // leaves it blank, and pinning a toolkit for a game that does not care is
+    // worse than leaving it alone.
+    /// "d3dmetal", "dxmt", or absent.
+    let backend: String?
+    /// "3", "4", or absent when either generation serves.
+    let gptk: String?
+    /// Environment this title needs as a standing requirement. Almost always
+    /// empty; a variable that worked once in a measurement is not one.
+    let env: [String: String]?
+
     /// Where the carrier DLL actually is.
     func carrierPath(inGameFolder folder: String) -> String {
         var url = URL(fileURLWithPath: folder)
@@ -64,6 +78,10 @@ struct MGVFManifest: Codable {
     let version: String
     let commit: String
     let games: [MGVFGame]
+    /// What the catalogue wants said out loud about the limits of `gptk`.
+    /// Carried in the data rather than in a comment, so it reaches the person
+    /// building the interface.
+    let scopeWarning: String?
 
     /// Refuse a manifest written to a contract this build does not know.
     ///
@@ -72,7 +90,10 @@ struct MGVFManifest: Codable {
     /// 2 describes titles, which is what identifying a game needs -- four of
     /// the scripts serve more than one game and the older shape could not say
     /// so.
-    static let supportedSchemas: Set<Int> = [2]
+    /// Both, while the catalogue moves. Schema 3 adds the per-title options;
+    /// schema 2 lacks them, and lacking them reads the same as "no preference",
+    /// which is the safe reading.
+    static let supportedSchemas: Set<Int> = [2, 3]
     var isSupported: Bool { Self.supportedSchemas.contains(schema) }
 }
 
@@ -111,9 +132,15 @@ final class MGVFBundle: @unchecked Sendable {
 
     private let repo = "MathiasKowoll/MacGameVideoFix"
     private let session: URLSession
+    /// Injectable so a test does not have to reach into the user's own
+    /// defaults. Two tests sharing UserDefaults.standard raced each other --
+    /// Swift Testing runs them in parallel -- and a test that fails depending
+    /// on what else is running is worse than no test.
+    private let defaults: UserDefaults
 
-    init(session: URLSession = .shared) {
+    init(session: URLSession = .shared, defaults: UserDefaults = .standard) {
         self.session = session
+        self.defaults = defaults
     }
 
     /// Where unpacked bundles live, one directory per tag.
@@ -207,10 +234,10 @@ final class MGVFBundle: @unchecked Sendable {
 
     var lastCheck: Date? {
         get {
-            let t = UserDefaults.standard.double(forKey: lastCheckKey)
+            let t = defaults.double(forKey: lastCheckKey)
             return t > 0 ? Date(timeIntervalSince1970: t) : nil
         }
-        set { UserDefaults.standard.set(newValue?.timeIntervalSince1970 ?? 0, forKey: lastCheckKey) }
+        set { defaults.set(newValue?.timeIntervalSince1970 ?? 0, forKey: lastCheckKey) }
     }
 
     /// Is there a newer fixes bundle than the one on disk?

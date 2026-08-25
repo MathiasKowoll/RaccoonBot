@@ -16,6 +16,7 @@ struct GameOptionsView: View {
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
     @StateObject private var fix = MGVFCoordinator()
     @State private var confirmingInstall = false
+    @State private var autoconfigError: String?
     @State var isLoading = false
 
     /// The folder the game is installed in, from its metadata.
@@ -171,10 +172,15 @@ struct GameOptionsView: View {
                                 do {
                                     try await autoconfig()
                                 } catch {
-                                    // display error on the UI
-                                    isLoading = false
+                                    autoconfigError = error.localizedDescription
                                 }
                                 isLoading = false
+                                // One button: it configures, and if the title
+                                // still needs its fix it asks to put it on.
+                                // The asking is not ceremony -- this is the
+                                // step that renames a file in the user's game
+                                // folder, and it says which one before it does.
+                                if fix.canInstall { confirmingInstall = true }
                             }
                         }
                     }.padding(.top)
@@ -190,16 +196,14 @@ struct GameOptionsView: View {
                                 if let blocked = fix.blocked {
                                     Text(blocked).font(.footnote).foregroundStyle(.orange)
                                 }
-                                if let error = fix.lastError {
+                                if let error = fix.lastError ?? autoconfigError {
                                     Text(error).font(.footnote).foregroundStyle(.red)
+                                }
+                                if fix.entry?.gptk != nil, let warning = fix.scopeWarning {
+                                    Text(warning).font(.footnote).foregroundStyle(.secondary)
                                 }
                             }
                             Spacer()
-                            if fix.canInstall {
-                                Button(fix.state == .dismissed ? "Install again…" : "Install video fix…") {
-                                    confirmingInstall = true
-                                }
-                            }
                             if fix.canRemove {
                                 Button("Remove") { Task { await fix.remove() } }
                             }
@@ -248,6 +252,9 @@ struct GameOptionsView: View {
         // consulted for THIS title, so the button reports what it needs rather
         // than only filling in the form.
         await fix.load(folder: gameFolder, hasGame: game != nil)
+        if let recommended = fix.recommendedOptions {
+            gameOptions.importAutoConfig(data: recommended)
+        }
         if let id = game?.steamAppID {
             print(id)
             if let autoconfigData = try await api.fetchAutoConfig(steamID: String(id)) {

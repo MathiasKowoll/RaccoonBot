@@ -38,6 +38,48 @@ final class MGVFCoordinator: ObservableObject {
     }
     var canRemove: Bool { entry != nil && state == .patched && !busy }
 
+    /// The options this title is known to need, for Auto configure to apply.
+    ///
+    /// Empty today: the manifest describes what to install, not what to
+    /// configure. The measurements exist on the other side -- NINJA GAIDEN 4
+    /// needs D3DMetal 3.0 and goes to a black screen on 4.0b2 -- and have been
+    /// asked for as fields. Until they arrive this returns nothing rather than
+    /// guessing, because a wrong backend is worse than none.
+    var recommendedOptions: GameOptionsData? {
+        guard let entry else { return nil }
+        var data = GameOptionsData(data: GameOptions())
+        var touched = false
+
+        // The backend id the picker uses folds the two together: DXMT is one
+        // choice, D3DMetal is two. A title that names d3dmetal without naming a
+        // generation is one that runs on either, so its choice is left alone --
+        // setting one would pin a toolkit the game does not care about.
+        switch (entry.backend, entry.gptk) {
+        case ("dxmt", _):            data.cxGraphicsBackend = "dxmt";       touched = true
+        case ("d3dmetal", "3"?):     data.cxGraphicsBackend = "d3dmetal3";  touched = true
+        case ("d3dmetal", "4"?):     data.cxGraphicsBackend = "d3dmetal4";  touched = true
+        default: break
+        }
+
+        if let env = entry.env, !env.isEmpty {
+            data.envVariables = env.map { "\($0.key)=\($0.value)" }.sorted().joined(separator: " ")
+            touched = true
+        }
+        return touched ? data : nil
+    }
+
+    /// What the catalogue asks be said about how far `gptk` reaches.
+    ///
+    /// Shown rather than filed away: the toolkit is installed into the shared
+    /// CrossOver application, so whichever game was launched last leaves its
+    /// generation in place for every other one. Honouring the field is right;
+    /// implying it isolates anything is not.
+    private(set) var scopeWarning: String?
+
+    /// Only for tests: the mapping from a catalogue entry to options is worth
+    /// testing on its own, and reaching it otherwise would mean a download.
+    func setEntryForTesting(_ game: MGVFGame) { entry = game }
+
     /// Load the catalogue and look this folder up.
     ///
     /// The bundle is fetched if it is missing and refreshed on its own
@@ -61,6 +103,7 @@ final class MGVFCoordinator: ObservableObject {
             let manifest = try MGVFBundle.shared.manifest(at: directory)
             let catalog = MGVFCatalog(manifest: manifest, directory: directory)
             self.catalog = catalog
+            self.scopeWarning = manifest.scopeWarning
             self.entry = catalog.entry(forFolder: folder)
             self.state = await catalog.state(forFolder: folder)
             console.log("MGVF folder=\(MGVFRunner.redacted(folder)) readable=\(FileManager.default.isReadableFile(atPath: folder)) entry=\(entry?.name ?? "none") state=\(state) catalog=\(manifest.games.count)")

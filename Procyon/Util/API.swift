@@ -8,12 +8,12 @@
 import Foundation
 import Alamofire
 
-var apiKey = Bundle.main.object(forInfoDictionaryKey: "API_KEY") as! String
-let pr = Bundle.main.object(forInfoDictionaryKey: "API_PROTOCOL") as! String
-let host = Bundle.main.object(forInfoDictionaryKey: "API_HOST") as! String
-let path = Bundle.main.object(forInfoDictionaryKey: "API_PATH") as! String
-let pathm = Bundle.main.object(forInfoDictionaryKey: "API_PATH_M") as! String
-let pathCustom = Bundle.main.object(forInfoDictionaryKey: "API_PATH_CUSTOM") as! String
+var apiKey = Bundle.main.object(forInfoDictionaryKey: "API_KEY") as? String ?? ""
+let pr = Bundle.main.object(forInfoDictionaryKey: "API_PROTOCOL") as? String ?? ""
+let host = Bundle.main.object(forInfoDictionaryKey: "API_HOST") as? String ?? ""
+let path = Bundle.main.object(forInfoDictionaryKey: "API_PATH") as? String ?? ""
+let pathm = Bundle.main.object(forInfoDictionaryKey: "API_PATH_M") as? String ?? ""
+let pathCustom = Bundle.main.object(forInfoDictionaryKey: "API_PATH_CUSTOM") as? String ?? ""
 
 let baseAPIURL = "\(pr)://\(host)\(path)"
 let baseAPIMURL = "\(pr)://\(host)\(pathm)"

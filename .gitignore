@@ -4,3 +4,4 @@ DerivedData/
 Secrets.swift
 build/
 .DS_Store
+*.profraw

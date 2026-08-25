@@ -196,7 +196,9 @@ struct GameOptionsView: View {
                             }
                             Spacer()
                             if fix.canInstall {
-                                Button("Install video fix…") { confirmingInstall = true }
+                                Button(fix.state == .dismissed ? "Install again…" : "Install video fix…") {
+                                    confirmingInstall = true
+                                }
                             }
                             if fix.canRemove {
                                 Button("Remove") { Task { await fix.remove() } }
@@ -229,7 +231,7 @@ struct GameOptionsView: View {
                 """)
             }
         }
-        .task(id: gameFolder) { await fix.load(folder: gameFolder) }
+        .task(id: gameFolder) { await fix.load(folder: gameFolder, hasGame: game != nil) }
         .onAppear() {
             if let data: GameOptionsData = readUsrDefData(key: gameOptKey) {
                 self.gameOptions.set(data: data)
@@ -245,7 +247,7 @@ struct GameOptionsView: View {
         // Per game, as the fixes application already works: the catalogue is
         // consulted for THIS title, so the button reports what it needs rather
         // than only filling in the form.
-        await fix.load(folder: gameFolder)
+        await fix.load(folder: gameFolder, hasGame: game != nil)
         if let id = game?.steamAppID {
             print(id)
             if let autoconfigData = try await api.fetchAutoConfig(steamID: String(id)) {

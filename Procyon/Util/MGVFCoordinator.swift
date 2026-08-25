@@ -25,7 +25,17 @@ final class MGVFCoordinator: ObservableObject {
     private var catalog: MGVFCatalog?
     private var folder: String?
 
-    var canInstall: Bool { entry != nil && state.isActionable && !busy }
+    /// Installing is offered whenever there is something to install, and that
+    /// includes a fix the user removed on purpose.
+    ///
+    /// Dismissing exists to stop the NAGGING -- no alert at launch, not swept
+    /// up by "patch everything" -- not to take the action away. A first version
+    /// of this treated `dismissed` as final, which left the only place that can
+    /// act on a title showing "removed on purpose" and no button at all.
+    var canInstall: Bool {
+        guard entry != nil, !busy else { return false }
+        return state.isActionable || state == .dismissed
+    }
     var canRemove: Bool { entry != nil && state == .patched && !busy }
 
     /// Load the catalogue and look this folder up.
@@ -34,9 +44,16 @@ final class MGVFCoordinator: ObservableObject {
     /// schedule; neither blocks the interface, and neither writes to a game
     /// folder. Downloading is safe, applying is not, and only one of the two
     /// happens without being asked for.
-    func load(folder: String?) async {
+    func load(folder: String?, hasGame: Bool = true) async {
         guard let folder else {
-            state = .noFix; entry = nil; return
+            // Silence here is indistinguishable from "this title needs
+            // nothing", and the two are very different. If there is a game on
+            // screen and we cannot work out where it lives, say that.
+            entry = nil
+            state = hasGame
+                ? .unknown("Could not work out where this game is installed")
+                : .noFix
+            return
         }
         self.folder = folder
         do {
@@ -46,6 +63,7 @@ final class MGVFCoordinator: ObservableObject {
             self.catalog = catalog
             self.entry = catalog.entry(forFolder: folder)
             self.state = await catalog.state(forFolder: folder)
+            console.log("MGVF folder=\(MGVFRunner.redacted(folder)) readable=\(FileManager.default.isReadableFile(atPath: folder)) entry=\(entry?.name ?? "none") state=\(state) catalog=\(manifest.games.count)")
         } catch {
             self.entry = nil
             self.state = .unknown(error.localizedDescription)
@@ -122,17 +140,38 @@ final class MGVFCoordinator: ObservableObject {
     /// opens its destination with O_TRUNC. So this refuses with a sentence and
     /// leaves the closing to the user: terminating wine processes to make room
     /// for a patch would end somebody's unsaved game.
+    ///
+    /// Asked with pgrep, not NSWorkspace. NSWorkspace lists applications with a
+    /// bundle, and the processes that matter here have none -- wineserver and
+    /// the Windows executables are started from inside CrossOver, so a check
+    /// against runningApplications answers "nothing is running" while a game is
+    /// very much running. Measured on this machine with wineserver-x86 and
+    /// services.exe live and invisible to it.
     static func reasonNotToWrite() -> String? {
-        let running = NSWorkspace.shared.runningApplications.compactMap {
-            $0.executableURL?.lastPathComponent.lowercased()
-        }
-        if running.contains(where: { $0.hasSuffix(".exe") }) {
+        if pgrepMatches("[.]exe") {
             return "A Windows game is running. Close it first — the fix renames a file it may have open."
         }
-        if running.contains(where: { $0.contains("wineserver") || $0 == "steam" }) {
-            return "Steam is running. Close it first — the fix renames a file it may have open."
+        if pgrepMatches("wineserver") {
+            return "Steam or CrossOver is still running. Close it first — the fix renames a file it may have open."
         }
         return nil
+    }
+
+    /// True when at least one process matches. A failure to ask is not a
+    /// licence to write: it returns true, so the refusal stands.
+    private static func pgrepMatches(_ pattern: String) -> Bool {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
+        p.arguments = ["-f", pattern]
+        p.standardOutput = FileHandle.nullDevice
+        p.standardError = FileHandle.nullDevice
+        do {
+            try p.run()
+            p.waitUntilExit()
+            return p.terminationStatus == 0
+        } catch {
+            return true
+        }
     }
 
     // MARK: - Wording

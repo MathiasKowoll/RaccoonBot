@@ -10,6 +10,7 @@ import AppKit
 let D3DM_CACHE_FOLDER = "d3dm"
 let PROCYON_SUPPORT_FOLDER_URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!.appendingPathComponent("Procyon")
 let PATCHED_CX_APPNAME = "Crossover_patched.app"
+// Sólo se construye para CrossOver 26. Ver makeX87CrossoverPatchedCopy.
 let PATCHED_CX_X87_APPNAME = "Crossover_patched_x87.app"
 private let DEFAULT_CXP_BOTTLES_ROOTPATH = "/Users/${USER}/"
 let DEFAULT_CXP_BOTTLES_FOLDER = "CXPBottles"
@@ -64,28 +65,38 @@ private let WINE_D3DM_RESOURCES_PATHS: [String] = [
     "wine/x86_64-windows/nvngx-on-metalfx.dll",
 ]
 
-private let d3dmRes: [(res: String, dest: String)] = WINE_D3DM_RESOURCES_PATHS.map { path in
-    let destPath = path.replacingOccurrences(of: "nvngx-on-metalfx", with: "nvngx")
-    return (res: "d3dMetal/" + path, dest: "/\(LIB_ROOT)/apple_gptk/" + destPath)
-}
-
 private let dxvkRes: [(res: String, dest: String)] = WINE_DXVK_RESOURCES_PATHS.map { path in
     (res: path, dest: "/lib/" + path)
 }
 
 private let allResources = dxvkRes + [
-    (res: "wine/x86_64-unix/winegstreamer.so", dest: "/lib/wine/x86_64-unix/winegstreamer.so"),
     (res: "wine/x86_64-unix/ntdll.so", dest: "/lib/wine/x86_64-unix/ntdll.so"),
-    (res: "wine/x86_64-unix/winedmo.so", dest: "/lib/wine/x86_64-unix/winedmo.so"),
     (res: "wine/x86_64-unix/win32u.so", dest: "/lib/wine/x86_64-unix/win32u.so"),
     (res: "wine/i386-windows/ntdll.dll", dest: "/lib/wine/i386-windows/ntdll.dll"),
     (res: "wine/x86_64-windows/ntdll.dll", dest: "/lib/wine/x86_64-windows/ntdll.dll"),
     (res: "wine/i386-windows/win32u.dll", dest: "/lib/wine/i386-windows/win32u.dll"),
     (res: "wine/x86_64-windows/win32u.dll", dest: "/lib/wine/x86_64-windows/win32u.dll"),
-    (res: "wine/x86_64-windows/winegstreamer.dll", dest: "/lib/wine/x86_64-windows/winegstreamer.dll"),
     (res: "d9vk/x32/d3d9_builtin.dll", dest: "/lib/wine/i386-windows/d3d9.dll"),
     (res: "d9vk/x64/d3d9_builtin.dll", dest: "/lib/wine/x86_64-windows/d3d9.dll"),
 ]
+
+// Three resources are deliberately NOT in that list any more:
+//
+//     wine/x86_64-unix/winegstreamer.so
+//     wine/x86_64-unix/winedmo.so
+//     wine/x86_64-windows/winegstreamer.dll
+//
+// They are Wine's bridge to GStreamer, built to load it out of the framework
+// the patcher used to install. `otool -l` on the shipped .so files gives
+//
+//     LC_RPATH  @loader_path/../../../lib64/GStreamer.framework/Libraries
+//
+// while CrossOver 27's own build carries @loader_path/../../../lib/x86_64 --
+// and 27 has no lib64 at all, so the copied bridge resolves its libraries to
+// nothing. Since the framework install is gone (we stage two plugins beside
+// the engine's own GStreamer instead of replacing it), these binaries now
+// point at something that will never exist. The engine's own are correct for
+// the engine, so they are left alone.
 
 let WINE_WINEINF_PATH: String = "/share/wine/wine.inf"
 
@@ -261,16 +272,33 @@ func fixup(destPath: String) throws {
     try safeShell("/usr/bin/xattr -cr \"\(destPath)\"")
 }
 
-func signAndFixup(destPath: String) throws {
-    try safeShell("/usr/bin/codesign --force --deep --sign - \"\(destPath)\"")
-    try fixup(destPath: destPath)
-}
-
 func removeSignature(destURL: URL) throws {
     try safeShell("/usr/bin/codesign --remove-signature \"\(destURL.path())\"")
     let command = "/usr/bin/codesign --remove-signature \"\(destURL.appendingPathComponent("Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/wine").path())\""
     try safeShell(command)
 }
+
+/// The x87 variant of the patched engine -- a second copy whose signature is
+/// stripped so rosettaX87 can inject into it.
+///
+/// CrossOver 26 ONLY. On 26 an x86_64 bottle runs through Rosetta, and that
+/// injection is the only way to get reduced x87 precision. CrossOver 27 runs
+/// x86 in an ARM bottle through FEX (lib/wine/aarch64-unix/libwow64fex.so),
+/// where the same knob is one supported environment variable -- so there the
+/// second 1.9 GB copy buys nothing and is not built.
+func makeX87CrossoverPatchedCopy (sourceCXPath: URL, patchedApp: URL) async -> Void {
+    guard EngineLayout.of(sourceCXPath) == .cx26 else {
+        console.log("x87 variant skipped: not CrossOver 26 (FEX handles it there)")
+        return
+    }
+    await makeCrossoverPatchedCopy(sourceCXPath: sourceCXPath, setProgress: { _, _ in }, setLoading: { _ in }, isX87: true)
+}
+
+func signAndFixup(destPath: String) throws {
+    try safeShell("/usr/bin/codesign --force --deep --sign - \"\(destPath)\"")
+    try fixup(destPath: destPath)
+}
+
 
 private func parseCXPlist(plistPath: String) -> CXPlist {
     let data = try! Data(contentsOf: URL(filePath: plistPath))
@@ -285,10 +313,6 @@ private func markAsPatched(url: URL) {
     }
 }
 
-func makeX87CrossoverPatchedCopy (sourceCXPath: URL, patchedApp: URL) async -> Void {
-    await makeCrossoverPatchedCopy(sourceCXPath: sourceCXPath, setProgress: { _, _ in }, setLoading: { _ in }, isX87: true)
-}
-
 func fetchLatestRelease(from path: String) async throws -> String {
     let url = URL(string: "\(path)/releases/latest")!
     let (data, _) = try await URLSession.shared.data(from: url)
@@ -297,9 +321,12 @@ func fetchLatestRelease(from path: String) async throws -> String {
 }
 
 func installd3dMetal(at: URL, version: String) throws -> Void {
+    guard let layout = EngineLayout.of(at) else {
+        throw UnsupportedEngine(path: at.path(percentEncoded: false))
+    }
     let d3dmRes: [(res: String, dest: String)] = WINE_D3DM_RESOURCES_PATHS.map { path in
         let destPath = path.replacingOccurrences(of: "nvngx-on-metalfx", with: "nvngx")
-        return (res: "d3dMetal\(version)/" + path, dest: "/\(LIB_ROOT)/apple_gptk/" + destPath)
+        return (res: "d3dMetal\(version)/" + path, dest: "/\(layout.gptkRoot)/apple_gptk/" + destPath)
     }
     
     let resources = d3dmRes
@@ -341,6 +368,7 @@ func makeCrossoverPatchedCopy(sourceCXPath: URL, setProgress: @escaping (Double,
         if(f.fileExists(atPath: destUrl.path())) {
             // MARK: Step 1 copy resources
             for (res, dest) in resources {
+                // ntdll, d3d9 and win32u go only into the x87 variant.
                 if(isX87) {
                     console.log("Copying \(res) to \(dest.path())")
                     try copyResource(name: res, destUrl: dest)
@@ -349,36 +377,26 @@ func makeCrossoverPatchedCopy(sourceCXPath: URL, setProgress: @escaping (Double,
                     try copyResource(name: res, destUrl: dest)
                 }
             }
-            // MARK: Step 2 download gstreamer
-            let gstURL = try await getGstreamerDownloadURL()
+            // MARK: Step 2 download DXMT
+            //
+            // GStreamer is deliberately NOT installed into the engine here.
+            //
+            // What this used to do: download a prebuilt GStreamer.framework
+            // from a third-party repository, copy it in, and then delete the
+            // ~85 GStreamer and GLib dylibs CrossOver ships -- each removal
+            // with `try?`, so every failure is silent, and a future CrossOver
+            // that adds one dylib missing from that hand-written list brings
+            // back the two-cores dyld crash with nothing to explain it. It
+            // also wrote to `lib64/`, a directory CrossOver 27 does not have.
+            //
+            // Instead we stage the two plugins CrossOver genuinely lacks --
+            // libgstlibav for VC-1, WMV, WMA and software VP9, libgstmatroska
+            // for WebM -- into a directory of their own, with the engine's own
+            // GStreamer core symlinked beside them so exactly one core and one
+            // type registry exist in the process, and point the bottle at it
+            // through GST_PLUGIN_PATH. Nothing inside the engine is replaced
+            // or removed, and the staging is built against this very bundle.
             let (url: dxmtURL, versionTag: dxmtVersion) = try await getDXMTDownloadURL()
-            console.log("Gstreamer download url: \(gstURL)")
-            try await withCheckedThrowingContinuation { continuation in
-                let gstreamerDownloader = TarDownloader(
-                    fromUrl: gstURL,
-                    onProgress: { progress in
-                        setProgress(progress, "Downloading GStreamer")
-                    },
-                    onComplete: { srcUrl in
-                        do {
-                            try installGstreamer(srcUrl: srcUrl, destUrl: destUrl )
-                            continuation.resume()
-                        } catch {
-                            console.error(String(reflecting: error))
-                            continuation.resume(throwing: error)
-                        }
-                        setLoading(false)
-                    },
-                    onError: { error in
-                        console.error("Error while downloading GStreamer")
-                        setProgress(0, "Error while downloading GStreamer")
-                        console.error(String(reflecting: error))
-                        continuation.resume(throwing: error)
-                    }
-                )
-                setLoading(true)
-                gstreamerDownloader.download()
-            }
             try await withCheckedThrowingContinuation { continuation in
                 let dxmtDownloader = TarDownloader(
                     fromUrl: dxmtURL,

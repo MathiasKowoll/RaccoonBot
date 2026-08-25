@@ -408,8 +408,14 @@ func getInlineEnvs(from: GameOptions, cxAppPath: String? = nil) -> String {
     // configuration from the environment still has to be measured against a
     // real ARM bottle.
     if (from.x87PatchEnabled) {
-        switch cxAppPath.flatMap({ EngineLayout.of(URL(fileURLWithPath: $0)) }) {
-        case .cx27:
+        // Which lever exists depends on what is translating the x86 code, and
+        // that is decided by the BOTTLE, not by the engine: an ARM bottle runs
+        // x86 through FEX, an x86_64 bottle runs it through Rosetta. Keying
+        // this on the engine alone emitted the FEX variable for a win64 bottle
+        // on 27, where FEX is not involved at all.
+        let layout = cxAppPath.flatMap { EngineLayout.of(URL(fileURLWithPath: $0)) }
+        switch (from.useArmBottle, layout) {
+        case (true, .cx27):
             // ARM bottle: x86 is emulated by FEX, which CrossOver 27 ships as
             // lib/wine/aarch64-unix/libwow64fex.so and libarm64ecfex.so. This
             // is a supported CrossOver variable and it works.
@@ -418,7 +424,7 @@ func getInlineEnvs(from: GameOptions, cxAppPath: String? = nil) -> String {
             // is not evidence of anything: FEX builds its option names at
             // runtime rather than storing them whole.
             value += "FEX_X87REDUCEDPRECISION=1 "
-        case .cx26:
+        case (false, .cx26):
             // x86_64 bottle under Rosetta: the only lever is rosettaX87, and
             // it needs the signature-stripped copy of the engine.
             if let runtimex87Url = Bundle.main.url(forResource: "runtime_loader", withExtension: nil) {
@@ -426,7 +432,14 @@ func getInlineEnvs(from: GameOptions, cxAppPath: String? = nil) -> String {
             } else {
                 console.error("Couldn't find runtime_loader")
             }
-        case .none:
+        case (true, _):
+            console.error("Reduced x87 precision needs FEX, which ships with CrossOver 27; nothing applied")
+        case (false, .cx27):
+            // Rosetta translates here, so the lever would be rosettaX87 -- and
+            // that needs the signature-stripped copy of the engine, which is
+            // not built for 27 on purpose.
+            console.error("Reduced x87 precision is only available in an ARM bottle on CrossOver 27; nothing applied")
+        case (false, .none):
             console.error("x87 requested but the engine version is unknown; nothing applied")
         }
     }

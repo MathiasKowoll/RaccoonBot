@@ -114,20 +114,21 @@ struct MGVFManifestTests {
         defer { try? FileManager.default.removeItem(at: dir) }
 
         let good = """
-        {"schema":1,"version":"v4.8.2","commit":"cbdcdd9","games":[
-          {"script":"install-nier-bridge.sh","exe":"NieR Replicant ver.1.22474487139.exe",
+        {"schema":2,"version":"v4.8.3","commit":"e7d1ee2","games":[
+          {"name":"NieR Replicant","script":"install-nier-bridge.sh",
+           "exe":"NieR Replicant ver.1.22474487139.exe",
            "files":["dinput8-nier.dll"],"carrier":"dinput8.dll","keptAs":"dinput8_real.dll",
-           "writesRegistry":true}]}
+           "carrierDir":"","why":"WMV2 in ASF","writesRegistry":true}]}
         """
         try good.write(to: dir.appendingPathComponent("manifest.json"), atomically: true, encoding: .utf8)
         let manifest = try bundle.manifest(at: dir)
-        #expect(manifest.version == "v4.8.2")
+        #expect(manifest.version == "v4.8.3")
         #expect(manifest.games.first?.carrier == "dinput8.dll")
         #expect(manifest.games.first?.writesRegistry == true)
 
         // A newer contract is refused rather than read on a best-effort basis:
         // a field that changed meaning would otherwise be acted on anyway.
-        let future = good.replacingOccurrences(of: "\"schema\":1", with: "\"schema\":2")
+        let future = good.replacingOccurrences(of: "\"schema\":2", with: "\"schema\":3")
         try future.write(to: dir.appendingPathComponent("manifest.json"), atomically: true, encoding: .utf8)
         #expect(throws: MGVFBundleError.self) { _ = try bundle.manifest(at: dir) }
     }
@@ -168,7 +169,7 @@ struct MGVFUnpackTests {
         #expect(!f.fileExists(atPath: bundle.directory(for: "v0.0.0-test-nomanifest").path(percentEncoded: false)))
 
         // With a manifest: unpacked, and readable through the normal path.
-        try #"{"schema":1,"version":"v0.0.0","commit":"test","games":[]}"#
+        try #"{"schema":2,"version":"v0.0.0","commit":"test","games":[]}"#
             .write(to: content.appendingPathComponent("manifest.json"), atomically: true, encoding: .utf8)
         let tag = "v0.0.0-test-ok"
         let dir = try bundle.unpack(try tarball(of: content), tag: tag)
@@ -177,4 +178,62 @@ struct MGVFUnpackTests {
         #expect(try bundle.manifest(at: dir).commit == "test")
         #expect(bundle.cachedTags().contains(tag))
     }
+}
+
+struct MGVFUpdateCheckTests {
+
+    @Test func aNewerTagIsAnUpdateAndAnOlderOneIsNot() {
+        #expect(MGVFBundle.compare(remote: "v4.8.3", cached: "v4.8.2") == .newer("v4.8.3"))
+        #expect(MGVFBundle.compare(remote: "v4.8.2", cached: "v4.8.2") == .upToDate("v4.8.2"))
+        // A repository that publishes an older tag must not drag the user back.
+        #expect(MGVFBundle.compare(remote: "v4.8.1", cached: "v4.8.2") == .upToDate("v4.8.2"))
+        // And numerically, so v4.8.10 beats v4.8.2 rather than sorting under it.
+        #expect(MGVFBundle.compare(remote: "v4.8.10", cached: "v4.8.2") == .newer("v4.8.10"))
+    }
+
+    @Test func withNothingCachedAnythingIsAnUpdate() {
+        #expect(MGVFBundle.compare(remote: "v4.8.3", cached: nil) == .nothingCached("v4.8.3"))
+    }
+
+    @Test func doesNotAskAgainWithinTheInterval() async {
+        let bundle = MGVFBundle()
+        let previous = bundle.lastCheck
+        defer { bundle.lastCheck = previous }
+
+        bundle.lastCheck = Date()
+        let status = await bundle.checkForUpdate(minimumInterval: 3600, now: Date())
+        #expect(status == .throttled)
+    }
+
+    @Test func aFailedCheckDoesNotSilenceTheNextOne() async {
+        // The timestamp is written on success only: an hour offline should not
+        // suppress checking for the rest of the interval.
+        //
+        // The failure is injected rather than provoked. A first version of this
+        // pointed a one-millisecond timeout at the real GitHub and passed or
+        // failed depending on the network, which tests nothing.
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AlwaysFailingProtocol.self]
+        let bundle = MGVFBundle(session: URLSession(configuration: configuration))
+
+        let previous = bundle.lastCheck
+        bundle.lastCheck = nil
+        defer { bundle.lastCheck = previous }
+
+        let status = await bundle.checkForUpdate(force: true)
+        if case .unknown = status {} else { Issue.record("expected unknown, got \(status)") }
+        #expect(bundle.lastCheck == nil)
+    }
+}
+
+
+/// Fails every request, so "what happens when the network is gone" is a fact
+/// about the code rather than a fact about the room it runs in.
+final class AlwaysFailingProtocol: URLProtocol {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
+    }
+    override func stopLoading() {}
 }

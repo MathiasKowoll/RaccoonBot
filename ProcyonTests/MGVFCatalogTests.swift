@@ -23,12 +23,14 @@ private final class MemoryStore: MGVFDecisionStore {
 }
 
 private func game(_ script: String, exe: String = "") -> MGVFGame {
-    MGVFGame(script: script, exe: exe, files: ["proxy.dll"],
-             carrier: "carrier.dll", keptAs: "carrier_real.dll", writesRegistry: false)
+    MGVFGame(name: script.replacingOccurrences(of: "install-", with: ""),
+             script: script, exe: exe, files: ["proxy.dll"],
+             carrier: "carrier.dll", keptAs: "carrier_real.dll",
+             carrierDir: "", why: "test", writesRegistry: false)
 }
 
 private func manifest(_ games: [MGVFGame]) -> MGVFManifest {
-    MGVFManifest(schema: 1, version: "v0", commit: "test", games: games)
+    MGVFManifest(schema: 2, version: "v0", commit: "test", games: games)
 }
 
 private func makeFolder(_ build: (URL) throws -> Void) throws -> String {

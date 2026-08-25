@@ -25,6 +25,8 @@ import CryptoKit
 /// written: a second copy of which DLL belongs to which game is the copy that
 /// goes stale the first time a title is added.
 struct MGVFGame: Codable, Hashable {
+    /// Readable title, for the interface.
+    let name: String
     let script: String
     /// The shipping executable. This is the identity -- not an app id, which
     /// neither repository records, and not the folder name, which Valve
@@ -35,8 +37,26 @@ struct MGVFGame: Codable, Hashable {
     let carrier: String
     /// What the original is renamed to.
     let keptAs: String
+    /// Where the carrier lives, relative to the game folder. Empty when it
+    /// sits in the folder itself.
+    ///
+    /// Not the same place as the executable: an Unreal title identifies itself
+    /// through <Project>/Binaries/Win64 while its ogg carrier is under
+    /// Engine/Binaries/ThirdParty/Ogg/Win64.
+    let carrierDir: String
+    /// One line on why this title needs the fix, for the confirmation -- so the
+    /// reason is on screen BEFORE the game folder is touched, rather than in
+    /// the installer's parting summary afterwards.
+    let why: String
     /// Whether the fix also needs a DLL override in the bottle's registry.
     let writesRegistry: Bool
+
+    /// Where the carrier DLL actually is.
+    func carrierPath(inGameFolder folder: String) -> String {
+        var url = URL(fileURLWithPath: folder)
+        if !carrierDir.isEmpty { url.appendPathComponent(carrierDir) }
+        return url.appendingPathComponent(carrier).path(percentEncoded: false)
+    }
 }
 
 struct MGVFManifest: Codable {
@@ -47,11 +67,13 @@ struct MGVFManifest: Codable {
 
     /// Refuse a manifest written to a contract this build does not know.
     ///
-    /// Reading a newer schema on a best-effort basis is how a field that
-    /// changed meaning gets acted on anyway. Better to say the bundle is too
-    /// new and let the user update.
-    static let supportedSchema = 1
-    var isSupported: Bool { schema == Self.supportedSchema }
+    /// Reading an unfamiliar schema on a best-effort basis is how a field that
+    /// changed meaning gets acted on anyway. Schema 1 described scripts; schema
+    /// 2 describes titles, which is what identifying a game needs -- four of
+    /// the scripts serve more than one game and the older shape could not say
+    /// so.
+    static let supportedSchemas: Set<Int> = [2]
+    var isSupported: Bool { Self.supportedSchemas.contains(schema) }
 }
 
 // MARK: - Errors
@@ -112,7 +134,9 @@ final class MGVFBundle: @unchecked Sendable {
         let f = FileManager.default
         guard let entries = try? f.contentsOfDirectory(atPath: root.path(percentEncoded: false)) else { return [] }
         return entries
-            .filter { f.fileExists(atPath: directory(for: $0).appendingPathComponent("manifest.json").path(percentEncoded: false)) }
+            // Readable, not merely present: falling back to a bundle written to
+            // a schema this build refuses is falling back to nothing, later.
+            .filter { (try? manifest(at: directory(for: $0))) != nil }
             .sorted { Self.compareTags($0, $1) == .orderedDescending }
     }
 
@@ -161,6 +185,71 @@ final class MGVFBundle: @unchecked Sendable {
             throw MGVFBundleError.unsupportedSchema(manifest.schema)
         }
         return manifest
+    }
+
+    // MARK: - Checking for a newer bundle
+
+    enum UpdateStatus: Equatable {
+        /// The newest release is the one already unpacked.
+        case upToDate(String)
+        /// A newer release exists. Carries its tag.
+        case newer(String)
+        /// Nothing is cached yet, so anything is an update.
+        case nothingCached(String)
+        /// Could not tell. Offline, rate limited, or GitHub answered something
+        /// unexpected -- none of which is worth putting in front of the user.
+        case unknown(String)
+        /// Asked too recently. Not a failure.
+        case throttled
+    }
+
+    private let lastCheckKey = "mgvf.lastUpdateCheck"
+
+    var lastCheck: Date? {
+        get {
+            let t = UserDefaults.standard.double(forKey: lastCheckKey)
+            return t > 0 ? Date(timeIntervalSince1970: t) : nil
+        }
+        set { UserDefaults.standard.set(newValue?.timeIntervalSince1970 ?? 0, forKey: lastCheckKey) }
+    }
+
+    /// Is there a newer fixes bundle than the one on disk?
+    ///
+    /// Called at startup and then on an interval. Throttled because the
+    /// anonymous GitHub API allows sixty requests an hour, and because an
+    /// application that phones home every time it opens is one that behaves
+    /// badly on a train.
+    ///
+    /// Never blocks anything: a failure here leaves the cached bundle in place
+    /// and says `unknown`, which the interface is free to ignore.
+    func checkForUpdate(minimumInterval: TimeInterval = 6 * 3600,
+                        now: Date = Date(),
+                        force: Bool = false) async -> UpdateStatus {
+        if !force, let last = lastCheck, now.timeIntervalSince(last) < minimumInterval {
+            return .throttled
+        }
+        do {
+            let release = try await latestRelease()
+            lastCheck = now
+            return Self.compare(remote: release.tag, cached: cachedTags().first)
+        } catch {
+            // The timestamp is deliberately not written on failure: being
+            // offline for an hour should not silence the next six.
+            return .unknown(error.localizedDescription)
+        }
+    }
+
+    /// Split out from the network so the decision itself can be tested.
+    ///
+    /// Compared numerically, not as text: a remote tag that sorts differently
+    /// is not the same thing as a remote tag that is newer, and lexicographic
+    /// order puts v4.8.10 before v4.8.2.
+    static func compare(remote: String, cached: String?) -> UpdateStatus {
+        guard let cached else { return .nothingCached(remote) }
+        switch compareTags(remote, cached) {
+        case .orderedDescending: return .newer(remote)
+        default:                 return .upToDate(cached)
+        }
     }
 
     // MARK: - Release resolution

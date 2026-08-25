@@ -21,7 +21,68 @@ let AUTOFILL_CUSTOM_GAME_ENABLED: Bool = {
     }
 }()
 
-let LIB_ROOT = "lib64"
+/// Where each supported CrossOver keeps the files the patcher writes.
+///
+/// Hardcoded per release rather than probed. The layouts differ in more than
+/// one directory name, and a probe looking for `lib/` would answer confidently
+/// and wrongly on a 26 engine, which has both `lib/` and `lib64/`.
+///
+/// Supported: CrossOver 26.x and CrossOver 27 (Preview). Anything else returns
+/// nil and the caller refuses, rather than writing into a path that does not
+/// exist -- which is how a patch silently half-applied before: the copy came
+/// out with no DXMT, no bottle redirection and no patch marker, and nothing
+/// said so.
+///
+/// Measured on 26.3.0.39832 and 27.0.0.40921:
+///
+///                   apple_gptk          libMoltenVK.dylib     dxmt
+///     26.x          lib64/apple_gptk    lib64/                lib/dxmt
+///     27 (Preview)  lib/apple_gptk      lib/<arch>/           lib/dxmt
+enum EngineLayout {
+    case cx26
+    case cx27
+
+    /// Directory holding the `apple_gptk` tree.
+    var gptkRoot: String {
+        switch self {
+        case .cx26: return "lib64"
+        case .cx27: return "lib"
+        }
+    }
+
+    /// Directory holding `libMoltenVK.dylib`. On 26 there is one copy and the
+    /// architecture is not part of the path; on 27 there is one per arch.
+    func moltenVKRoot(arch: String = "x86_64") -> String {
+        switch self {
+        case .cx26: return "lib64"
+        case .cx27: return "lib/\(arch)"
+        }
+    }
+
+    /// Read from the bundle's own CFBundleVersion. A patched copy keeps the
+    /// version of the CrossOver it was copied from, which is exactly what we
+    /// want: the copy has the layout of its source.
+    static func of(_ appURL: URL) -> EngineLayout? {
+        let plist = appURL.appendingPathComponent("Contents/Info.plist")
+        guard let d = NSDictionary(contentsOf: plist),
+              let version = d["CFBundleVersion"] as? String,
+              let first = version.split(separator: ".").first,
+              let major = Int(first)
+        else { return nil }
+        switch major {
+        case 26: return .cx26
+        case 27: return .cx27
+        default: return nil
+        }
+    }
+}
+
+struct UnsupportedEngine: LocalizedError {
+    let path: String
+    var errorDescription: String? {
+        "Unsupported CrossOver at \(path) -- this build supports CrossOver 26.x and 27 (Preview)."
+    }
+}
 
 let DEFAULT_BOTTLE_PATH = "Library/Application Support/CrossOver/Bottles/"
 let BLACKLIST = [

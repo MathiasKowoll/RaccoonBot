@@ -90,7 +90,10 @@ func openSteam(cxAppPath: String?, selectedBottle: String?, SteamX86AppPath: Str
         return
     }
     if let bottleName = URL(string: selectedBottle!)?.lastPathComponent {
-        let steamLaunchCommand = "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=0 CX_GRAPHICS_BACKEND=\"auto\" \(cxAppPath!)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \"\(SteamX86AppPath)\""
+        // Same reason as launchWindowsGame: the name alone can resolve into
+        // another product's bottle root.
+        let bottleRoot = URL(string: selectedBottle!)?.deletingLastPathComponent().path(percentEncoded: false) ?? ""
+        let steamLaunchCommand = "CX_BOTTLE_PATH=\"\(bottleRoot)\" MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=0 CX_GRAPHICS_BACKEND=\"auto\" \(cxAppPath!)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \"\(SteamX86AppPath)\""
         do {
             try safeShell(steamLaunchCommand)
             console.log(steamLaunchCommand)
@@ -176,7 +179,18 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
     // El bundle x87 sólo existe en 26; en 27 la precisión x87 es una variable.
     let useX87Bundle = options!.x87PatchEnabled && EngineLayout.of(URL(fileURLWithPath: cxAppPath)) == .cx26
     let steamBootOptions = "-nochatui -nofriendsui -silent -no-browser -no-cef-sandbox -skipinitialbootstrap"
-    let wineEnvs = "CX_ROOT=\"\(useX87Bundle ? x87cxAppURL.path() : cxAppPath)/Contents/SharedSupport/CrossOver\" WINEPREFIX=\"\(URL(string: selectedBottle)?.path ?? "")\" WINEDEBUG=-all WINEMSYNC=\(options!.wineMSync ? "1" : "0")"
+    // CX_BOTTLE_PATH names the root this bottle lives under, so `--bottle` can
+    // only resolve to this one.
+    //
+    // Without it the name is looked up under whatever root the engine happens
+    // to use, and a name that also exists elsewhere wins there instead. This
+    // machine has SteamARM under CrossOver's root and SteamArm under Procyon's;
+    // macOS does not distinguish the case, so the launch would go to the wrong
+    // bottle in silence. It works today only because the patched engine happens
+    // to carry the redirection in its own configuration -- an accident to
+    // depend on, not a design.
+    let bottleRoot = URL(string: selectedBottle)?.deletingLastPathComponent().path(percentEncoded: false) ?? ""
+    let wineEnvs = "CX_BOTTLE_PATH=\"\(bottleRoot)\" CX_ROOT=\"\(useX87Bundle ? x87cxAppURL.path() : cxAppPath)/Contents/SharedSupport/CrossOver\" WINEPREFIX=\"\(URL(string: selectedBottle)?.path ?? "")\" WINEDEBUG=-all WINEMSYNC=\(options!.wineMSync ? "1" : "0")"
     
 //    try cpyd8d9DLLs(to: bottleURL, enable: options!.dx9PatchEnabled)
     

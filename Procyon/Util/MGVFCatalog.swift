@@ -146,6 +146,7 @@ final class MGVFCatalog: @unchecked Sendable {
 
     // MARK: - Decisions
 
+    func isDismissed(_ folder: String) -> Bool { store.isDismissed(folder) }
     func dismiss(folder: String) { store.setDismissed(true, for: folder) }
     func undismiss(folder: String) { store.setDismissed(false, for: folder) }
 

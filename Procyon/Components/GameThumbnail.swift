@@ -14,6 +14,13 @@ struct GameThumbnail: View {
     @EnvironmentObject var appGlobals: AppGlobals
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
     @State private var tObserver: TerminationObserver?
+    @StateObject private var fixes = MGVFLibrary.shared
+    @State private var warnAboutFix = false
+
+    /// Where this title is installed, from its metadata.
+    private var gameFolder: String? {
+        getMeta(libraryPageGlobals.gamesMeta, byID: item.id)?.gameURL?.path(percentEncoded: false)
+    }
     var isPlaying: Bool {
         libraryPageGlobals.playingID == item.id
     }
@@ -36,6 +43,20 @@ struct GameThumbnail: View {
         }) {
             VStack(alignment: .leading, spacing: 6) {
                 ZStack(alignment: .topTrailing){
+                    if fixes.needsPatch(folder: gameFolder) {
+                        // Marked here because this is where a library is looked
+                        // at. Everything else about the fix lives inside the
+                        // game's options, which nobody opens for a title they
+                        // have no reason to suspect.
+                        Image(systemName: "wand.and.sparkles")
+                            .font(.caption)
+                            .padding(4)
+                            .background(.orange.opacity(0.85), in: Circle())
+                            .foregroundStyle(.white)
+                            .padding(6)
+                            .zIndex(1)
+                            .help("This title needs its video fix")
+                    }
                     KFImage(URL(string: item.headerImage))
                         .placeholder {
                             ProgressView()
@@ -53,6 +74,14 @@ struct GameThumbnail: View {
                                 libraryPageGlobals.deleteCustomAddedGame(game: item)
                             } label: {
                                 OIcon("trash").padding(.vertical, 8)
+                            }
+                            .task { await fixes.loadIfNeeded() }
+                            .alert("This title needs its video fix", isPresented: $warnAboutFix) {
+                                Button("Open options") { openDetailPage() }
+                                Button("Play anyway", role: .destructive) { warnAboutFix = false }
+                                Button("Cancel", role: .cancel) {}
+                            } message: {
+                                Text(fixes.entry(for: gameFolder)?.why ?? "Its video will not play without it.")
                             }
                             .buttonStyle(.plain)
                         }
@@ -155,15 +184,26 @@ struct GameThumbnail: View {
                     }, isNative: item.isNative, steamID: item.isCustom == true ? nil : item.steamAppID, steamPath: appGlobals.windowsSteamFolder?.path(percentEncoded: false) ?? "")
                 }
                 if(item.isNative) {
-                    try await launchNativeGame(id: String(item.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: gameOptions.useArmBottle ? appGlobals.selectedArmBottle : appGlobals.selectedBottle, options: gameOptions, appExeURL: item.appExeURL)
+                    try await launchNativeGame(id: String(item.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions, appExeURL: item.appExeURL)
                 } else {
                     if(item.isCustom == true && item.appExeURL == nil) {
                         console.error("custom game doesn't have an executable associated")
                         libraryPageGlobals.setLoader(state: false)
                         return
                     }
+                    // Asked before the game starts: that is the moment the
+                    // reason is obvious, and the only moment a user who never
+                    // opens the options will hear it at all. It asks rather
+                    // than acts -- applying a fix renames a file in the game
+                    // folder, and doing that behind a play button is not
+                    // something to do quietly.
+                    if fixes.needsPatch(folder: gameFolder) {
+                        warnAboutFix = true
+                        libraryPageGlobals.setLoader(state: false)
+                        return
+                    }
                     let steamExePath = appGlobals.windowsSteamFolder?.appendingPathComponent("Steam.exe").path(percentEncoded: false) ?? "C:\\Program Files (x86)\\Steam\\Steam.exe"
-                    try await launchWindowsGame(id: String(item.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, steamExePath: steamExePath, options: gameOptions, appExeURL: item.appExeURL)
+                    try await launchWindowsGame(id: String(item.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: gameOptions.useArmBottle ? appGlobals.selectedArmBottle : appGlobals.selectedBottle, steamExePath: steamExePath, options: gameOptions, appExeURL: item.appExeURL)
                 }
             } catch {
                 console.error(String(reflecting: error))

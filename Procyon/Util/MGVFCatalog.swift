@@ -42,15 +42,18 @@ enum GameFixState: Equatable {
 /// game in two Steam libraries are two installations, and a decision about one
 /// is not a decision about the other.
 protocol MGVFDecisionStore: AnyObject {
-    func pairedScript(for folder: String) -> String?
-    func setPairedScript(_ script: String?, for folder: String)
+    /// By TITLE, not by script: four scripts serve more than one game --
+    /// install-runtime-fix.sh serves four -- so a pairing kept by script name
+    /// shows the wrong title and the wrong reason.
+    func pairedTitle(for folder: String) -> String?
+    func setPairedTitle(_ title: String?, for folder: String)
     func isDismissed(_ folder: String) -> Bool
     func setDismissed(_ dismissed: Bool, for folder: String)
 }
 
 final class MGVFUserDefaultsStore: MGVFDecisionStore {
     private let defaults: UserDefaults
-    private let pairKey = "mgvf.pairedScripts"
+    private let pairKey = "mgvf.pairedTitles"
     private let dismissKey = "mgvf.dismissedFolders"
 
     init(defaults: UserDefaults = .standard) { self.defaults = defaults }
@@ -64,10 +67,10 @@ final class MGVFUserDefaultsStore: MGVFDecisionStore {
         set { defaults.set(Array(newValue), forKey: dismissKey) }
     }
 
-    func pairedScript(for folder: String) -> String? { pairs[folder] }
-    func setPairedScript(_ script: String?, for folder: String) {
+    func pairedTitle(for folder: String) -> String? { pairs[folder] }
+    func setPairedTitle(_ title: String?, for folder: String) {
         var p = pairs
-        if let script { p[folder] = script } else { p.removeValue(forKey: folder) }
+        if let title { p[folder] = title } else { p.removeValue(forKey: folder) }
         pairs = p
     }
     func isDismissed(_ folder: String) -> Bool { dismissed.contains(folder) }
@@ -109,8 +112,8 @@ final class MGVFCatalog: @unchecked Sendable {
     /// of the ten. It is remembered so the question is asked once.
     func entry(forFolder folder: String) -> MGVFGame? {
         if let automatic = automaticEntry(forFolder: folder) { return automatic }
-        guard let script = store.pairedScript(for: folder) else { return nil }
-        return manifest.games.first { $0.script == script }
+        guard let title = store.pairedTitle(for: folder) else { return nil }
+        return manifest.games.first { $0.name == title }
     }
 
     func automaticEntry(forFolder folder: String) -> MGVFGame? {
@@ -141,8 +144,8 @@ final class MGVFCatalog: @unchecked Sendable {
     /// Titles the user can be offered when the automatic match finds nothing.
     var pairableGames: [MGVFGame] { manifest.games }
 
-    func pair(folder: String, to game: MGVFGame) { store.setPairedScript(game.script, for: folder) }
-    func unpair(folder: String) { store.setPairedScript(nil, for: folder) }
+    func pair(folder: String, to game: MGVFGame) { store.setPairedTitle(game.name, for: folder) }
+    func unpair(folder: String) { store.setPairedTitle(nil, for: folder) }
 
     // MARK: - Decisions
 
@@ -160,6 +163,9 @@ final class MGVFCatalog: @unchecked Sendable {
     /// can show without overstating it.
     func state(forFolder folder: String) async -> GameFixState {
         guard let game = entry(forFolder: folder) else { return .noFix }
+        // Nothing to install and nothing to ask: what this title needs is a
+        // staged codec, which is a property of the engine, not of the folder.
+        if game.isCodecOnly { return .noFix }
         if store.isDismissed(folder) { return .dismissed }
         do {
             let result = try await MGVFRunner.shared.run(script: scriptPath(for: game),

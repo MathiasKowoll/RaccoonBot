@@ -118,7 +118,7 @@ struct MGVFManifestTests {
           {"name":"NieR Replicant","script":"install-nier-bridge.sh",
            "exe":"NieR Replicant ver.1.22474487139.exe",
            "files":["dinput8-nier.dll"],"carrier":"dinput8.dll","keptAs":"dinput8_real.dll",
-           "carrierDir":"","why":"WMV2 in ASF","writesRegistry":true}]}
+           "carrierDir":"","why":"WMV2 in ASF","writesRegistry":true,"codec":"libgstlibav"}]}
         """
         try good.write(to: dir.appendingPathComponent("manifest.json"), atomically: true, encoding: .utf8)
         let manifest = try bundle.manifest(at: dir)

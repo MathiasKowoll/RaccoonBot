@@ -199,7 +199,11 @@ struct GameOptionsView: View {
                                 if let error = fix.lastError ?? autoconfigError {
                                     Text(error).font(.footnote).foregroundStyle(.red)
                                 }
-                                if fix.entry?.gptk != nil, let warning = fix.scopeWarning {
+                                // Never nil: the catalogue emits "" for the
+                                // thirteen titles that run on either
+                                // generation, so `!= nil` showed this on all
+                                // of them.
+                                if fix.entry?.gptk?.isEmpty == false, let warning = fix.scopeWarning {
                                     Text(warning).font(.footnote).foregroundStyle(.secondary)
                                 }
                             }
@@ -228,8 +232,7 @@ struct GameOptionsView: View {
                 \(entry.name)
                 \(entry.why)
 
-                In \(MGVFRunner.redacted(folder)):
-                \(entry.carrier) is renamed to \(entry.keptAs), and \(entry.files.joined(separator: ", ")) takes its place.\(entry.writesRegistry ? "\nA DLL override is written to the bottle, for this game only." : "")
+                \(MGVFRunner.redacted(entry.carrierPath(inGameFolder: folder))) is renamed to \(entry.keptAs), and \(entry.files.joined(separator: ", ")) takes its place.\(entry.writesRegistry ? "\nA DLL override is written to the bottle, for this game only." : "")
 
                 Verifying the game's files in Steam undoes this. It can be put back from here.
                 """)
@@ -252,14 +255,19 @@ struct GameOptionsView: View {
         // consulted for THIS title, so the button reports what it needs rather
         // than only filling in the form.
         await fix.load(folder: gameFolder, hasGame: game != nil)
-        if let recommended = fix.recommendedOptions {
-            gameOptions.importAutoConfig(data: recommended)
-        }
+        // The remote settings first, the measured catalogue second.
+        //
+        // importAutoConfig overwrites every non-nil field, so whichever runs
+        // last wins. Until the catalogue carried a backend the measured branch
+        // returned nothing and the order did not matter; now it does, and a
+        // measurement made on this hardware should not lose to a server.
         if let id = game?.steamAppID {
-            print(id)
             if let autoconfigData = try await api.fetchAutoConfig(steamID: String(id)) {
                 gameOptions.importAutoConfig(data: autoconfigData)
             }
+        }
+        if let recommended = fix.recommendedOptions {
+            gameOptions.importAutoConfig(data: recommended)
         }
     }
 }

@@ -12,9 +12,9 @@ import Foundation
 private final class MemoryStore: MGVFDecisionStore {
     var pairs: [String: String] = [:]
     var dismissed: Set<String> = []
-    func pairedScript(for folder: String) -> String? { pairs[folder] }
-    func setPairedScript(_ script: String?, for folder: String) {
-        if let script { pairs[folder] = script } else { pairs.removeValue(forKey: folder) }
+    func pairedTitle(for folder: String) -> String? { pairs[folder] }
+    func setPairedTitle(_ title: String?, for folder: String) {
+        if let title { pairs[folder] = title } else { pairs.removeValue(forKey: folder) }
     }
     func isDismissed(_ folder: String) -> Bool { dismissed.contains(folder) }
     func setDismissed(_ value: Bool, for folder: String) {
@@ -27,7 +27,7 @@ private func game(_ script: String, exe: String = "") -> MGVFGame {
              script: script, exe: exe, files: ["proxy.dll"],
              carrier: "carrier.dll", keptAs: "carrier_real.dll",
              carrierDir: "", why: "test", writesRegistry: false,
-             backend: nil, gptk: nil, env: nil)
+             backend: nil, gptk: nil, env: nil, codec: nil)
 }
 
 private func manifest(_ games: [MGVFGame]) -> MGVFManifest {
@@ -213,7 +213,7 @@ struct MGVFRecommendedOptionsTests {
     private func entry(backend: String?, gptk: String?, env: [String: String]? = nil) -> MGVFGame {
         MGVFGame(name: "t", script: "s.sh", exe: "t.exe", files: [],
                  carrier: "c.dll", keptAs: "c_real.dll", carrierDir: "", why: "",
-                 writesRegistry: false, backend: backend, gptk: gptk, env: env)
+                 writesRegistry: false, backend: backend, gptk: gptk, env: env, codec: nil)
     }
 
     @MainActor
@@ -252,4 +252,76 @@ struct MGVFRecommendedOptionsTests {
         let withEnv = options(entry(backend: nil, gptk: nil, env: ["D3DM_MTL4": "0"]))
         #expect(withEnv?.envVariables == "D3DM_MTL4=0")
     }
+}
+
+struct MGVFSchemaThreeTests {
+
+    private func titled(_ name: String, script: String, gptk: String? = "", codec: String? = "") -> MGVFGame {
+        MGVFGame(name: name, script: script, exe: "", files: [], carrier: "c.dll",
+                 keptAs: "c_real.dll", carrierDir: "Engine/Binaries/ThirdParty/Ogg/Win64",
+                 why: "because \(name)", writesRegistry: false,
+                 backend: "d3dmetal", gptk: gptk, env: nil, codec: codec)
+    }
+
+    @Test func pairingKeepsTheTitleNotTheScript() throws {
+        // install-runtime-fix.sh serves four games. Keyed by script, pairing
+        // "Wo Long" showed "DYNASTY WARRIORS: ORIGINS" -- wrong name, wrong
+        // reason, in the dialog that is about to write to disk.
+        let a = titled("Wo Long: Fallen Dynasty", script: "install-runtime-fix.sh")
+        let b = titled("Mortal Shell 2", script: "install-runtime-fix.sh")
+        let folder = try makeSharedFolder()
+        defer { try? FileManager.default.removeItem(atPath: folder) }
+
+        let catalog = MGVFCatalog(manifest: MGVFManifest(schema: 3, version: "v", commit: "c",
+                                                         games: [a, b], scopeWarning: nil),
+                                  directory: URL(fileURLWithPath: "/tmp"),
+                                  store: SharedMemoryStore())
+        catalog.pair(folder: folder, to: b)
+        #expect(catalog.entry(forFolder: folder)?.name == "Mortal Shell 2")
+        #expect(catalog.entry(forFolder: folder)?.why == "because Mortal Shell 2")
+    }
+
+    @Test func aCodecOnlyTitleHasNothingToInstall() async throws {
+        // Devil May Cry 5 needs a staged decoder and no file beside the game.
+        // Offering to install something would be offering nothing.
+        let folder = try makeSharedFolder()
+        defer { try? FileManager.default.removeItem(atPath: folder) }
+        let dmc = titled("Devil May Cry 5", script: "", codec: "libgstlibav")
+        let catalog = MGVFCatalog(manifest: MGVFManifest(schema: 3, version: "v", commit: "c",
+                                                         games: [dmc], scopeWarning: nil),
+                                  directory: URL(fileURLWithPath: "/tmp"),
+                                  store: SharedMemoryStore())
+        catalog.pair(folder: folder, to: dmc)
+        #expect(dmc.isCodecOnly)
+        #expect(await catalog.state(forFolder: folder) == .noFix)
+    }
+
+    @Test func namesTheCarrierWhereItActuallyIs() {
+        // Five of seventeen keep the carrier in a subfolder. The dialog that
+        // says what is about to be renamed must name that path, not the game
+        // folder.
+        let g = titled("Mortal Shell 2", script: "install-runtime-fix.sh")
+        let path = g.carrierPath(inGameFolder: "/games/Sparta")
+        #expect(path == "/games/Sparta/Engine/Binaries/ThirdParty/Ogg/Win64/c.dll")
+    }
+}
+
+private final class SharedMemoryStore: MGVFDecisionStore {
+    var pairs: [String: String] = [:]
+    var dismissed: Set<String> = []
+    func pairedTitle(for folder: String) -> String? { pairs[folder] }
+    func setPairedTitle(_ title: String?, for folder: String) {
+        if let title { pairs[folder] = title } else { pairs.removeValue(forKey: folder) }
+    }
+    func isDismissed(_ folder: String) -> Bool { dismissed.contains(folder) }
+    func setDismissed(_ value: Bool, for folder: String) {
+        if value { dismissed.insert(folder) } else { dismissed.remove(folder) }
+    }
+}
+
+private func makeSharedFolder() throws -> String {
+    let dir = FileManager.default.temporaryDirectory
+        .appendingPathComponent("mgvf-s3-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    return dir.path(percentEncoded: false)
 }

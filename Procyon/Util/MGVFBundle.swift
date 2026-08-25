@@ -64,6 +64,15 @@ struct MGVFGame: Codable, Hashable {
     /// Environment this title needs as a standing requirement. Almost always
     /// empty; a variable that worked once in a measurement is not one.
     let env: [String: String]?
+    /// The staged plugin this title needs: "libgstlibav", "libgstmatroska", or
+    /// empty when the engine decodes it unaided -- which is a measurement, not
+    /// a gap.
+    let codec: String?
+
+    /// Some titles need only a staged codec and no file beside the game at all.
+    /// Devil May Cry 5 is one: there is nothing to install, so nothing to
+    /// offer installing.
+    var isCodecOnly: Bool { script.isEmpty }
 
     /// Where the carrier DLL actually is.
     func carrierPath(inGameFolder folder: String) -> String {

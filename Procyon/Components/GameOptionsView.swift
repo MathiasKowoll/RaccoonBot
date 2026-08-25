@@ -13,7 +13,19 @@ struct GameOptionsView: View {
     /// Needed to tell the user whether an ARM bottle has been chosen at all.
     /// Provided by the sheet that presents this view.
     @EnvironmentObject var appGlobals: AppGlobals
+    @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
+    @StateObject private var fix = MGVFCoordinator()
+    @State private var confirmingInstall = false
     @State var isLoading = false
+
+    /// The folder the game is installed in, from its metadata.
+    ///
+    /// Never GameDetailView.gameFolder: that one is built without the "common"
+    /// component and points at a path that does not exist.
+    private var gameFolder: String? {
+        guard let id = game?.id else { return nil }
+        return getMeta(libraryPageGlobals.gamesMeta, byID: id)?.gameURL?.path(percentEncoded: false)
+    }
     
     var preferredMaxFrameRate: String {
         $gameOptions.dxmtPreferredMaxFrameRate.wrappedValue < 20.0 ? "Disabled" : "\($gameOptions.dxmtPreferredMaxFrameRate.wrappedValue)"
@@ -166,6 +178,31 @@ struct GameOptionsView: View {
                             }
                         }
                     }.padding(.top)
+
+                    if fix.entry != nil || fix.state != .noFix {
+                        Divider()
+                        HStack(alignment: .top) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(fix.summary).font(.callout)
+                                if let detail = fix.detail {
+                                    Text(detail).font(.footnote).foregroundStyle(.secondary)
+                                }
+                                if let blocked = fix.blocked {
+                                    Text(blocked).font(.footnote).foregroundStyle(.orange)
+                                }
+                                if let error = fix.lastError {
+                                    Text(error).font(.footnote).foregroundStyle(.red)
+                                }
+                            }
+                            Spacer()
+                            if fix.canInstall {
+                                Button("Install video fix…") { confirmingInstall = true }
+                            }
+                            if fix.canRemove {
+                                Button("Remove") { Task { await fix.remove() } }
+                            }
+                        }.padding(.top, 4)
+                    }
                 }
                 
             }
@@ -174,6 +211,25 @@ struct GameOptionsView: View {
             .toggleStyle(.switch)
         }
         .padding()
+        .confirmationDialog("Install the video fix?",
+                            isPresented: $confirmingInstall,
+                            titleVisibility: .visible) {
+            Button("Install") { Task { await fix.install() } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            if let entry = fix.entry, let folder = gameFolder {
+                Text("""
+                \(entry.name)
+                \(entry.why)
+
+                In \(MGVFRunner.redacted(folder)):
+                \(entry.carrier) is renamed to \(entry.keptAs), and \(entry.files.joined(separator: ", ")) takes its place.\(entry.writesRegistry ? "\nA DLL override is written to the bottle, for this game only." : "")
+
+                Verifying the game's files in Steam undoes this. It can be put back from here.
+                """)
+            }
+        }
+        .task(id: gameFolder) { await fix.load(folder: gameFolder) }
         .onAppear() {
             if let data: GameOptionsData = readUsrDefData(key: gameOptKey) {
                 self.gameOptions.set(data: data)
@@ -186,6 +242,10 @@ struct GameOptionsView: View {
     
     @MainActor
     private func autoconfig() async throws {
+        // Per game, as the fixes application already works: the catalogue is
+        // consulted for THIS title, so the button reports what it needs rather
+        // than only filling in the form.
+        await fix.load(folder: gameFolder)
         if let id = game?.steamAppID {
             print(id)
             if let autoconfigData = try await api.fetchAutoConfig(steamID: String(id)) {
@@ -201,6 +261,11 @@ struct GameOptionsView: View {
     
     @StateObject @Previewable var appGlobals: AppGlobals = AppGlobals()
 
-    GameOptionsView(game: $game).environmentObject(gameOptions).environmentObject(appGlobals)
+    @StateObject @Previewable var libraryPageGlobals: LibraryPageGlobals = LibraryPageGlobals()
+
+    GameOptionsView(game: $game)
+        .environmentObject(gameOptions)
+        .environmentObject(appGlobals)
+        .environmentObject(libraryPageGlobals)
 
 }

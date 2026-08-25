@@ -2,3 +2,5 @@ Config.xcconfig
 DerivedData/
 .derived-data-log-*
 Secrets.swift
+build/
+.DS_Store

@@ -14,6 +14,14 @@ struct OptionsView: View {
     @State var progressLabel = "Processing..."
     @State var downloading: Bool = false
     @State var shouldShowBottleSelector: Bool = false
+
+    /// Bottles that can actually serve a game marked to run on ARM: ARM
+    /// architecture AND an engine that ships FEX. An ARM bottle on CrossOver 26
+    /// runs ARM-native Windows binaries only, so listing it here would offer
+    /// the one bottle that cannot run the game.
+    private var armBottles: [BottleInfo] {
+        bottles.compactMap { bottleInfo($0) }.filter { $0.isARM && $0.canRunX86 }
+    }
     @State var creatingBottle: Bool = false
     @EnvironmentObject var appGlobals: AppGlobals
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
@@ -84,9 +92,37 @@ struct OptionsView: View {
                                 }
                                 Task { await load() }
                                 persistUsrDefOptionString(key: "selectedBottle", value: newValue)
+                                if let url = URL(string: newValue) {
+                                    applyStagedCodecs(to: url, cxAppPath: appGlobals.cxAppPath)
+                                }
                             }
                         }
                     }
+                    // Second slot, not another entry in the same picker: a
+                    // bottle's architecture is fixed when it is created, so
+                    // there is no promoting the normal one. Either an ARM
+                    // bottle exists or the game cannot run on ARM.
+                    HStack {
+                        Picker("ARM bottle", selection: $appGlobals.selectedArmBottle) {
+                            Text("None").tag("")
+                            ForEach(armBottles, id: \.url.absoluteString) { info in
+                                Text(info.name).tag(info.url.absoluteString)
+                            }
+                        }.onChange(of: appGlobals.selectedArmBottle) { _, newValue in
+                            persistUsrDefOptionString(key: "selectedArmBottle", value: newValue)
+                            if let url = URL(string: newValue) {
+                                applyStagedCodecs(to: url, cxAppPath: appGlobals.cxAppPath)
+                            }
+                        }
+                    }
+                    if armBottles.isEmpty {
+                        Text("No ARM bottle found. Create one in CrossOver, choosing the ARM architecture, on CrossOver 27 — it is the engine that ships FEX to emulate x86.")
+                            .font(.footnote)
+                            .foregroundStyle(.orange)
+                    }
+                    Text("ARM bottles draw through DXMT, which reaches Direct3D 11. Direct3D 12 titles will not run in one.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 } else if(bottles.isEmpty) {
                     if appGlobals.cxAppPath != nil {
                     Text("No bottles found")

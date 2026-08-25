@@ -139,7 +139,7 @@ struct GameHeader: View {
                      steamPath: appGlobals.windowsSteamFolder?.path(percentEncoded: false) ?? "")
                 }
                 if(game!.isNative) {
-                    try await launchNativeGame(id: String(game!.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions, appExeURL: game!.appExeURL)
+                    try await launchNativeGame(id: String(game!.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: gameOptions.useArmBottle ? appGlobals.selectedArmBottle : appGlobals.selectedBottle, options: gameOptions, appExeURL: game!.appExeURL)
                 } else {
                     if(game!.isCustom == true && game!.appExeURL == nil) {
                         console.error("custom game doesn't have an executable associated")

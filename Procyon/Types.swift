@@ -40,6 +40,8 @@ struct GameOptionsData: Codable { // this is used for reading saved properties
     var mtlHudEnabled: Bool?
     var d3dMtl4Enabled: Bool?
     var x87PatchEnabled: Bool?
+    /// Run this title in the ARM bottle instead of the default one.
+    var useArmBottle: Bool?
     var dx9PatchEnabled: Bool?
     var gameArguments: String?
     var dxmtPreferredMaxFrameRate: Double?
@@ -63,6 +65,7 @@ struct GameOptionsData: Codable { // this is used for reading saved properties
         self.wineMSync = data.wineMSync
         self.mtlHudEnabled = data.mtlHudEnabled
         self.x87PatchEnabled = data.x87PatchEnabled
+        self.useArmBottle = data.useArmBottle
         self.dx9PatchEnabled = data.dx9PatchEnabled
         self.gameArguments = data.gameArguments
         self.dxmtPreferredMaxFrameRate = data.dxmtPreferredMaxFrameRate
@@ -89,6 +92,10 @@ class GameOptions: ObservableObject { // this is used as form state
     @Published var wineMSync: Bool
     @Published var mtlHudEnabled: Bool
     @Published var x87PatchEnabled: Bool
+    /// Defaults to false and is not in the initialiser on purpose: every
+    /// existing call site keeps working, and a title only moves bottles when
+    /// somebody asks it to.
+    @Published var useArmBottle: Bool = false
     @Published var dx9PatchEnabled: Bool
     @Published var gameArguments: String
     @Published var dxmtPreferredMaxFrameRate: Double
@@ -138,6 +145,7 @@ class GameOptions: ObservableObject { // this is used as form state
         self.wineMSync = data.wineMSync ?? true
         self.mtlHudEnabled = data.mtlHudEnabled ?? false
         self.x87PatchEnabled = data.x87PatchEnabled ?? false
+        self.useArmBottle = data.useArmBottle ?? false
         self.dx9PatchEnabled = data.dx9PatchEnabled ?? false
         self.gameArguments = data.gameArguments ?? ""
         self.dxmtMetalFXSpatial = data.dxmtMetalFXSpatial ?? false
@@ -162,6 +170,7 @@ class GameOptions: ObservableObject { // this is used as form state
         if let v = data.wineMSync { self.wineMSync = v }
         if let v = data.mtlHudEnabled { self.mtlHudEnabled = v }
         if let v = data.x87PatchEnabled { self.x87PatchEnabled = v }
+        if let v = data.useArmBottle { self.useArmBottle = v }
         if let v = data.dx9PatchEnabled { self.dx9PatchEnabled = v }
         if let v = data.gameArguments { self.gameArguments = v }
         if let v = data.dxmtMetalFXSpatial { self.dxmtMetalFXSpatial = v }
@@ -635,12 +644,18 @@ class LibraryPageGlobals: ObservableObject {
 
 final class AppGlobals: ObservableObject {
     @Published var selectedBottle: String = ""
+    /// The bottle used by games marked to run on ARM. Empty means none chosen,
+    /// which is a state the interface has to warn about rather than paper over:
+    /// a bottle's architecture is fixed when it is created, so there is no way
+    /// to promote the normal one.
+    @Published var selectedArmBottle: String = ""
     @Published var userID: String? = nil
     @Published var cxAppPath: String?
     @Published var windowsSteamFolder: URL?
     
     init(selectedBottle: String? = "", cxAppPath: String? = nil) {
         self.selectedBottle = readUsrDefOptionString(key: "selectedBottle") ?? ""
+        self.selectedArmBottle = readUsrDefOptionString(key: "selectedArmBottle") ?? ""
         self.cxAppPath = readUsrDefOptionString(key: "cxAppPath")
     }
 }

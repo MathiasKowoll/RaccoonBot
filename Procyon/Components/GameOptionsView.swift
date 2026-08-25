@@ -10,6 +10,9 @@ import SwiftUI
 struct GameOptionsView: View {
     @Binding var game: Game?
     @EnvironmentObject var gameOptions: GameOptions
+    /// Needed to tell the user whether an ARM bottle has been chosen at all.
+    /// Provided by the sheet that presents this view.
+    @EnvironmentObject var appGlobals: AppGlobals
     @State var isLoading = false
     
     var preferredMaxFrameRate: String {
@@ -38,8 +41,25 @@ struct GameOptionsView: View {
                                 TextField("Env variables", text: $gameOptions.envVariables)
                                 if !game!.isNative {
                                     Divider()
+                                    Toggle("Run in the ARM bottle", isOn: $gameOptions.useArmBottle)
+                                        .onChange(of: gameOptions.useArmBottle) { _, newValue in
+                                            // An ARM bottle has no D3DMetal: Direct3D goes
+                                            // through DXMT, which reaches D3D11. Forcing the
+                                            // backend here is the same idiom the DX9 toggle
+                                            // already uses below.
+                                            if newValue { gameOptions.cxGraphicsBackend = "dxmt" }
+                                        }
+                                    if gameOptions.useArmBottle {
+                                        if appGlobals.selectedArmBottle.isEmpty {
+                                            Text("No ARM bottle chosen. Pick one in Options, or create one in CrossOver with the ARM architecture.")
+                                                .font(.footnote).foregroundStyle(.orange)
+                                        }
+                                        Text("Draws through DXMT, so Direct3D 11 at most: a Direct3D 12 title will not run here.")
+                                            .font(.footnote).foregroundStyle(.secondary)
+                                    }
+                                    Divider()
                                     Text("32Bits options")
-                                    Toggle("Use X87 Patch", isOn: $gameOptions.x87PatchEnabled)
+                                    Toggle("Reduced x87 precision", isOn: $gameOptions.x87PatchEnabled)
                                     Toggle("Use DX9", isOn: $gameOptions.dx9PatchEnabled).onChange(of: gameOptions.dx9PatchEnabled) { oldValue, newValue in
                                         if(newValue == true) {
                                             gameOptions.cxGraphicsBackend = "wine"
@@ -179,6 +199,8 @@ struct GameOptionsView: View {
     @State @Previewable var game: Game? = .mock
     @StateObject @Previewable var gameOptions: GameOptions = GameOptions(cxGraphicsBackend: "dxmt")
     
-    GameOptionsView(game: $game).environmentObject(gameOptions)
+    @StateObject @Previewable var appGlobals: AppGlobals = AppGlobals()
+
+    GameOptionsView(game: $game).environmentObject(gameOptions).environmentObject(appGlobals)
 
 }

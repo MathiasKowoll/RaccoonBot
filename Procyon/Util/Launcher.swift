@@ -102,7 +102,10 @@ func openSteam(cxAppPath: String?, selectedBottle: String?, SteamX86AppPath: Str
 
 func copyMoltenVK(cxAppPath: String, vulkanLibID: String) throws -> Void {
     let cxURL = URL(fileURLWithPath: cxAppPath)
-    let moltenVKDest = cxURL.appendingPathComponent(SHARED_SUPPORT_COMPONENT + "/\(LIB_ROOT)/libMoltenVK.dylib")
+    guard let layout = EngineLayout.of(cxURL) else {
+        throw UnsupportedEngine(path: cxAppPath)
+    }
+    let moltenVKDest = cxURL.appendingPathComponent(SHARED_SUPPORT_COMPONENT + "/\(layout.moltenVKRoot())/libMoltenVK.dylib")
     console.log(moltenVKDest.path())
     switch (vulkanLibID) {
     case "latest":
@@ -127,6 +130,10 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
     console.log("options: \(options.debugDescription)")
     if let vulkanLibID = options?.vulkanLib {
         try copyMoltenVK(cxAppPath: cxAppPath, vulkanLibID: vulkanLibID)
+    }
+    guard !selectedBottle.isEmpty else {
+        console.error("No bottle to launch into. If this title is set to run on ARM, choose an ARM bottle in Options -- or create one in CrossOver with the ARM architecture.")
+        return
     }
     guard let bottleURL = URL(string: selectedBottle) else {
         console.error("Invalid bottle URL: \(selectedBottle)")
@@ -166,23 +173,33 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
     console.warn("attempting to run steam.exe on game id \(id)")
     let arguments = options != nil ? " " + options!.gameArguments : ""
     let x87cxAppURL = f.homeDirectoryForCurrentUser.appendingPathComponent("Applications", isDirectory: true).appendingPathComponent(PATCHED_CX_X87_APPNAME)
+    // El bundle x87 sólo existe en 26; en 27 la precisión x87 es una variable.
+    let useX87Bundle = options!.x87PatchEnabled && EngineLayout.of(URL(fileURLWithPath: cxAppPath)) == .cx26
     let steamBootOptions = "-nochatui -nofriendsui -silent -no-browser -no-cef-sandbox -skipinitialbootstrap"
-    let wineEnvs = "CX_ROOT=\"\(options!.x87PatchEnabled ? x87cxAppURL.path() : cxAppPath)/Contents/SharedSupport/CrossOver\" WINEPREFIX=\"\(URL(string: selectedBottle)?.path ?? "")\" WINEDEBUG=-all WINEMSYNC=\(options!.wineMSync ? "1" : "0")"
+    let wineEnvs = "CX_ROOT=\"\(useX87Bundle ? x87cxAppURL.path() : cxAppPath)/Contents/SharedSupport/CrossOver\" WINEPREFIX=\"\(URL(string: selectedBottle)?.path ?? "")\" WINEDEBUG=-all WINEMSYNC=\(options!.wineMSync ? "1" : "0")"
     
 //    try cpyd8d9DLLs(to: bottleURL, enable: options!.dx9PatchEnabled)
     
     let gameLaunchCommand = appExeURL != nil ? "\"\(appExeURL!.path(percentEncoded: false))\"" : "\"\(steamExePath)\" \(steamBootOptions) -applaunch \(String(id))"
     let cxAppURL = URL(fileURLWithPath: cxAppPath)
-    switch (options!.cxGraphicsBackend) {
-        case "d3dmetal4":
-            try installd3dMetal(at: cxAppURL, version: "4")
-        case "d3dmetal3":
-            try installd3dMetal(at: cxAppURL, version: "3")
-        default:
-            try  installd3dMetal(at: cxAppURL, version: "3")
+    // D3DMetal is x86 and an ARM bottle never loads it: there Direct3D goes
+    // through DXMT. Copying ~60 MB of toolkit into the engine on every launch
+    // to leave it unread is work for nothing, and it would misreport in the
+    // HUD what is actually drawing.
+    if bottleInfo(bottleURL)?.isARM == true {
+        console.log("ARM bottle: skipping the D3DMetal install, DXMT draws here")
+    } else {
+        switch (options!.cxGraphicsBackend) {
+            case "d3dmetal4":
+                try installd3dMetal(at: cxAppURL, version: "4")
+            case "d3dmetal3":
+                try installd3dMetal(at: cxAppURL, version: "3")
+            default:
+                try  installd3dMetal(at: cxAppURL, version: "3")
+        }
     }
     
-    if (options!.x87PatchEnabled) {
+    if useX87Bundle {
         if(!f.fileExists(atPath: x87cxAppURL.path())) {
             console.error("Couldn't find \(x87cxAppURL.path())")
             return

@@ -23,14 +23,33 @@ struct WineRegValue {
 class WineRegSection {
     var header: String       // e.g. "[Software\\\\Wine\\\\Explorer]"
     var timestamp: String?   // e.g. "1772562888"
-    var timeLine: String?    // e.g. "#time=1dcab3c6a58a0ea"
+    /// The marker lines wine writes between a section's header and its first
+    /// value, in the order it wrote them.
+    ///
+    /// Not just #time. Wine also writes #link, which is how a registry key is
+    /// marked as a symbolic link -- 324 of them across the bottles on this
+    /// machine. Treated as a comment it was moved below the values, and wine
+    /// no longer read the key as a link. The bottle games launch from has
+    /// none left; the one beside it still has 54.
+    ///
+    /// Kept as a list rather than named fields so a marker nobody here has
+    /// heard of survives too.
+    var preamble: [String] = []
+    var timeLine: String? {
+        get { preamble.first { $0.hasPrefix("#time=") } }
+        set {
+            preamble.removeAll { $0.hasPrefix("#time=") }
+            if let newValue { preamble.insert(newValue, at: 0) }
+        }
+    }
     var values: [(key: String, value: WineRegValue)] = []
     var trailingLines: [String] = [] // blank lines or comments after last value
 
     init(header: String, timestamp: String? = nil, timeLine: String? = nil) {
+        if let timeLine { self.preamble = [timeLine] }
         self.header = header
         self.timestamp = timestamp
-        self.timeLine = timeLine
+
     }
 
     var path: String {
@@ -116,6 +135,17 @@ class WineRegistryFile {
      */
     var headerLines: [String] = [] // "WINE REGISTRY Version 2", comments, #arch line
     var sections: [WineRegSection] = []
+
+    /// Whether this file can be written back at all.
+    ///
+    /// Decided at load time by rebuilding the file from what was parsed and
+    /// comparing it to what was read. If the two differ, the parser did not
+    /// understand something, and writing would put that misunderstanding on
+    /// disk. Refusing is the only safe answer: a bottle registry has one copy
+    /// and the things it holds -- what can decode a video, what a game
+    /// installed -- are not reconstructible from anywhere else.
+    private(set) var isFaithful = false
+    private(set) var infidelity: String?
     let fileURL: URL
 
     init(fileURL: URL) {
@@ -148,6 +178,11 @@ class WineRegistryFile {
 
     func load() throws {
         let content = try String(contentsOf: fileURL, encoding: .utf8)
+        parse(content)
+        checkFidelity(against: content)
+    }
+
+    fileprivate func parse(_ content: String) {
         var lines: [String] = []
         content.enumerateLines { line, _ in lines.append(line) }
 
@@ -194,9 +229,12 @@ class WineRegistryFile {
                 continue
             }
 
-            // #time= line
-            if trimmed.hasPrefix("#time=") {
-                section.timeLine = trimmed
+            // A marker line, before any value: #time=, #link, or whatever
+            // else wine decides to write there. Position is meaning -- these
+            // describe the section, and below the values they describe
+            // nothing.
+            if trimmed.hasPrefix("#") && section.values.isEmpty {
+                section.preamble.append(trimmed)
                 continue
             }
 
@@ -286,35 +324,94 @@ class WineRegistryFile {
 
     // MARK: - Write
 
-    func save() throws {
-        try createBackup()
-
+    /// The file as this model would write it.
+    private func serialise() -> String {
         var output = ""
-
-        // Header
-        for line in headerLines {
-            output += line + "\n"
-        }
-
-        // Sections
+        for line in headerLines { output += line + "\n" }
         for section in sections {
             output += section.header + "\n"
-            if let timeLine = section.timeLine {
-                output += timeLine + "\n"
-            }
-            for entry in section.values {
-                output += entry.value.rawLine + "\n"
-            }
-            for trailing in section.trailingLines {
-                output += trailing + "\n"
-            }
+            for marker in section.preamble { output += marker + "\n" }
+            for entry in section.values { output += entry.value.rawLine + "\n" }
+            for trailing in section.trailingLines { output += trailing + "\n" }
+        }
+        return output
+    }
+
+    /// Can what was just read be written back unchanged?
+    ///
+    /// Asked before any edit, so the answer is about the parser rather than
+    /// about the change. Everything this reader does not model -- a value
+    /// shape it does not know, a line it puts in the wrong place, a line
+    /// ending it normalises -- shows up here as a difference, whether or not
+    /// anyone thought of that shape in advance. That generality is the point:
+    /// the multi-line binary values this once destroyed were not on anybody's
+    /// list either.
+    private func checkFidelity(against original: String) {
+        let rebuilt = serialise()
+        if rebuilt == original || rebuilt == original + "\n" {
+            isFaithful = true
+            infidelity = nil
+            return
+        }
+        isFaithful = false
+        let a = original.components(separatedBy: "\n")
+        let b = rebuilt.components(separatedBy: "\n")
+        let at = zip(a, b).enumerated().first { $0.element.0 != $0.element.1 }?.offset
+        if let at {
+            infidelity = "line \(at + 1): read \"\(a[at].prefix(60))\" but would write \"\(b[at].prefix(60))\""
+        } else {
+            infidelity = "\(a.count) lines read, \(b.count) would be written"
+        }
+        console.error("Refusing to write \(fileURL.lastPathComponent): \(infidelity ?? "")")
+    }
+
+    func save() throws {
+        guard isFaithful else {
+            throw WineRegistryError.wouldNotSurviveRewriting(file: fileURL.lastPathComponent,
+                                                             detail: infidelity ?? "load() was never called")
+        }
+        let output = serialise()
+
+        // And the edits have to survive too. Reading the text back and
+        // comparing it to the model catches a change that produced something
+        // this parser cannot read -- the same failure, arriving by the other
+        // door.
+        let check = WineRegistryFile(fileURL: fileURL)
+        check.parse(output)
+        if let lost = check.firstValueMissing(comparedTo: self) {
+            throw WineRegistryError.wouldNotSurviveRewriting(file: fileURL.lastPathComponent,
+                                                             detail: "the edit made \(lost) unreadable")
         }
 
-        do {
-            try output.write(to: fileURL, atomically: true, encoding: .utf8)
-        } catch {
-            console.error("Coulnd't write registry file: \(error)")
-        }
+        try createBackup()
+        try output.write(to: fileURL, atomically: true, encoding: .utf8)
         console.log("Registry file saved to \(fileURL.lastPathComponent)")
+    }
+
+    /// The first value the other model has that this one does not, or has
+    /// differently. Nil when nothing was lost.
+    fileprivate func firstValueMissing(comparedTo other: WineRegistryFile) -> String? {
+        var mine: [String: String] = [:]
+        for s in sections {
+            for e in s.values { mine["\(s.header)|\(e.key)"] = e.value.rawLine }
+        }
+        for s in other.sections {
+            for e in s.values {
+                let id = "\(s.header)|\(e.key)"
+                if mine[id] != e.value.rawLine { return "\(e.key) in \(s.path)" }
+            }
+        }
+        return nil
+    }
+}
+
+enum WineRegistryError: LocalizedError {
+    case wouldNotSurviveRewriting(file: String, detail: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .wouldNotSurviveRewriting(let file, let detail):
+            return "\(file) holds something this build cannot rewrite without losing it (\(detail)). Nothing was written."
+        }
     }
 }

@@ -200,3 +200,146 @@ struct WineRegistryNoOpTests {
         #expect(section.addOrSetDword(forKey: "Something New", value: 1) == true)
     }
 }
+
+/// The guarantee, rather than a fix for one known bug.
+///
+/// A bottle registry has one copy, and what it holds -- what can decode a
+/// video, what a game installed -- cannot be reconstructed from anywhere else.
+/// So the rule is: if this build cannot reproduce what it read, it has no
+/// business writing it back.
+struct WineRegistryFidelityTests {
+
+    private func file(_ contents: String) throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("fid-\(UUID().uuidString).reg")
+        try contents.write(to: url, atomically: true, encoding: .utf8)
+        return url
+    }
+
+    /// Every value shape found across every .reg on a real machine: plain
+    /// strings, dword, hex, hex(N) for several N, str(2), str(7), and the
+    /// empty hex(0). If the parser cannot rebuild this, it says so.
+    private static let everyShape = """
+    WINE REGISTRY Version 2
+    ;; All keys relative to \\\\Machine
+
+    [Software\\\\Test] 1787673438
+    #time=1dc0000000000000
+    @="a default value"
+    "plain"="just a string"
+    "number"=dword:0000002a
+    "binary"=hex:01,02,03
+    "long"=hex:76,69,64,73,00,00,10,00,80,00,00,aa,00,38,9b,71,48,32,36,34,\\
+      00,00,10,00,80,00,00,aa,00,38,9b,71
+    "empty"=hex(0):
+    "expand"=str(2):"C:\\\\Program Files\\\\Thing"
+    "multi"=str(7):":\\0"
+    "link"=hex(6):5c,00,52,00,65,00
+    "odd"=hex(ffff0012):44,00,75,00
+    "qword"=hex(b):00,00,00,00,0c,00,00,00
+
+    """
+
+    /// #link marks a registry key as a symbolic link. Read as a comment it
+    /// was moved below the values, where it means nothing -- and the bottle
+    /// games launch from has none left, while the one beside it has 54.
+    @Test func aSectionMarkerStaysWhereItWasWritten() throws {
+        let withLink = """
+        WINE REGISTRY Version 2
+
+        [System\\\\CurrentControlSet\\\\Control\\\\Class] 1787673438
+        #time=1dc0000000000000
+        #link
+        "SymbolicLinkValue"=hex(6):5c,00,52,00,65,00
+        "other"="x"
+
+        """
+        let url = try file(withLink)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let registry = WineRegistryFile(fileURL: url)
+        try registry.load()
+        #expect(registry.isFaithful, "\(registry.infidelity ?? "")")
+        try registry.save()
+        #expect(try String(contentsOf: url, encoding: .utf8) == withLink,
+                "the marker moved, and below the values it marks nothing")
+        try? FileManager.default.removeItem(at: url.appendingPathExtension("bak"))
+    }
+
+    @Test func everyShapeOnARealMachineRebuildsExactly() throws {
+        let url = try file(Self.everyShape)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let registry = WineRegistryFile(fileURL: url)
+        try registry.load()
+        #expect(registry.isFaithful, "no reproduce lo que leyó: \(registry.infidelity ?? "")")
+        try registry.save()
+        #expect(try String(contentsOf: url, encoding: .utf8) == Self.everyShape)
+        try? FileManager.default.removeItem(at: url.appendingPathExtension("bak"))
+    }
+
+    /// The point of the guard: a shape nobody anticipated is refused rather
+    /// than mangled. Here a value is deliberately written in a form the parser
+    /// puts in the wrong place -- and the file is left alone.
+    @Test func aShapeItCannotRebuildIsRefusedRatherThanWritten() throws {
+        // A continuation line that begins a section, which the reader will
+        // treat as a section header and the writer will therefore move.
+        let awkward = """
+        WINE REGISTRY Version 2
+
+        [Software\\\\Test] 1787673438
+        "value"=hex:01,02,\\
+        [not really a section]
+        "after"="x"
+
+        """
+        let url = try file(awkward)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let before = try String(contentsOf: url, encoding: .utf8)
+
+        let registry = WineRegistryFile(fileURL: url)
+        try registry.load()
+        if registry.isFaithful {
+            // If it CAN rebuild this, writing it must be lossless.
+            try registry.save()
+            #expect(try String(contentsOf: url, encoding: .utf8) == before)
+            try? FileManager.default.removeItem(at: url.appendingPathExtension("bak"))
+        } else {
+            // And if it cannot, it must refuse and change nothing.
+            #expect(throws: WineRegistryError.self) { try registry.save() }
+            #expect(try String(contentsOf: url, encoding: .utf8) == before,
+                    "it refused and wrote anyway")
+        }
+    }
+
+    /// A file this build has never seen the inside of cannot be written.
+    @Test func savingWithoutLoadingIsRefused() throws {
+        let url = try file("WINE REGISTRY Version 2\n")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let registry = WineRegistryFile(fileURL: url)
+        #expect(throws: WineRegistryError.self) { try registry.save() }
+    }
+
+    /// The real thing: a bottle registry must be declared faithful, or the
+    /// launcher will refuse to apply controller settings on this machine.
+    @Test func realBottleRegistriesAreWritable() throws {
+        let f = FileManager.default
+        let roots = [
+            f.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/RaccoonBot/CXPBottles"),
+            f.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/CrossOver/Bottles"),
+        ]
+        var checked = 0
+        for root in roots {
+            for name in (try? f.contentsOfDirectory(atPath: root.path(percentEncoded: false))) ?? [] {
+                let reg = root.appendingPathComponent(name).appendingPathComponent("system.reg")
+                guard f.fileExists(atPath: reg.path(percentEncoded: false)) else { continue }
+                let copy = f.temporaryDirectory.appendingPathComponent("b-\(UUID().uuidString).reg")
+                try Data(contentsOf: reg).write(to: copy)
+                defer { try? f.removeItem(at: copy) }
+                let registry = WineRegistryFile(fileURL: copy)
+                try registry.load()
+                #expect(registry.isFaithful, "\(name): \(registry.infidelity ?? "")")
+                checked += 1
+            }
+        }
+        if checked > 0 { #expect(checked > 0) }
+    }
+}

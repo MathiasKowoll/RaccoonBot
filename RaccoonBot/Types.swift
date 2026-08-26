@@ -586,6 +586,24 @@ enum LibraryColumn: String, CaseIterable, Identifiable {
     }
 }
 
+/// One row of the list view, from either tab.
+///
+/// The two tabs hold different types -- Game for what is installed, OwnedGame
+/// for what is not -- and the list has to render both. Rather than a table that
+/// knows about both, both produce this.
+struct LibraryRow: Identifiable {
+    let id: String
+    let appID: String
+    let name: String
+    let platforms: Set<String>
+    /// Only known for installed titles: nothing on disk records the size of
+    /// something that is not there.
+    let sizeBytes: Int64?
+    let lastPlayed: Date?
+    let coverURL: URL?
+    let isInstalled: Bool
+}
+
 class LibraryPageGlobals: ObservableObject {
     @Published var tab: LibraryTab = .installed
     @Published var viewMode: LibraryViewMode = .grid
@@ -650,6 +668,70 @@ class LibraryPageGlobals: ObservableObject {
         }
     }
     
+    /// The rows for whichever tab is showing, filtered and sorted.
+    var rows: [LibraryRow] {
+        let rows: [LibraryRow] = tab == .installed ? installedRows : ownedRows
+        var shown = rows
+        if self.filter.count >= 3 {
+            let needle = self.filter.lowercased()
+            shown = shown.filter { $0.name.lowercased().contains(needle) || $0.appID.contains(needle) }
+        }
+        return shown.sorted { lhs, rhs in
+            let ascending = self.sortAscending
+            switch self.sortColumn {
+            case .name:
+                let result = lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+                return ascending ? result : !result
+            case .platform:
+                let result = lhs.platforms.sorted().joined() < rhs.platforms.sorted().joined()
+                return ascending ? result : !result
+            case .size:
+                // Unknown sorts last in both directions: it is an absence, not
+                // a size of zero.
+                switch (lhs.sizeBytes, rhs.sizeBytes) {
+                case let (l?, r?): return ascending ? l > r : l < r
+                case (nil, _?):    return false
+                case (_?, nil):    return true
+                case (nil, nil):   return lhs.name < rhs.name
+                }
+            case .lastPlayed:
+                switch (lhs.lastPlayed, rhs.lastPlayed) {
+                case let (l?, r?): return ascending ? l > r : l < r
+                case (nil, _?):    return false
+                case (_?, nil):    return true
+                case (nil, nil):   return lhs.name < rhs.name
+                }
+            }
+        }
+    }
+
+    private var installedRows: [LibraryRow] {
+        let sizes = Dictionary(gamesMeta.map { ($0.id, $0.SizeOnDisk.flatMap(Int64.init)) },
+                               uniquingKeysWith: { first, _ in first })
+        return allGames.map { game in
+            var platforms: Set<String> = []
+            if game.platforms.windows { platforms.insert("windows") }
+            if game.platforms.mac { platforms.insert("macos") }
+            if game.platforms.linux { platforms.insert("linux") }
+            return LibraryRow(id: game.id,
+                              appID: String(game.steamAppID),
+                              name: game.name,
+                              platforms: platforms,
+                              sizeBytes: sizes[game.id] ?? nil,
+                              lastPlayed: nil,
+                              coverURL: game.headerImage.isEmpty ? nil : URL(string: game.headerImage),
+                              isInstalled: true)
+        }
+    }
+
+    private var ownedRows: [LibraryRow] {
+        ownedGames.map {
+            LibraryRow(id: $0.appID, appID: $0.appID, name: $0.displayName,
+                       platforms: $0.platforms, sizeBytes: nil, lastPlayed: $0.lastPlayed,
+                       coverURL: $0.coverURL, isInstalled: false)
+        }
+    }
+
     var filteredOwnedGames: [OwnedGame] {
         var owned = self.ownedGames
         if self.filter.count >= 3 {

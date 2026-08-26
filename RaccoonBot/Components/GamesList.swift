@@ -23,14 +23,25 @@ struct GamesList: View {
         Group {
             switch libraryPageGlobals.tab {
             case .installed:
-                ScrollView {
-                    LazyVGrid(columns: columns, spacing: 10) {
-                        ForEach(libraryPageGlobals.filteredGames) { item in
-                            GameThumbnail(item: item, isResizable: appWindowResizable)
+                if libraryPageGlobals.viewMode == .list {
+                    LibraryTable(rows: libraryPageGlobals.rows,
+                                 actionSymbol: "info.circle",
+                                 actionHelp: "Open this title") { row in
+                        if let game = libraryPageGlobals.allGames.first(where: { $0.id == row.id }) {
+                            libraryPageGlobals.selectedGame = game
+                            libraryPageGlobals.showDetailView = true
                         }
                     }
-                    .padding(.horizontal)
-                    .padding(.bottom)
+                } else {
+                    ScrollView {
+                        LazyVGrid(columns: columns, spacing: 10) {
+                            ForEach(libraryPageGlobals.filteredGames) { item in
+                                GameThumbnail(item: item, isResizable: appWindowResizable)
+                            }
+                        }
+                        .padding(.horizontal)
+                        .padding(.bottom)
+                    }
                 }
             case .notInstalled:
                 OwnedGamesList()

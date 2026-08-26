@@ -105,3 +105,64 @@ struct SteamStorePlainTextTests {
         #expect(SteamStore.plainText(from: already) == already)
     }
 }
+
+/// Serialized on purpose: these share a URLProtocol whose counters are static,
+/// and Swift Testing runs a suite's tests in parallel by default. Two of them
+/// counting into the same box is a race, not a result.
+@Suite(.serialized)
+struct SteamStoreRestraintTests {
+
+    /// Answers every request with the given status, counting them.
+    final class CountingProtocol: URLProtocol, @unchecked Sendable {
+        nonisolated(unsafe) static var status = 429
+        nonisolated(unsafe) static var count = 0
+        override class func canInit(with request: URLRequest) -> Bool { true }
+        override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+        override func startLoading() {
+            Self.count += 1
+            let response = HTTPURLResponse(url: request.url!, statusCode: Self.status,
+                                           httpVersion: nil, headerFields: nil)!
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: Data("{}".utf8))
+            client?.urlProtocolDidFinishLoading(self)
+        }
+        override func stopLoading() {}
+    }
+
+    private func store(status: Int) -> SteamStore {
+        CountingProtocol.status = status
+        CountingProtocol.count = 0
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [CountingProtocol.self]
+        return SteamStore(session: URLSession(configuration: configuration))
+    }
+
+    @Test func stopsAskingAfterSteamRefusesOnce() async {
+        // The break in fetchGamesInfo only ends the pass it is in. The library
+        // reloads on every volume mount and unmount, and this user's games are
+        // on an external drive -- so the gate has to outlive one pass or a
+        // flapping disk becomes a retry storm against their own address.
+        let steam = store(status: 429)
+        for id in ["1", "2", "3", "4", "5"] {
+            _ = try? await steam.fetch(appID: id)
+        }
+        #expect(CountingProtocol.count == 1)
+        #expect(await steam.isSilenced)
+    }
+
+    @Test func givesUpAfterThreeFailuresRatherThanWalkingTheLibrary() async {
+        // Three in a row is not three unlucky titles, it is no network.
+        let steam = store(status: 500)
+        for id in ["1", "2", "3", "4", "5", "6", "7"] {
+            _ = try? await steam.fetch(appID: id)
+        }
+        #expect(CountingProtocol.count == 3)
+        #expect(await steam.isSilenced)
+    }
+
+    @Test func aPassedCooldownIsNotSilence() async {
+        let steam = store(status: 200)
+        await steam.silenceForTesting(until: Date().addingTimeInterval(-1))
+        #expect(await steam.isSilenced == false)
+    }
+}

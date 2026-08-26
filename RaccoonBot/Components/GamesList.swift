@@ -173,7 +173,9 @@ struct GamesList: View {
             ToolbarItem(placement: .principal) {
                 TabSwitcher(selection: $libraryPageGlobals.tab)
             }
-            ToolbarItemGroup(placement: .automatic) {
+            // Two capsules, two questions. This one is how the library is
+            // drawn: rescan it, stop what is running, grid or list.
+            ToolbarItemGroup(placement: .secondaryAction) {
                 HStack(spacing: 8) {
                     Button {
                         api.deleteOwnedGamesIDsCache()
@@ -200,9 +202,16 @@ struct GamesList: View {
                                  options: LibraryViewMode.allCases,
                                  symbol: { $0.symbol },
                                  help: { $0 == .grid ? "Grid" : "List" })
+                }
+                .padding(.horizontal, 10).padding(.vertical, 4)
+                .background(.quaternary, in: Capsule())
+                .controlSize(.small)
+            }
 
-                    Divider().frame(height: 14)
-
+            // And this one is which titles are in it: platform, search, count,
+            // order -- plus the account, which has nowhere better to be.
+            ToolbarItemGroup(placement: .automatic) {
+                HStack(spacing: 8) {
                     Menu {
                         ForEach(["windows", "macos", "linux"], id: \.self) { platform in
                             Toggle(PlatformBadge.name(for: platform), isOn: Binding(
@@ -300,11 +309,11 @@ struct GamesList: View {
                     .help("Options")
                 }
                 .padding(.horizontal, 10).padding(.vertical, 4)
-                // One width, always. Everything variable inside it is pinned --
+                // One width, always. Everything variable inside is pinned --
                 // the count, the filter glyphs -- and the search field takes up
-                // whatever slack is left, so the bar stops shifting under the
-                // pointer as the library is filtered.
-                .frame(width: 640)
+                // whatever slack is left, so this capsule stops shifting under
+                // the pointer as the library is filtered.
+                .frame(width: 470)
                 .background(.quaternary, in: Capsule())
                 .controlSize(.small)
             }

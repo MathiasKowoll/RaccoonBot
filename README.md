@@ -84,7 +84,7 @@ seconds — see [the FAQ](#macos-says-raccoonbot-cannot-be-opened) below.
 
 ### The library
 
-![The library, list view](docs/images/01-list.png)
+![The library, list view](docs/images/01-list.webp)
 
 Three tabs:
 
@@ -99,14 +99,14 @@ shows cover art. `Installed` is the platform a title is installed *as*;
 `Available` is what it ships *for* — a game can offer three and be installed as
 one.
 
-![The library, grid view](docs/images/02-grid.png)
+![The library, grid view](docs/images/02-grid.webp)
 
 Search filters the list you are looking at, and the count beside the field tells
 you how much of it you are seeing.
 
 ### A game's page
 
-![A game's detail page](docs/images/05-game-detail.png)
+![A game's detail page](docs/images/05-game-detail.webp)
 
 Click a cover or a row and you get the store page for that title — description,
 genres, release date, and what it is available for. From here you can play it,
@@ -115,7 +115,7 @@ same page appears with an Install button instead.
 
 ### Settings
 
-![Application settings](docs/images/03-app-settings.png)
+![Application settings](docs/images/03-app-settings.webp)
 
 This is where you point RaccoonBot at CrossOver, choose a bottle, and see
 whether GStreamer is installed and current. **Patch all** applies every fix your
@@ -124,7 +124,7 @@ first, and skips anything you have chosen to leave alone.
 
 ### Per-game options
 
-![Per-game options](docs/images/04-game-settings.png)
+![Per-game options](docs/images/04-game-settings.webp)
 
 Every title carries its own graphics backend, environment variables and launch
 options. **Auto configure** installs that title's fix and sets the options it is

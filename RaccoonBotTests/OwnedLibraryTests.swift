@@ -115,9 +115,77 @@ struct OwnedGameShapeTests {
     }
 }
 
-// A suite that read this machine's real Steam used to sit here. It failed with
-// no expectation message, no crash report and a 0.000s duration, which makes it
-// a test of the environment rather than of the code -- and an unreadable one.
-// The parsers were validated against the real files another way (2076 apps out
-// of appinfo.vdf, 427 owned out of localconfig.vdf, zero errors), and the
-// behaviour that matters is verified by running the application.
+/// Reads this machine's actual Steam. Skipped where there is none.
+///
+/// An earlier version of this suite failed with no message and a 0.000s
+/// duration, and I removed it as environment-coupled. That was wrong: it was
+/// reporting a crash inside parseVDFToDict on a real localconfig.vdf, which is
+/// exactly the bug it existed to catch, and removing it meant shipping the
+/// crash to the application instead. Restored, and split so a failure says
+/// which file it was reading.
+struct OwnedLibraryOnThisMachineTests {
+
+    @Test func readsTheBinaryAppCache() {
+        guard let steam = OwnedLibrary.steamRoots().first else { return }
+        let url = AppInfoVDF.url(inSteamAt: steam)
+        guard FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) else { return }
+        let apps = AppInfoVDF.read(at: url)
+        #expect(apps.count > 100, "parsed only \(apps.count) apps out of a real appinfo.vdf")
+        #expect(apps.values.contains { $0.isGame })
+    }
+
+    @Test func readsTheOwnedListWithoutHangingOrCrashing() {
+        // The regression. parseVDFToDict builds the whole file into nested
+        // dictionaries and never returns on this one -- a string token followed
+        // by a closing brace advances no pointer -- besides calling fatalError()
+        // in its lexer. Neither belongs on a file Steam writes.
+        guard let steam = OwnedLibrary.steamRoots().first else { return }
+        guard let config = OwnedLibrary.localConfigs(inSteamAt: steam).first else { return }
+        let owned = OwnedLibrary.ownedApps(inLocalConfigAt: config)
+        #expect(owned.count > 10, "parsed only \(owned.count) owned titles")
+        #expect(owned.values.contains { $0.lastPlayed != nil })
+    }
+}
+
+struct LocalConfigScannerTests {
+
+    @Test func readsFieldsOnTheAppAndNotFromInsideItsChildren() {
+        // "cloud" and friends are nested one deeper and carry their own keys.
+        // Reading at any depth would attribute a child's value to the game.
+        let apps = OwnedLibrary.ownedApps(inLocalConfig: """
+        "UserLocalConfigStore" { "Software" { "Valve" { "Steam" { "apps"
+        {
+            "220"
+            {
+                "LastPlayed"    "1629933180"
+                "Playtime"      "48"
+                "cloud"
+                {
+                    "LastPlayed"    "1"
+                }
+            }
+            "7"
+            {
+                "cloud" { "last_sync_state" "synchronized" }
+            }
+        } } } } }
+        """)
+        #expect(apps.count == 2)
+        #expect(apps["220"]?.playtime == 48)
+        #expect(apps["220"]?.lastPlayed == Date(timeIntervalSince1970: 1629933180))
+        #expect(apps["7"]?.lastPlayed == nil)
+    }
+
+    @Test func doesNotSpinOnAShapeItDoesNotExpect() {
+        // The failure mode being replaced: upstream's parser loops forever when
+        // a string token is followed by a closing brace. This must return.
+        _ = OwnedLibrary.ownedApps(inLocalConfig: #""apps" { "220" "}"#)
+        _ = OwnedLibrary.ownedApps(inLocalConfig: #""apps" {"#)
+        _ = OwnedLibrary.ownedApps(inLocalConfig: "")
+        _ = OwnedLibrary.ownedApps(inLocalConfig: #""apps" { "220" { "LastPlayed" "#)
+    }
+
+    @Test func findsNothingWhenThereIsNoAppsBlock() {
+        #expect(OwnedLibrary.ownedApps(inLocalConfig: #""Software" { "Valve" { } }"#).isEmpty)
+    }
+}

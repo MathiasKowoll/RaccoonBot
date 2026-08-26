@@ -69,35 +69,105 @@ enum OwnedLibrary {
     }
 
     /// app id -> (lastPlayed, playtime), read out of one localconfig.
+    ///
+    /// Scanned directly rather than through parseVDFToDict. That parser builds
+    /// the entire file into nested dictionaries, and on a real localconfig it
+    /// does not come back: a string token followed by a closing brace advances
+    /// no pointer, so the loop spins. It also calls fatalError() in its lexer.
+    /// Neither is a thing to run on a file Steam writes.
+    ///
+    /// This wants one block and three fields, so it reads them and nothing
+    /// else. No recursion, no regex, no whole-file model.
     static func ownedApps(inLocalConfigAt url: URL) -> [String: (lastPlayed: Date?, playtime: Int?)] {
         guard let text = try? String(contentsOf: url, encoding: .utf8) else { return [:] }
-        let parsed = parseVDFToDict(from: text)
-        // UserLocalConfigStore -> Software -> Valve -> Steam -> apps
-        var node = parsed as [String: Any]
-        for key in ["UserLocalConfigStore", "Software", "Valve", "Steam", "apps"] {
-            guard let next = caseInsensitive(node, key) as? [String: Any] else { return [:] }
-            node = next
-        }
-        var out: [String: (Date?, Int?)] = [:]
-        for (appID, value) in node {
-            guard appID.allSatisfy(\.isNumber), !appID.isEmpty else { continue }
-            let fields = value as? [String: Any] ?? [:]
-            var played: Date?
-            if let raw = caseInsensitive(fields, "LastPlayed") as? String, let seconds = TimeInterval(raw), seconds > 0 {
-                played = Date(timeIntervalSince1970: seconds)
-            }
-            let minutes = (caseInsensitive(fields, "Playtime") as? String).flatMap(Int.init)
-            out[appID] = (played, minutes)
-        }
-        return out
+        return ownedApps(inLocalConfig: text)
     }
 
-    /// Steam writes these keys with inconsistent capitalisation between client
-    /// versions, and a miss here silently empties the whole library.
-    private static func caseInsensitive(_ dict: [String: Any], _ key: String) -> Any? {
-        if let exact = dict[key] { return exact }
-        let wanted = key.lowercased()
-        return dict.first { $0.key.lowercased() == wanted }?.value
+    static func ownedApps(inLocalConfig text: String) -> [String: (lastPlayed: Date?, playtime: Int?)] {
+        var out: [String: (Date?, Int?)] = [:]
+        let scalars = Array(text.unicodeScalars)
+
+        /// The next quoted string at or after `index`, and where it ended.
+        func nextQuoted(from index: Int) -> (value: String, end: Int)? {
+            var i = index
+            while i < scalars.count, scalars[i] != "\"" { i += 1 }
+            guard i < scalars.count else { return nil }
+            var value = String.UnicodeScalarView()
+            i += 1
+            while i < scalars.count, scalars[i] != "\"" {
+                if scalars[i] == "\\", i + 1 < scalars.count { i += 1 }
+                value.append(scalars[i]); i += 1
+            }
+            guard i < scalars.count else { return nil }
+            return (String(value), i + 1)
+        }
+
+        /// The first `{` after `index`, skipping whitespace only. Anything else
+        /// means this key had a value rather than a block.
+        func openBrace(after index: Int) -> Int? {
+            var i = index
+            while i < scalars.count {
+                let s = scalars[i]
+                if s == "{" { return i + 1 }
+                if s == " " || s == "\t" || s == "\n" || s == "\r" { i += 1; continue }
+                return nil
+            }
+            return nil
+        }
+
+        // Find the apps block: a key "apps" whose value is an object.
+        var cursor = 0
+        var appsBody: Int?
+        while let (key, end) = nextQuoted(from: cursor) {
+            if key.lowercased() == "apps", let body = openBrace(after: end) {
+                appsBody = body
+                break
+            }
+            cursor = end
+        }
+        guard var i = appsBody else { return [:] }
+
+        // Walk its direct children. Depth is counted rather than recursed so a
+        // surprising shape cannot blow the stack or spin.
+        while i < scalars.count {
+            if scalars[i] == "}" { break }                       // end of apps
+            guard let (appID, afterKey) = nextQuoted(from: i) else { break }
+            guard let body = openBrace(after: afterKey) else { i = afterKey; continue }
+
+            var depth = 1
+            var j = body
+            var lastPlayed: Date?
+            var playtime: Int?
+            while j < scalars.count, depth > 0 {
+                switch scalars[j] {
+                case "{": depth += 1; j += 1
+                case "}": depth -= 1; j += 1
+                case "\"":
+                    guard let (field, afterField) = nextQuoted(from: j) else { j = scalars.count; break }
+                    // Only fields directly on this app, not inside "cloud" etc.
+                    if depth == 1, let (value, afterValue) = nextQuoted(from: afterField),
+                       openBrace(after: afterField) == nil {
+                        switch field.lowercased() {
+                        case "lastplayed":
+                            if let seconds = TimeInterval(value), seconds > 0 {
+                                lastPlayed = Date(timeIntervalSince1970: seconds)
+                            }
+                        case "playtime": playtime = Int(value)
+                        default: break
+                        }
+                        j = afterValue
+                    } else {
+                        j = afterField
+                    }
+                default: j += 1
+                }
+            }
+            if appID.allSatisfy(\.isNumber), !appID.isEmpty {
+                out[appID] = (lastPlayed, playtime)
+            }
+            i = j
+        }
+        return out
     }
 
     /// The full owned library, minus anything already installed.

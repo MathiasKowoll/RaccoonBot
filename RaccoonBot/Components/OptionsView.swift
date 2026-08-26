@@ -126,187 +126,10 @@ struct OptionsView: View {
                         Text(progressLabel).font(.footnote)
                     }.padding(.top)
                 }
-                if(shouldShowBottleSelector) {
-                    HStack {
-                        Picker("Select a bottle", selection: $appGlobals.selectedBottle) {
-                            Text("No bottle selected").tag("")
-                            ForEach(bottles, id: \.absoluteString) { bottle in
-                                let components = bottle.pathComponents
-                                let lastTwo = Array(components.suffix(2))
-                                let label = lastTwo.joined(separator: "/")
-                                Text(label).tag(bottle.absoluteString)
-                            }
-                        }.onChange(of: appGlobals.selectedBottle) { oldValue, newValue in
-                            if(newValue != "") {
-                                appGlobals.windowsSteamFolder = URL(string: newValue)?.appendingPathComponent(DEFAULT_STEAM_WINE_PATH)
-                                persistUsrDefOptionString(key: "windowsSteamFolder", value: appGlobals.windowsSteamFolder!.path(percentEncoded: false))
-                                libraryPageGlobals.folders.removeAll()
-                                resetPersistedFolderAccess()
-                                let from = appGlobals.windowsSteamFolder?.appendingPathComponent("config") ?? URL(string: newValue)!.appendingPathComponent(DEFAULT_STEAM_WINE_CONFIG_PATH)
-                                let steamLibrariesURLs = getSteamLibraryFolders(bottleURL: URL(string: newValue)!,from: from)
-                                steamLibrariesURLs.forEach { url in
-                                    validateAddSteamFolder(url, to: &libraryPageGlobals.folders)
-                                }
-                                Task { await load() }
-                                persistUsrDefOptionString(key: "selectedBottle", value: newValue)
-                                if let url = URL(string: newValue) {
-                                    applyStagedCodecs(to: url, cxAppPath: appGlobals.cxAppPath)
-                                }
-                            }
-                        }
-                    }
-                    // Second slot, not another entry in the same picker: a
-                    // bottle's architecture is fixed when it is created, so
-                    // there is no promoting the normal one. Either an ARM
-                    // bottle exists or the game cannot run on ARM.
-                    HStack {
-                        Picker("ARM bottle", selection: $appGlobals.selectedArmBottle) {
-                            Text("None").tag("")
-                            ForEach(armBottles, id: \.url.absoluteString) { info in
-                                Text(info.name).tag(info.url.absoluteString)
-                            }
-                        }.onChange(of: appGlobals.selectedArmBottle) { _, newValue in
-                            persistUsrDefOptionString(key: "selectedArmBottle", value: newValue)
-                            if let url = URL(string: newValue) {
-                                applyStagedCodecs(to: url, cxAppPath: appGlobals.cxAppPath)
-                            }
-                        }
-                    }
-                    if armBottles.isEmpty {
-                        Text("No ARM bottle found. Create one in CrossOver, choosing the ARM architecture, on CrossOver 27 — it is the engine that ships FEX to emulate x86.")
-                            .font(.footnote)
-                            .foregroundStyle(.orange)
-                    }
-                    Text("ARM bottles draw through DXMT, which reaches Direct3D 11. Direct3D 12 titles will not run in one.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-
-                    // Said here rather than discovered later: a title whose
-                    // video needs a decoder is silent in exactly the same way
-                    // whether the framework is missing, the staging was never
-                    // built, or it was built against a CrossOver that has since
-                    // been updated.
-                    // Every installed title that needs its fix, in one go.
-                    let targets = PatchAll.targets(from: libraryPageGlobals.gamesMeta,
-                                                   needsPatch: { fixLibrary.needsPatch(folder: $0) })
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(alignment: .top, spacing: 6) {
-                            Image(systemName: targets.isEmpty ? "checkmark.circle" : "wand.and.sparkles")
-                                .foregroundStyle(targets.isEmpty ? .green : .orange)
-                            Text(targets.isEmpty
-                                 ? "Every installed title that needs a fix has one."
-                                 : "^[\(targets.count) installed title](inflect: true) needs its video fix.")
-                                .font(.footnote)
-                            Spacer()
-                            if !targets.isEmpty {
-                                Button(patchAll.running
-                                       ? "Patching \(patchAll.done)/\(patchAll.total)…"
-                                       : "Patch all") {
-                                    Task { await patchAll.run(targets) }
-                                }
-                                .disabled(patchAll.running)
-                            }
-                        }
-                        if let current = patchAll.current {
-                            Text(current).font(.footnote).foregroundStyle(.secondary)
-                        }
-                        // Refused rather than attempted: not an error, a reason.
-                        if let refused = patchAll.refusedReason {
-                            Text(refused).font(.footnote).foregroundStyle(.orange)
-                        }
-                        if !patchAll.patched.isEmpty && !patchAll.running {
-                            Text("^[Patched \(patchAll.patched.count) title](inflect: true).")
-                                .font(.footnote).foregroundStyle(.secondary)
-                        }
-                        // Named, not counted. "3 failed" tells you nothing you
-                        // can act on.
-                        ForEach(patchAll.failures) { failure in
-                            Text("\(failure.title): \(failure.reason)")
-                                .font(.footnote).foregroundStyle(.orange)
-                        }
-                    }
-
-                    Group {
-                        if let gst = gstStatus {
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack(alignment: .top, spacing: 6) {
-                                    Image(systemName: gst.isOK ? "checkmark.circle" : "exclamationmark.triangle")
-                                        .foregroundStyle(gst.isOK ? .green : .orange)
-                                    Text(gst.summary).font(.footnote)
-                                        .foregroundStyle(gst.isOK ? .secondary : .primary)
-                                    Spacer()
-                                    if case .missing = gst.framework {
-                                        Button(gstBusy ? "Downloading…" : "Install GStreamer…") {
-                                            Task { await installGStreamer() }
-                                        }.disabled(gstBusy)
-                                    }
-                                }
-                                if let gstMessage {
-                                    Text(gstMessage).font(.footnote).foregroundStyle(.secondary)
-                                }
-                            }
-                        } else {
-                            HStack(spacing: 6) {
-                                ProgressView().controlSize(.small)
-                                Text("Checking GStreamer…").font(.footnote).foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    .task(id: appGlobals.cxAppPath ?? "") {
-                        let path = appGlobals.cxAppPath
-                        gstStatus = await Task.detached { GStreamerStatus.read(engineAppPath: path) }.value
-                    }
-                } else if(bottles.isEmpty) {
-                    if appGlobals.cxAppPath != nil {
-                    Text("No bottles found")
-                    Text("Create a new bottle first").font(.footnote)
-                        ProminentButton("Create new bottle", systemImage: "waterbottle") {
-                            if creatingBottle {
-                                return
-                            }
-                            if let cxAppPath = appGlobals.cxAppPath {
-                                creatingBottle = true
-                                createBtlPrc = try? createBottle(cxAppPath: cxAppPath)
-                                if let proc = createBtlPrc {
-                                    proc.terminationHandler = { _ in
-                                        DispatchQueue.main.async {
-                                            creatingBottle = false
-                                            if let cxCompleteAppPath = readUsrDefOptionString(key: "cxCompleteAppPath") {
-                                                do{
-                                                    bottles = try getAllBottles(appDir: URL(fileURLWithPath: cxCompleteAppPath))
-                                                    shouldShowBottleSelector = true
-                                                } catch {
-                                                    console.error(String(reflecting: error))
-                                                }
-                                            } else {
-                                                console.error("Failed to load all bottles")
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    creatingBottle = false
-                                    console.error("Bottle creation failed")
-                                }
-                            } else {
-                                console.error("Can't create a bottle before bottle is selected")
-                            }
-                        }
-                    }
-                    if creatingBottle {
-                        ProgressView().progressViewStyle(.linear).frame(maxWidth: .infinity)
-                        Button("Cancel") {
-                            createBtlPrc!.terminate()
-                            creatingBottle = false
-                        }
-                    }
-                } else {
-                    ProgressView().progressViewStyle(.linear).frame(maxWidth: .infinity)
-                }
-                // One section per store. Each one owns the bottle its client
-                // lives in and where its games are installed -- which are
-                // different questions per store even when the controls look
-                // alike: Steam finds its libraries from the bottle, Epic
-                // records one install path per title.
+                // One section per store: the bottle its client lives in, the
+                // ARM bottle where that applies, and where its games are
+                // installed. Switched rather than stacked -- at three stores
+                // the stacked version is a page nobody reads to the bottom of.
                 VStack(alignment: .leading, spacing: 10) {
                     Picker("", selection: $configuringStore) {
                         ForEach(Store.allCases) { store in
@@ -316,31 +139,224 @@ struct OptionsView: View {
                     .pickerStyle(.segmented)
                     .labelsHidden()
 
-                    if configuringStore != .steam {
-                        // Steam's bottle is still the application-wide one --
-                        // the scan, the launcher and the fixes all read it from
-                        // AppGlobals. Every other store keeps its own here, and
-                        // this is the setting that has to exist whatever we
-                        // decide about one-bottle-per-store: RaccoonBot cannot
-                        // launch a client it cannot find.
+                    if configuringStore == .steam {
+                    if(shouldShowBottleSelector) {
                         HStack {
-                            Picker("Bottle", selection: $storeBottle) {
-                                Text("Not set").tag("")
+                            Text("Select a bottle").frame(width: 110, alignment: .leading)
+                            Picker("", selection: $appGlobals.selectedBottle) {
+                                Text("No bottle selected").tag("")
+                                ForEach(bottles, id: \.absoluteString) { bottle in
+                                    let components = bottle.pathComponents
+                                    let lastTwo = Array(components.suffix(2))
+                                    let label = lastTwo.joined(separator: "/")
+                                    Text(label).tag(bottle.absoluteString)
+                                }
+                            }
+                        .labelsHidden()
+                        .onChange(of: appGlobals.selectedBottle) { oldValue, newValue in
+                                if(newValue != "") {
+                                    appGlobals.windowsSteamFolder = URL(string: newValue)?.appendingPathComponent(DEFAULT_STEAM_WINE_PATH)
+                                    persistUsrDefOptionString(key: "windowsSteamFolder", value: appGlobals.windowsSteamFolder!.path(percentEncoded: false))
+                                    libraryPageGlobals.folders.removeAll()
+                                    resetPersistedFolderAccess()
+                                    let from = appGlobals.windowsSteamFolder?.appendingPathComponent("config") ?? URL(string: newValue)!.appendingPathComponent(DEFAULT_STEAM_WINE_CONFIG_PATH)
+                                    let steamLibrariesURLs = getSteamLibraryFolders(bottleURL: URL(string: newValue)!,from: from)
+                                    steamLibrariesURLs.forEach { url in
+                                        validateAddSteamFolder(url, to: &libraryPageGlobals.folders)
+                                    }
+                                    Task { await load() }
+                                    persistUsrDefOptionString(key: "selectedBottle", value: newValue)
+                                    if let url = URL(string: newValue) {
+                                        applyStagedCodecs(to: url, cxAppPath: appGlobals.cxAppPath)
+                                    }
+                                }
+                            }
+                        }
+                        // Second slot, not another entry in the same picker: a
+                        // bottle's architecture is fixed when it is created, so
+                        // there is no promoting the normal one. Either an ARM
+                        // bottle exists or the game cannot run on ARM.
+                        HStack {
+                            Text("ARM bottle").frame(width: 110, alignment: .leading)
+                            Picker("", selection: $appGlobals.selectedArmBottle) {
+                                Text("None").tag("")
+                                ForEach(armBottles, id: \.url.absoluteString) { info in
+                                    Text(info.name).tag(info.url.absoluteString)
+                                }
+                            }
+                        .labelsHidden()
+                        .onChange(of: appGlobals.selectedArmBottle) { _, newValue in
+                                persistUsrDefOptionString(key: "selectedArmBottle", value: newValue)
+                                if let url = URL(string: newValue) {
+                                    applyStagedCodecs(to: url, cxAppPath: appGlobals.cxAppPath)
+                                }
+                            }
+                        }
+                        if armBottles.isEmpty {
+                            Text("No ARM bottle found. Create one in CrossOver, choosing the ARM architecture, on CrossOver 27 — it is the engine that ships FEX to emulate x86.")
+                                .font(.footnote)
+                                .foregroundStyle(.orange)
+                        }
+                        Text("ARM bottles draw through DXMT, which reaches Direct3D 11. Direct3D 12 titles will not run in one.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+
+                        // Said here rather than discovered later: a title whose
+                        // video needs a decoder is silent in exactly the same way
+                        // whether the framework is missing, the staging was never
+                        // built, or it was built against a CrossOver that has since
+                        // been updated.
+                        // Every installed title that needs its fix, in one go.
+                        let targets = PatchAll.targets(from: libraryPageGlobals.gamesMeta,
+                                                       needsPatch: { fixLibrary.needsPatch(folder: $0) })
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(alignment: .top, spacing: 6) {
+                                Image(systemName: targets.isEmpty ? "checkmark.circle" : "wand.and.sparkles")
+                                    .foregroundStyle(targets.isEmpty ? .green : .orange)
+                                Text(targets.isEmpty
+                                     ? "Every installed title that needs a fix has one."
+                                     : "^[\(targets.count) installed title](inflect: true) needs its video fix.")
+                                    .font(.footnote)
+                                Spacer()
+                                if !targets.isEmpty {
+                                    Button(patchAll.running
+                                           ? "Patching \(patchAll.done)/\(patchAll.total)…"
+                                           : "Patch all") {
+                                        Task { await patchAll.run(targets) }
+                                    }
+                                    .disabled(patchAll.running)
+                                }
+                            }
+                            if let current = patchAll.current {
+                                Text(current).font(.footnote).foregroundStyle(.secondary)
+                            }
+                            // Refused rather than attempted: not an error, a reason.
+                            if let refused = patchAll.refusedReason {
+                                Text(refused).font(.footnote).foregroundStyle(.orange)
+                            }
+                            if !patchAll.patched.isEmpty && !patchAll.running {
+                                Text("^[Patched \(patchAll.patched.count) title](inflect: true).")
+                                    .font(.footnote).foregroundStyle(.secondary)
+                            }
+                            // Named, not counted. "3 failed" tells you nothing you
+                            // can act on.
+                            ForEach(patchAll.failures) { failure in
+                                Text("\(failure.title): \(failure.reason)")
+                                    .font(.footnote).foregroundStyle(.orange)
+                            }
+                        }
+
+                        Group {
+                            if let gst = gstStatus {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack(alignment: .top, spacing: 6) {
+                                        Image(systemName: gst.isOK ? "checkmark.circle" : "exclamationmark.triangle")
+                                            .foregroundStyle(gst.isOK ? .green : .orange)
+                                        Text(gst.summary).font(.footnote)
+                                            .foregroundStyle(gst.isOK ? .secondary : .primary)
+                                        Spacer()
+                                        if case .missing = gst.framework {
+                                            Button(gstBusy ? "Downloading…" : "Install GStreamer…") {
+                                                Task { await installGStreamer() }
+                                            }.disabled(gstBusy)
+                                        }
+                                    }
+                                    if let gstMessage {
+                                        Text(gstMessage).font(.footnote).foregroundStyle(.secondary)
+                                    }
+                                }
+                            } else {
+                                HStack(spacing: 6) {
+                                    ProgressView().controlSize(.small)
+                                    Text("Checking GStreamer…").font(.footnote).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .task(id: appGlobals.cxAppPath ?? "") {
+                            let path = appGlobals.cxAppPath
+                            gstStatus = await Task.detached { GStreamerStatus.read(engineAppPath: path) }.value
+                        }
+                    } else if(bottles.isEmpty) {
+                        if appGlobals.cxAppPath != nil {
+                        Text("No bottles found")
+                        Text("Create a new bottle first").font(.footnote)
+                            ProminentButton("Create new bottle", systemImage: "waterbottle") {
+                                if creatingBottle {
+                                    return
+                                }
+                                if let cxAppPath = appGlobals.cxAppPath {
+                                    creatingBottle = true
+                                    createBtlPrc = try? createBottle(cxAppPath: cxAppPath)
+                                    if let proc = createBtlPrc {
+                                        proc.terminationHandler = { _ in
+                                            DispatchQueue.main.async {
+                                                creatingBottle = false
+                                                if let cxCompleteAppPath = readUsrDefOptionString(key: "cxCompleteAppPath") {
+                                                    do{
+                                                        bottles = try getAllBottles(appDir: URL(fileURLWithPath: cxCompleteAppPath))
+                                                        shouldShowBottleSelector = true
+                                                    } catch {
+                                                        console.error(String(reflecting: error))
+                                                    }
+                                                } else {
+                                                    console.error("Failed to load all bottles")
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        creatingBottle = false
+                                        console.error("Bottle creation failed")
+                                    }
+                                } else {
+                                    console.error("Can't create a bottle before bottle is selected")
+                                }
+                            }
+                        }
+                        if creatingBottle {
+                            ProgressView().progressViewStyle(.linear).frame(maxWidth: .infinity)
+                            Button("Cancel") {
+                                createBtlPrc!.terminate()
+                                creatingBottle = false
+                            }
+                        }
+                    } else {
+                        ProgressView().progressViewStyle(.linear).frame(maxWidth: .infinity)
+                    }
+                    } else {
+                        // Every other store keeps its own bottle here. This
+                        // setting has to exist whatever is decided about
+                        // one-bottle-per-store: RaccoonBot cannot launch a
+                        // client it cannot find.
+                        HStack {
+                            Text("Select a bottle").frame(width: 110, alignment: .leading)
+                            Picker("", selection: $storeBottle) {
+                                Text("No bottle selected").tag("")
                                 ForEach(bottles, id: \.absoluteString) { bottle in
                                     Text(Array(bottle.pathComponents.suffix(2)).joined(separator: "/"))
                                         .tag(bottle.absoluteString)
                                 }
                             }
+                            .labelsHidden()
                             .onChange(of: storeBottle) { _, newValue in
                                 var settings = StoreConfig.settings(for: configuringStore)
                                 settings.bottle = newValue
                                 StoreConfig.save(settings, for: configuringStore)
                             }
                         }
-                        if let floor = configuringStore.minimumEngine {
-                            Text("\(configuringStore.label) needs a bottle on CrossOver \(floor) or newer.")
-                                .font(.footnote).foregroundStyle(.secondary)
+                        // Present and disabled rather than absent: the slot says
+                        // the concept exists for this store too, and that it is
+                        // off because nobody has established it works -- not
+                        // because RaccoonBot forgot about it.
+                        HStack {
+                            Text("ARM bottle").frame(width: 110, alignment: .leading)
+                            Picker("", selection: .constant("")) {
+                                Text("Not available").tag("")
+                            }
+                            .labelsHidden()
+                            .disabled(true)
                         }
+                        Text("Running \(configuringStore.label) in an ARM bottle has not been tested, so the option is off.")
+                            .font(.footnote).foregroundStyle(.secondary)
                     }
 
                     GameLibrariesList(store: configuringStore, load: load)
@@ -348,6 +364,7 @@ struct OptionsView: View {
                 .task(id: configuringStore) {
                     storeBottle = StoreConfig.settings(for: configuringStore).bottle
                 }
+
                 .padding(.vertical)
                 VStack(alignment: .leading) {
                     if appGlobals.selectedBottle != "" {

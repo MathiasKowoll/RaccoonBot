@@ -32,8 +32,13 @@ nonisolated struct GStreamerStatus: Sendable {
     let framework: Framework
     /// Architectures staged for the engine in use, e.g. ["x86_64", "aarch64"].
     let staged: [String]
-    /// The engine those stagings were built against, if any.
-    let builtAgainst: String?
+    /// What each staged architecture was built against, keyed by architecture.
+    ///
+    /// Per architecture, not one value for the pair. It used to keep only the
+    /// first it found, so a machine with a fresh x86_64 staging and a stale
+    /// aarch64 one reported "current" -- and the ARM bottle, the one that
+    /// actually needed saying, was the half nobody was told about.
+    let builtAgainst: [String: String]
     /// The version that engine actually runs, to notice drift.
     let engineVersion: String?
 
@@ -48,9 +53,15 @@ nonisolated struct GStreamerStatus: Sendable {
     /// Not fatal on its own -- GStreamer keeps its ABI across 1.x -- but it is
     /// how a working setup quietly stops working after a CrossOver update, so
     /// it is worth saying.
-    var isStale: Bool {
-        guard let builtAgainst, let engineVersion else { return false }
-        return builtAgainst != engineVersion
+    var isStale: Bool { !staleArchitectures.isEmpty }
+
+    /// The staged architectures built against something the engine no longer is.
+    var staleArchitectures: [String] {
+        guard let engineVersion else { return [] }
+        return staged.filter { arch in
+            guard let built = builtAgainst[arch] else { return false }
+            return built != engineVersion
+        }
     }
 
     static func read(engineAppPath: String?) -> GStreamerStatus {
@@ -62,7 +73,7 @@ nonisolated struct GStreamerStatus: Sendable {
 
         guard let engineAppPath else {
             return GStreamerStatus(framework: framework, staged: [],
-                                   builtAgainst: nil, engineVersion: nil)
+                                   builtAgainst: [:], engineVersion: nil)
         }
         let bundle = URL(fileURLWithPath: engineAppPath).deletingPathExtension().lastPathComponent
         let slug = String(bundle.map { c in
@@ -73,17 +84,15 @@ nonisolated struct GStreamerStatus: Sendable {
             .appendingPathComponent(slug)
 
         var staged: [String] = []
-        var builtAgainst: String?
+        var builtAgainst: [String: String] = [:]
         for arch in ["x86_64", "aarch64"] {
             let dir = root.appendingPathComponent(arch)
             // .complete is written last, precisely so a half-built directory
             // never reads as ready.
             guard f.fileExists(atPath: dir.appendingPathComponent(".complete").path(percentEncoded: false)) else { continue }
             staged.append(arch)
-            if builtAgainst == nil {
-                builtAgainst = (try? String(contentsOf: dir.appendingPathComponent(".built-against"), encoding: .utf8))?
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-            }
+            builtAgainst[arch] = (try? String(contentsOf: dir.appendingPathComponent(".built-against"), encoding: .utf8))?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
         let engineVersion = (NSDictionary(contentsOfFile: engineAppPath + "/Contents/Info.plist")?["CFBundleVersion"] as? String)
@@ -162,7 +171,10 @@ nonisolated struct GStreamerStatus: Sendable {
                 return "GStreamer \(version) is installed, but no codecs are staged for this engine"
             }
             if isStale {
-                return "Codecs staged for \(builtAgainst ?? "another build") — this engine now runs \(engineVersion ?? "a different one")"
+                let stale = staleArchitectures
+                let built = stale.compactMap { builtAgainst[$0] }.first ?? "another build"
+                let which = stale.count == staged.count ? "Codecs" : "\(stale.joined(separator: " and ")) codecs"
+                return "\(which) staged for \(built) — this engine now runs \(engineVersion ?? "a different one")"
             }
             return "GStreamer \(version), codecs staged for \(staged.joined(separator: " and "))"
         }

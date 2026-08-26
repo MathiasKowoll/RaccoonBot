@@ -138,6 +138,15 @@ struct CodecStagingTests {
 /// comes out is something dyld could actually load.
 struct CodecStagingIntegrationTests {
 
+    /// What CodecStaging would call this machine's own architecture.
+    private var hostArchitecture: String {
+        #if arch(arm64)
+        return "aarch64"
+        #else
+        return "x86_64"
+        #endif
+    }
+
     private func engine() -> String? {
         let f = FileManager.default
         let candidates = [
@@ -150,7 +159,11 @@ struct CodecStagingIntegrationTests {
     @Test func buildsSomethingLoadable() throws {
         let f = FileManager.default
         guard f.fileExists(atPath: CodecStaging.frameworkLib), let app = engine() else { return }
-        guard let arch = CodecStaging.architectures(ofEngineAt: app).first else { return }
+        let available = CodecStaging.architectures(ofEngineAt: app)
+        // Prefer the one this process can actually load, so the dlopen below
+        // is exercised rather than skipped.
+        guard let arch = available.first(where: { $0 == hostArchitecture }) ?? available.first
+        else { return }
 
         let base = f.temporaryDirectory.appendingPathComponent("stage-\(UUID().uuidString)", isDirectory: true)
         defer { try? f.removeItem(at: base) }
@@ -179,9 +192,30 @@ struct CodecStagingIntegrationTests {
                     "\(name) links to somewhere that does not exist")
         }
 
-        // The real question: after staging, is every @rpath dependency of the
-        // plugins present in lib? A single missing one is a plugin dyld
-        // refuses to load, and the only symptom is a silent cutscene.
+        // The real question, asked the only way that settles it: hand the
+        // staged plugin to dyld and see whether it comes up. Every dependency
+        // has to resolve through the staging's own layout, including the ones
+        // symlinked into an engine whose GStreamer is a different series from
+        // the framework the plugin came out of.
+        //
+        // Only for the architecture this process is. The other one is not
+        // wrong -- the engine's x86_64 libraries are x86_64, as they should be
+        // -- but an arm64 test process cannot open them, and asking it to
+        // fails a correct staging. The first version of this test did exactly
+        // that, and the error was worth reading: dyld found the file through
+        // @loader_path/../lib and refused the slice, which is the layout
+        // working.
+        if arch == hostArchitecture {
+            for plugin in CodecStaging.plugins {
+                let path = dir.appendingPathComponent("gstreamer-1.0/\(plugin)").path(percentEncoded: false)
+                let handle = dlopen(path, RTLD_NOW | RTLD_LOCAL)
+                #expect(handle != nil, "\(plugin): \(String(cString: dlerror()))")
+                if let handle { dlclose(handle) }
+            }
+        }
+
+        // And the cheaper check for every architecture, because when the load
+        // DOES fail this is what says which library is missing.
         let staged = Set(result.copied + result.linked)
         for plugin in CodecStaging.plugins {
             let path = dir.appendingPathComponent("gstreamer-1.0/\(plugin)").path(percentEncoded: false)
@@ -204,5 +238,62 @@ struct CodecStagingIntegrationTests {
         // Copying onto an existing symlink throws, which is why the directory
         // is wiped rather than written over.
         #expect(first == second)
+    }
+}
+
+/// Staleness, per architecture.
+///
+/// The old reading kept the first `.built-against` it found and called that
+/// the answer for both. A machine with a fresh x86_64 staging and a stale
+/// aarch64 one was told everything was current -- and the ARM bottle, the one
+/// that needed saying, was the half that went unmentioned.
+struct GStreamerStalenessTests {
+
+    private func status(staged: [String], built: [String: String], engine: String) -> GStreamerStatus {
+        GStreamerStatus(framework: .present(version: "1.24.13"),
+                        staged: staged, builtAgainst: built, engineVersion: engine)
+    }
+
+    @Test func oneStaleArchitectureIsEnough() {
+        let s = status(staged: ["x86_64", "aarch64"],
+                       built: ["x86_64": "27.0.0.40921", "aarch64": "26.3.0.39832"],
+                       engine: "27.0.0.40921")
+        #expect(s.isStale)
+        #expect(s.staleArchitectures == ["aarch64"])
+        #expect(!s.isOK)
+        #expect(s.summary.contains("aarch64"), "the summary has to name the half that is wrong")
+    }
+
+    @Test func bothCurrentIsCurrent() {
+        let s = status(staged: ["x86_64", "aarch64"],
+                       built: ["x86_64": "27.0.0.40921", "aarch64": "27.0.0.40921"],
+                       engine: "27.0.0.40921")
+        #expect(!s.isStale)
+        #expect(s.isOK)
+        #expect(s.summary.contains("x86_64 and aarch64"))
+    }
+
+    @Test func bothStaleDoesNotSingleOneOut() {
+        let s = status(staged: ["x86_64", "aarch64"],
+                       built: ["x86_64": "26.3.0.39832", "aarch64": "26.3.0.39832"],
+                       engine: "27.0.0.40921")
+        #expect(s.staleArchitectures == ["x86_64", "aarch64"])
+        #expect(s.summary.hasPrefix("Codecs staged for 26.3.0.39832"))
+    }
+
+    @Test func aStagingWithNoMarkerIsNotCalledStale() {
+        // Unreadable .built-against is not the same as built against the wrong
+        // thing, and telling someone to restage over a file we could not read
+        // is a guess dressed as a fact.
+        let s = status(staged: ["x86_64"], built: [:], engine: "27.0.0.40921")
+        #expect(!s.isStale)
+        #expect(s.isOK)
+    }
+
+    @Test func nothingStagedIsNotStaleEither() {
+        let s = status(staged: [], built: [:], engine: "27.0.0.40921")
+        #expect(!s.isStale)
+        #expect(!s.isOK, "nothing staged is not OK; it is just not stale")
+        #expect(s.summary.contains("no codecs are staged"))
     }
 }

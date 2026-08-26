@@ -229,12 +229,15 @@ final class MGVFCoordinator: ObservableObject {
     /// against runningApplications answers "nothing is running" while a game is
     /// very much running. Measured on this machine with wineserver-x86 and
     /// services.exe live and invisible to it.
-    static func reasonNotToWrite() -> String? {
+    /// `because` names the consequence, because the two callers have different
+    /// ones: applying a fix renames a file inside a game folder, restaging the
+    /// codecs deletes the directory a running bottle has dylibs mapped from.
+    static func reasonNotToWrite(because: String = "the fix renames a file it may have open") -> String? {
         if pgrepMatches("[.]exe") {
-            return "A Windows game is running. Close it first — the fix renames a file it may have open."
+            return "A Windows game is running. Close it first — \(because)."
         }
         if pgrepMatches("wineserver") {
-            return "Steam or CrossOver is still running. Close it first — the fix renames a file it may have open."
+            return "Steam or CrossOver is still running. Close it first — \(because)."
         }
         return nil
     }

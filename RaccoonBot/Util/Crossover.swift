@@ -152,7 +152,10 @@ func setBottleEnv(_ bottleURL: URL, key: String, value: String) {
         out.append(line)
     }
     do {
-        try out.joined(separator: "\n").write(to: conf, atomically: true, encoding: .utf8)
+        // Trailing newline, because this key is often the last line written.
+        // Without it the next tool to append a line lands on the end of ours,
+        // and CrossOver's parser reads the fused result as a key nobody set.
+        try (out.joined(separator: "\n") + "\n").write(to: conf, atomically: true, encoding: .utf8)
         console.log("\(key) set in \(bottleURL.lastPathComponent)")
     } catch {
         console.error(String(reflecting: error))

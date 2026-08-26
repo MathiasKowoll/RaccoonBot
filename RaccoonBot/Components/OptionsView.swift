@@ -62,8 +62,16 @@ struct OptionsView: View {
     /// not a reasonable thing to ask.
     private func stageCodecs() async {
         guard let path = appGlobals.cxAppPath else { return }
-        stagingBusy = true
         stagingMessage = nil
+        // Refused rather than attempted. Staging deletes the directory the
+        // running bottle has these dylibs mapped from, and pulling them out
+        // from under a live wineserver is worse than not restaging at all.
+        if let reason = MGVFCoordinator.reasonNotToWrite(
+            because: "restaging replaces libraries it has open") {
+            stagingMessage = reason
+            return
+        }
+        stagingBusy = true
         defer { stagingBusy = false }
 
         // CodecStaging is nonisolated, so this genuinely leaves the main

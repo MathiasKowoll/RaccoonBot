@@ -11,6 +11,16 @@ import Flow
 import AVKit
 
 struct GameDetailView: View {
+    /// The width this page lays out at, and the width the sheet presenting it
+    /// is given. One number, stated once.
+    ///
+    /// It used to be `windowWidth - 100`, which tied the page to the default
+    /// window size -- so widening that default from 1024 to 1280 to get a
+    /// fourth column of cards silently widened this panel by 256 points, past
+    /// the sheet, and the left of every line fell off the edge. The page's
+    /// width has nothing to do with how big the library window opens.
+    static let contentWidth: CGFloat = 940
+
     @Binding var game: Game?
     @State private var player = AVPlayer()
     @State private var isMuted: Bool = true
@@ -233,7 +243,7 @@ struct GameDetailView: View {
                 .padding(.bottom, 30)
             }
             .background(.procyonAccent.mix(with: .black, by: 0.6).opacity(0.9))
-            .frame(width: windowWidth - 100)
+            .frame(width: Self.contentWidth)
             .environmentObject(gameOptions)
         }
     }

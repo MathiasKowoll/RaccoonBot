@@ -113,8 +113,10 @@ struct LibraryPage: View {
                 // has none of its own -- so a long description grew the sheet
                 // past the bottom of the window with no way to reach the rest.
                 // Bounded here; the Modal already scrolls inside it.
-                .frame(minWidth: 720, idealWidth: 980, maxWidth: 1200,
-                       minHeight: 460, idealHeight: 720, maxHeight: 860)
+                // The same width GameDetailView lays out at, so the sheet and
+                // its content agree instead of negotiating.
+                .frame(width: GameDetailView.contentWidth)
+                .frame(minHeight: 460, idealHeight: 720, maxHeight: 860)
             }
             .sheet(isPresented: $showAddCustomGameView) {
                 Modal("Custom Game Editor", showModal: $showAddCustomGameView, scrollable: false)  {

@@ -1,9 +1,13 @@
-<img width="80" height="80" alt="RaccoonBot" src="Logo.icon/Assets/Image.png" />
+<div align="center">
+
+<img width="140" height="140" alt="RaccoonBot" src="docs/images/logo.png" />
 
 # RaccoonBot
 
-A Steam launcher for macOS that runs Windows games through CrossOver — and fixes
-the ones whose cutscenes do not play.
+**A Steam launcher for macOS that runs Windows games through CrossOver —
+and fixes the ones whose cutscenes do not play.**
+
+</div>
 
 > **RaccoonBot is not a replacement for anything. It needs CrossOver, and it
 > needs it installed and licensed by you.**
@@ -62,9 +66,9 @@ the library and warned about *before* it launches, not after the cutscene fails.
 | [GStreamer](https://gstreamer.freedesktop.org/download/) | The universal macOS framework. RaccoonBot checks for it and offers to fetch it |
 | Steam | Installed inside a CrossOver bottle, and signed in |
 
-Apple's Game Porting Toolkit (D3DMetal) and the Wine components used for the
-32-bit path travel with the repository, inherited from Procyon — RaccoonBot
-copies them into the patched CrossOver rather than asking you to find them.
+D3DMetal and the Wine components for the 32-bit path come with RaccoonBot and
+are copied into the patched CrossOver for you, so there is nothing else to find
+or download.
 
 ---
 
@@ -215,9 +219,10 @@ it, replace it, or work without it.
 
 ### Why do I have to install GStreamer separately?
 
-Because bundling it would mean redistributing it, which brings obligations this
-project would rather not take on when the official installer is one click away.
-RaccoonBot tells you which version fits your CrossOver and opens the download.
+Because it belongs to your system rather than to RaccoonBot: other applications
+use it, it updates on its own schedule, and the official installer is one click
+away. RaccoonBot works out which version fits your CrossOver, tells you whether
+you already have it, and opens the download when you do not.
 
 ### A game still shows a black screen
 

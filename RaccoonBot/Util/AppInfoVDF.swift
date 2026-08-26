@@ -32,7 +32,10 @@
 
 import Foundation
 
-struct AppInfoEntry: Sendable, Equatable {
+/// Plain data, read off a disk. Nothing about it belongs to the interface, so
+/// nothing about it belongs on the main actor -- and leaving it there would
+/// have dragged the parser back onto the main thread through its own results.
+nonisolated struct AppInfoEntry: Sendable, Equatable {
     let appID: String
     let name: String
     /// "Game", "DLC", "Demo", "Tool", "Music"… Only Game is worth listing.
@@ -53,7 +56,7 @@ struct AppInfoEntry: Sendable, Equatable {
     }
 }
 
-enum AppInfoVDF {
+nonisolated enum AppInfoVDF {
 
     static let supportedMagic: Set<UInt32> = [0x07564428, 0x07564429]
 

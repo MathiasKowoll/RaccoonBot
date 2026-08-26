@@ -22,7 +22,7 @@
 
 import Foundation
 
-struct OwnedGame: Identifiable, Sendable, Equatable {
+nonisolated struct OwnedGame: Identifiable, Sendable, Equatable {
     let appID: String
     /// Empty when appinfo.vdf has no record: 36 of 427 on the machine this was
     /// measured on. Shown by app id rather than hidden, because the cover
@@ -44,10 +44,16 @@ struct OwnedGame: Identifiable, Sendable, Equatable {
 }
 
 enum OwnedLibrary {
+    // Every one of these reads files and returns values. None of them touches
+    // the interface, so none belongs on the main actor -- and being on it was
+    // not merely untidy: GamesList hands notInstalled() to a Task.detached
+    // precisely to keep a 4.7 MB parse off the main thread, and a main-actor
+    // function hops straight back onto it. The detachment was doing nothing.
+
 
     /// Every Steam installation inside a bottle. A machine can have more than
     /// one bottle and each carries its own Steam.
-    static func steamRoots(fileManager: FileManager = .default) -> [URL] {
+    nonisolated static func steamRoots(fileManager: FileManager = .default) -> [URL] {
         let bottles = PROCYON_SUPPORT_FOLDER_URL
             .appendingPathComponent(DEFAULT_CXP_BOTTLES_FOLDER, isDirectory: true)
         guard let names = try? fileManager.contentsOfDirectory(atPath: bottles.path(percentEncoded: false))
@@ -59,7 +65,7 @@ enum OwnedLibrary {
 
     /// localconfig.vdf sits under a numeric account directory, and there can be
     /// more than one account.
-    static func localConfigs(inSteamAt steam: URL, fileManager: FileManager = .default) -> [URL] {
+    nonisolated static func localConfigs(inSteamAt steam: URL, fileManager: FileManager = .default) -> [URL] {
         let userdata = steam.appendingPathComponent("userdata", isDirectory: true)
         guard let accounts = try? fileManager.contentsOfDirectory(atPath: userdata.path(percentEncoded: false))
         else { return [] }
@@ -78,12 +84,12 @@ enum OwnedLibrary {
     ///
     /// This wants one block and three fields, so it reads them and nothing
     /// else. No recursion, no regex, no whole-file model.
-    static func ownedApps(inLocalConfigAt url: URL) -> [String: (lastPlayed: Date?, playtime: Int?)] {
+    nonisolated static func ownedApps(inLocalConfigAt url: URL) -> [String: (lastPlayed: Date?, playtime: Int?)] {
         guard let text = try? String(contentsOf: url, encoding: .utf8) else { return [:] }
         return ownedApps(inLocalConfig: text)
     }
 
-    static func ownedApps(inLocalConfig text: String) -> [String: (lastPlayed: Date?, playtime: Int?)] {
+    nonisolated static func ownedApps(inLocalConfig text: String) -> [String: (lastPlayed: Date?, playtime: Int?)] {
         var out: [String: (Date?, Int?)] = [:]
         let scalars = Array(text.unicodeScalars)
 
@@ -174,7 +180,7 @@ enum OwnedLibrary {
     ///
     /// `installed` is the set of app ids the .acf scan found, which the other
     /// tab is already showing.
-    static func notInstalled(installed: Set<String>,
+    nonisolated static func notInstalled(installed: Set<String>,
                              fileManager: FileManager = .default) -> [OwnedGame] {
         var owned: [String: (lastPlayed: Date?, playtime: Int?)] = [:]
         var info: [String: AppInfoEntry] = [:]

@@ -11,12 +11,12 @@ let D3DM_CACHE_FOLDER = "d3dm"
 /// NOT renamed with the application. This names a directory on disk that
 /// already holds the user's bottles; changing the string does not move them,
 /// it abandons them. Same for the app group and for `Procyon/mgvf`.
-let PROCYON_SUPPORT_FOLDER_URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!.appendingPathComponent("Procyon")
+nonisolated(unsafe) let PROCYON_SUPPORT_FOLDER_URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!.appendingPathComponent("Procyon")
 let PATCHED_CX_APPNAME = "Crossover_patched.app"
 // Sólo se construye para CrossOver 26. Ver makeX87CrossoverPatchedCopy.
 let PATCHED_CX_X87_APPNAME = "Crossover_patched_x87.app"
 private let DEFAULT_CXP_BOTTLES_ROOTPATH = "/Users/${USER}/"
-let DEFAULT_CXP_BOTTLES_FOLDER = "CXPBottles"
+nonisolated let DEFAULT_CXP_BOTTLES_FOLDER = "CXPBottles"
 //private let DEFAULT_CXP_BOTTLES_ROOTPATH = "/Users/${USER}/Application Support/Procyon/"
 //private let DEFAULT_CXP_BOTTLES_FOLDER = "Bottles"
 //private let DEFAULT_CXP_BOTTLES_PATH = DEFAULT_CXP_BOTTLES_ROOTPATH + DEFAULT_CXP_BOTTLES_FOLDER

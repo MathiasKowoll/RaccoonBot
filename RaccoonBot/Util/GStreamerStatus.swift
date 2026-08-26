@@ -15,7 +15,15 @@
 
 import Foundation
 
-struct GStreamerStatus: Sendable {
+/// Nonisolated on purpose, and it matters.
+///
+/// Reading this runs otool and blocks on waitUntilExit(). OptionsView already
+/// hands it to a Task.detached to keep that off the main thread -- but a
+/// main-actor-isolated function hops straight back onto the main actor when
+/// called, so the detachment was decoration and the block was still there. The
+/// crash it caused was fixed by moving the call out of the body getter; this is
+/// the other half of that fix.
+nonisolated struct GStreamerStatus: Sendable {
     enum Framework: Equatable, Sendable {
         case missing
         case present(version: String)

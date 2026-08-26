@@ -223,8 +223,8 @@ func safeShellWithOutput(_ command: String) throws -> String {
 
 let DEFAULT_STEAM_MAC_PATH = "/Library/Application Support/Steam/"
 let DEFAULT_STEAM_MAC_CONFIG_PATH = DEFAULT_STEAM_MAC_PATH + "config/"
-let DEFAULT_STEAM_WINE_PATH = "/drive_c/Program Files (x86)/Steam/"
-let DEFAULT_STEAM_WINE_CONFIG_PATH = DEFAULT_STEAM_WINE_PATH + "config/"
+nonisolated let DEFAULT_STEAM_WINE_PATH = "/drive_c/Program Files (x86)/Steam/"
+nonisolated let DEFAULT_STEAM_WINE_CONFIG_PATH = DEFAULT_STEAM_WINE_PATH + "config/"
 
 func getSteamUserID (usingURL: URL) -> String? {
     let steamLoginUsersPath = usingURL.appendingPathComponent("loginusers.vdf")

@@ -45,14 +45,6 @@ struct OwnedGamesList: View {
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if libraryPageGlobals.viewMode == .list {
-                LibraryTable(rows: libraryPageGlobals.rows,
-                             actionSymbol: "square.and.arrow.down",
-                             actionHelp: "Opens Steam's install dialog for this title") { row in
-                    if let game = libraryPageGlobals.ownedGames.first(where: { $0.appID == row.appID }) {
-                        install(game)
-                    }
-                }
             } else {
                 ScrollView {
                     OwnedGamesGrid()

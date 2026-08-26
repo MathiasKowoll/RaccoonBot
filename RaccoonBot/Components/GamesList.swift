@@ -34,10 +34,61 @@ struct GamesList: View {
     @State private var warnAboutFix = false
     @State private var fixWarningGame: Game?
     @State private var optionsGame: Game?
+    @State private var installChoice: OwnedGame?
     @StateObject private var fixes = MGVFLibrary.shared
     
     var load: @Sendable () async -> Void
     
+    /// Open a row's detail page, installed or not.
+    ///
+    /// A not-installed row has no Game yet -- its record is fetched on demand,
+    /// one request for the title actually being opened.
+    private func openRow(_ row: LibraryRow) {
+        if let game = libraryPageGlobals.allGames.first(where: { $0.id == row.id }) {
+            libraryPageGlobals.selectedGame = game
+            libraryPageGlobals.showDetailView = true
+            return
+        }
+        guard let owned = libraryPageGlobals.ownedGames.first(where: { $0.appID == row.appID })
+        else { return }
+        Task {
+            guard let info = try? await api.fetchGameInfo(appID: owned.appID) else { return }
+            libraryPageGlobals.selectedGame = Game(from: info, id: owned.appID,
+                                                   isNative: owned.runsOnMac && !owned.runsOnWindows,
+                                                   downloadProgress: 0, isInstalled: false,
+                                                   appNames: [])
+            libraryPageGlobals.showDetailView = true
+        }
+    }
+
+    /// Hand the title to Steam's own install dialog, asking first only when the
+    /// title genuinely ships for both platforms.
+    private func installRow(_ row: LibraryRow) {
+        guard let owned = libraryPageGlobals.ownedGames.first(where: { $0.appID == row.appID })
+        else { return }
+        if owned.isCrossPlatform {
+            installChoice = owned
+            return
+        }
+        sendInstall(owned, toMac: owned.runsOnMac && !owned.runsOnWindows)
+    }
+
+    private func sendInstall(_ game: OwnedGame, toMac: Bool) {
+        installChoice = nil
+        if toMac {
+            if let url = URL(string: "steam://install/\(game.appID)") {
+                NSWorkspace.shared.open(url)
+            }
+            return
+        }
+        let steamX86AppPath = appGlobals.windowsSteamFolder?
+            .appendingPathComponent("Steam.exe").path(percentEncoded: false)
+            ?? "C:\\Program Files (x86)\\Steam\\Steam.exe"
+        installGame(id: game.appID, cxAppPath: appGlobals.cxAppPath,
+                    selectedBottle: appGlobals.selectedBottle,
+                    SteamX86AppPath: steamX86AppPath)
+    }
+
     /// Play from the list, through the same launcher the cards use -- fix
     /// gate included, so this cannot start an unpatched title by omission.
     private func play(_ row: LibraryRow) {
@@ -61,27 +112,20 @@ struct GamesList: View {
 
     var body: some View {
         Group {
-            switch libraryPageGlobals.tab {
-            case .installed:
-                if libraryPageGlobals.viewMode == .list {
-                    LibraryTable(rows: libraryPageGlobals.rows,
-                                 actionSymbol: "info.circle",
-                                 actionHelp: "Open this title",
-                                 action: { row in
-                                     if let game = libraryPageGlobals.allGames.first(where: { $0.id == row.id }) {
-                                         libraryPageGlobals.selectedGame = game
-                                         libraryPageGlobals.showDetailView = true
-                                     }
-                                 },
-                                 secondarySymbol: "play.fill",
-                                 secondaryHelp: "Play",
-                                 secondaryAction: { row in play(row) },
-                                 tertiarySymbol: "gearshape",
-                                 tertiaryHelp: "Options for this title",
-                                 tertiaryAction: { row in
-                                     optionsGame = libraryPageGlobals.allGames.first { $0.id == row.id }
-                                 })
-                } else {
+            // The list is one view for all three tabs: which rows it holds is a
+            // property of the tab, not a reason for a second table. That also
+            // makes the filter search one library rather than two.
+            if libraryPageGlobals.viewMode == .list {
+                LibraryTable(rows: libraryPageGlobals.rows,
+                             open: { row in openRow(row) },
+                             play: { row in play(row) },
+                             options: { row in
+                                 optionsGame = libraryPageGlobals.allGames.first { $0.id == row.id }
+                             },
+                             install: { row in installRow(row) })
+            } else {
+                switch libraryPageGlobals.tab {
+                case .installed:
                     ScrollView {
                         LazyVGrid(columns: columns, spacing: 10) {
                             ForEach(libraryPageGlobals.filteredGames) { item in
@@ -91,29 +135,9 @@ struct GamesList: View {
                         .padding(.horizontal)
                         .padding(.bottom, dockClearance)
                     }
-                }
-            case .notInstalled:
-                OwnedGamesList()
-            case .all:
-                if libraryPageGlobals.viewMode == .list {
-                    LibraryTable(rows: libraryPageGlobals.rows,
-                                 actionSymbol: "info.circle",
-                                 actionHelp: "Open this title",
-                                 action: { row in
-                                     if let game = libraryPageGlobals.allGames.first(where: { $0.id == row.id }) {
-                                         libraryPageGlobals.selectedGame = game
-                                         libraryPageGlobals.showDetailView = true
-                                     }
-                                 },
-                                 secondarySymbol: "play.fill",
-                                 secondaryHelp: "Play",
-                                 secondaryAction: { row in play(row) },
-                                 tertiarySymbol: "gearshape",
-                                 tertiaryHelp: "Options for this title",
-                                 tertiaryAction: { row in
-                                     optionsGame = libraryPageGlobals.allGames.first { $0.id == row.id }
-                                 })
-                } else {
+                case .notInstalled:
+                    OwnedGamesList()
+                case .all:
                     ScrollView {
                         LazyVGrid(columns: columns, spacing: 10) {
                             ForEach(libraryPageGlobals.filteredGames) { item in
@@ -126,27 +150,6 @@ struct GamesList: View {
                     }
                 }
             }
-        }
-        // Per-title options, reachable without opening the detail page first,
-        // and through the same sheet the detail page uses.
-        .sheet(isPresented: Binding(get: { optionsGame != nil },
-                                    set: { if !$0 { optionsGame = nil } })) {
-            GameOptionsSheet(game: $optionsGame,
-                             isPresented: Binding(get: { optionsGame != nil },
-                                                  set: { if !$0 { optionsGame = nil } }))
-        }
-        .alert("This title needs its video fix", isPresented: $warnAboutFix) {
-            Button("Open options") {
-                libraryPageGlobals.selectedGame = fixWarningGame
-                libraryPageGlobals.showDetailView = true
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            let folder = fixWarningGame
-                .flatMap { getMeta(libraryPageGlobals.gamesMeta, byID: $0.id) }?
-                .gameURL?.path(percentEncoded: false)
-            Text(folder.flatMap { fixes.entry(for: $0)?.why }
-                 ?? "Its video will not play without it.")
         }
         // Read only when the tab is first opened. It walks a 4.7 MB binary
         // cache, and there is no reason to make somebody who never leaves the

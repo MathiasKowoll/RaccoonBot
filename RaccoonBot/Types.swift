@@ -631,10 +631,41 @@ struct LibraryRow: Identifiable {
 }
 
 class LibraryPageGlobals: ObservableObject {
-    @Published var tab: LibraryTab = .installed
-    @Published var viewMode: LibraryViewMode = .grid
-    @Published var sortColumn: LibraryColumn = .name
-    @Published var sortAscending: Bool = true
+    // Remembered across launches. Choosing the list and being handed the grid
+    // again next time is not a default, it is the application forgetting.
+    @Published var tab: LibraryTab = LibraryPageGlobals.restored(.tab) {
+        didSet { UserDefaults.standard.set(tab.rawValue, forKey: Key.tab) }
+    }
+    @Published var viewMode: LibraryViewMode = LibraryPageGlobals.restored(.viewMode) {
+        didSet { UserDefaults.standard.set(viewMode.rawValue, forKey: Key.viewMode) }
+    }
+    @Published var sortColumn: LibraryColumn = LibraryPageGlobals.restored(.sortColumn) {
+        didSet { UserDefaults.standard.set(sortColumn.rawValue, forKey: Key.sortColumn) }
+    }
+    @Published var sortAscending: Bool = UserDefaults.standard.object(forKey: Key.sortAscending) as? Bool ?? true {
+        didSet { UserDefaults.standard.set(sortAscending, forKey: Key.sortAscending) }
+    }
+
+    private enum Key {
+        static let tab = "raccoonbot.library.tab"
+        static let viewMode = "raccoonbot.library.viewMode"
+        static let sortColumn = "raccoonbot.library.sortColumn"
+        static let sortAscending = "raccoonbot.library.sortAscending"
+    }
+
+    private enum Restorable { case tab, viewMode, sortColumn }
+
+    /// Falls back to the default for anything unreadable -- a value written by
+    /// a version that had a column this one does not, for instance.
+    private static func restored(_ what: Restorable) -> LibraryTab {
+        LibraryTab(rawValue: UserDefaults.standard.string(forKey: Key.tab) ?? "") ?? .installed
+    }
+    private static func restored(_ what: Restorable) -> LibraryViewMode {
+        LibraryViewMode(rawValue: UserDefaults.standard.string(forKey: Key.viewMode) ?? "") ?? .grid
+    }
+    private static func restored(_ what: Restorable) -> LibraryColumn {
+        LibraryColumn(rawValue: UserDefaults.standard.string(forKey: Key.sortColumn) ?? "") ?? .name
+    }
     /// Everything owned and not installed, read from the disk. Empty until the
     /// not-installed tab is opened: there is no reason to walk appinfo.vdf for
     /// somebody who never looks at it.

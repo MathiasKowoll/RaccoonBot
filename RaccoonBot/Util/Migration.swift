@@ -35,7 +35,36 @@ enum Migration {
         "mgvf.lastUpdateCheck",
     ]
 
+    /// Copies the per-game options out of the domain this fork used to share
+    /// with upstream.
+    ///
+    /// A copy, not a move: the original is left intact, so a build from before
+    /// the change still finds its settings. Written only where the new domain
+    /// has nothing, so re-running cannot overwrite a setting changed since.
+    static func carryGameOptions() {
+        let key = "mgvf.migratedGroupDomain"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        defer { UserDefaults.standard.set(true, forKey: key) }
+
+        guard let old = UserDefaults(suiteName: previousSuiteName),
+              let new = UserDefaults(suiteName: suiteName) else { return }
+
+        var carried = 0
+        for (name, value) in old.dictionaryRepresentation() {
+            // Skip what the system puts in every domain.
+            guard !name.hasPrefix("Apple"), !name.hasPrefix("NS"), !name.hasPrefix("com.apple")
+            else { continue }
+            guard new.object(forKey: name) == nil else { continue }
+            new.set(value, forKey: name)
+            carried += 1
+        }
+        if carried > 0 {
+            console.log("Carried \(carried) game setting(s) over from \(previousSuiteName)")
+        }
+    }
+
     static func run(into defaults: UserDefaults = .standard) {
+        carryGameOptions()
         guard !defaults.bool(forKey: doneKey) else { return }
         defer { defaults.set(true, forKey: doneKey) }
 

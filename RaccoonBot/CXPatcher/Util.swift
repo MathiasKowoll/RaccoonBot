@@ -8,10 +8,30 @@ import Foundation
 import AppKit
 
 let D3DM_CACHE_FOLDER = "d3dm"
-/// NOT renamed with the application. This names a directory on disk that
-/// already holds the user's bottles; changing the string does not move them,
-/// it abandons them. Same for the app group and for `Procyon/mgvf`.
-nonisolated(unsafe) let PROCYON_SUPPORT_FOLDER_URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!.appendingPathComponent("Procyon")
+/// Where the bottles live.
+///
+/// Prefers our own directory and falls back to the one inherited from upstream,
+/// which is what makes the move safe: the migration CLONES rather than moves,
+/// the original stays exactly where it was, and a build from either side of the
+/// change finds a working set of bottles.
+///
+/// Resolved once, at launch. A bottle path that changed under a running
+/// application would be worse than either answer.
+nonisolated(unsafe) let PROCYON_SUPPORT_FOLDER_URL: URL = {
+    let root = FileManager.default.urls(for: .applicationSupportDirectory,
+                                        in: .userDomainMask).first!
+    let ours = root.appendingPathComponent("RaccoonBot")
+    let inherited = root.appendingPathComponent("Procyon")
+    let bottles = ours.appendingPathComponent("CXPBottles")
+    // Ours only counts once it actually holds bottles: an empty directory left
+    // by a half-finished migration must not shadow a working one.
+    if let contents = try? FileManager.default.contentsOfDirectory(atPath: bottles.path(percentEncoded: false)),
+       contents.contains(where: { !$0.hasPrefix(".") }) {
+        return ours
+    }
+    return FileManager.default.fileExists(atPath: inherited.path(percentEncoded: false)) ? inherited : ours
+}()
+
 let PATCHED_CX_APPNAME = "Crossover_patched.app"
 // Sólo se construye para CrossOver 26. Ver makeX87CrossoverPatchedCopy.
 let PATCHED_CX_X87_APPNAME = "Crossover_patched_x87.app"

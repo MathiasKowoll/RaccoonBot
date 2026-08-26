@@ -7,7 +7,14 @@
 
 import Foundation
 
-let suiteName = "group.com.italomandara.procyon"
+/// Where the per-game options live.
+///
+/// Ours now. The old one is not abandoned: Migration copies every key across on
+/// first launch, and the original is left untouched, so a build from before
+/// this change still finds its settings exactly where it left them.
+let suiteName = "group.io.github.mathiaskowoll.raccoonbot"
+/// The domain this application used to share with the one it came from.
+let previousSuiteName = "group.com.italomandara.procyon"
 
 func resolvePersistedFolders() -> [URL] {
     let groupDefaults = UserDefaults(suiteName: suiteName)!

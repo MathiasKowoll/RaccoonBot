@@ -13,6 +13,14 @@ struct LibraryPage: View {
     @StateObject var libraryPageGlobals = LibraryPageGlobals()
     @EnvironmentObject var appGlobals: AppGlobals
     @State private var isLoading = false
+    /// One library reload at a time.
+    ///
+    /// A mount and an unmount both call load(), and Steam libraries commonly
+    /// sit on external drives, so two can easily be in flight together --
+    /// reconnecting a disk is enough. Both clear gamesMeta and both append to
+    /// it, so overlapping them loses titles or duplicates them. Checked and set
+    /// on the main actor, which is what makes the check meaningful.
+    @State private var isReloading = false
     @State private var errorMessage: String?
     @State private var progress: Double = 0
     @State private var selectedGame: SteamGame? = nil
@@ -145,6 +153,12 @@ struct LibraryPage: View {
     
     @MainActor
     private func load() async {
+        guard !isReloading else {
+            console.log("library reload already running; not starting a second")
+            return
+        }
+        isReloading = true
+        defer { isReloading = false }
         isLoading = true
         defer {
             Task {

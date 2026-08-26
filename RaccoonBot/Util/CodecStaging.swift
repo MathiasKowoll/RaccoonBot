@@ -135,12 +135,21 @@ nonisolated enum CodecStaging {
 
     /// Where this engine should keep its GStreamer plugin cache.
     ///
-    /// One per engine and architecture. GStreamer's default is
-    /// ~/.cache/gstreamer-1.0/registry.<arch>.bin -- a single file shared by
-    /// the user's own framework and by every engine on the machine. Two
-    /// engines with different plugin sets, which is exactly what staging
-    /// creates, take turns writing one another's view of what exists. Nothing
-    /// checks, and the symptom is a decoder that is there and then is not.
+    /// One per engine and architecture, because on CrossOver 27 nothing else
+    /// scopes it.
+    ///
+    /// CrossOver's own `wine` does set GST_REGISTRY, to a path under its
+    /// product directory -- but only inside `if (-d "$lib64_path/gstreamer-1.0")`,
+    /// and 27 keeps its plugins in lib/<arch> rather than lib64. So on 26 the
+    /// engine scopes the cache and this value is overridden, harmlessly; on 27
+    /// the block never runs and GStreamer falls back to
+    /// ~/.cache/gstreamer-1.0/registry.<arch>.bin -- one file shared with the
+    /// user's own framework and with every other 27 engine.
+    ///
+    /// That matters here more than anywhere: staging exists precisely to give
+    /// one engine a plugin set the others do not have, and a shared cache is
+    /// the one place that difference cannot survive. The symptom is a decoder
+    /// that is there and then is not.
     static func registryPath(engineAppPath: String, arch: String, into base: URL? = nil) -> String {
         directory(engineAppPath: engineAppPath, arch: arch, into: base)
             .path(percentEncoded: false) + "/registry.bin"

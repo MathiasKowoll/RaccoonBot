@@ -110,6 +110,10 @@ func readUsrDefOptionString(key: String) -> String? {
     return UserDefaults(suiteName: suiteName)!.value(forKey: key) as? String
 }
 
+func deleteUsrDefOption(key: String) {
+    UserDefaults(suiteName: suiteName)?.removeObject(forKey: key)
+}
+
 func deleteUsrDefOptionStartsWith(prefix: String) {
     guard let defaults = UserDefaults(suiteName: suiteName) else { return }
     let dict = defaults.dictionaryRepresentation()

@@ -630,8 +630,19 @@ class TarDownloader: NSObject, URLSessionDownloadDelegate {
     var onComplete: (URL) -> Void
     var onError: (Error) -> Void
     
-    init(fromUrl: URL, onProgress: @escaping (Double) -> Void, onComplete: @escaping (URL) -> Void, onError: @escaping (Error) -> Void) {
+    /// What must be inside downloadDir for a cached download to count, relative
+    /// to it. Nil means the caller cannot say, and the cache is then trusted on
+    /// the archive alone.
+    ///
+    /// This exists because the cache lives in ~/Library/Caches, which macOS
+    /// empties whenever it likes -- that is what the directory is for -- while
+    /// the "already downloaded" flag lives in preferences, which it does not.
+    /// The two drift apart on their own, and the drift used to be silent.
+    var expecting: String?
+
+    init(fromUrl: URL, expecting: String? = nil, onProgress: @escaping (Double) -> Void, onComplete: @escaping (URL) -> Void, onError: @escaping (Error) -> Void) {
         self.downloadDir = TarDownloader.getDownloadsDir()
+        self.expecting = expecting
         self.fromUrl = fromUrl
         self.onProgress = onProgress
         self.onError = onError
@@ -653,11 +664,18 @@ class TarDownloader: NSObject, URLSessionDownloadDelegate {
     func download() {
         let f = FileManager.default
         console.log(self.fromUrl.debugDescription)
-        if let lastDownloadedPath = readUsrDefOptionString(key: namespacedKey("downloads", self.fromUrl.lastPathComponent)){
-            if lastDownloadedPath == self.fromUrl.path(percentEncoded: false) {
+        if let lastDownloadedPath = readUsrDefOptionString(key: namespacedKey("downloads", self.fromUrl.lastPathComponent)),
+           lastDownloadedPath == self.fromUrl.path(percentEncoded: false) {
+            // The flag is not the evidence. Ask the disk.
+            let present = expecting.map {
+                f.fileExists(atPath: downloadDir.appendingPathComponent($0).path(percentEncoded: false))
+            } ?? f.fileExists(atPath: downloadDir.appendingPathComponent(fromUrl.lastPathComponent).path(percentEncoded: false))
+            if present {
                 console.log("download cache found, skipping download")
                 return self.onComplete(self.downloadDir)
             }
+            console.warn("download cache flag is set but \(expecting ?? fromUrl.lastPathComponent) is gone; downloading again")
+            deleteUsrDefOption(key: namespacedKey("downloads", self.fromUrl.lastPathComponent))
         }
         try? f.createDirectory(at: downloadDir, withIntermediateDirectories: true, attributes: nil)
         let session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
@@ -702,7 +720,15 @@ class TarDownloader: NSObject, URLSessionDownloadDelegate {
                     }
                 }
             }
-            try? process.run()
+            // Not `try?`. The continuation that waits on this resumes only
+            // from onComplete or onError, and terminationHandler never fires
+            // for a process that failed to launch -- so swallowing this hung
+            // the patching run for good.
+            do {
+                try process.run()
+            } catch {
+                DispatchQueue.main.async { self.onError(error) }
+            }
         } catch {
             DispatchQueue.main.async { self.onError(error) }
         }

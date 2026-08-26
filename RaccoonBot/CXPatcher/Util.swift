@@ -456,6 +456,9 @@ func makeCrossoverPatchedCopy(sourceCXPath: URL, setProgress: @escaping (Double,
             try await withCheckedThrowingContinuation { continuation in
                 let dxmtDownloader = TarDownloader(
                     fromUrl: dxmtURL,
+                    // What has to be on disk for a cached download to count.
+                    // The archive unpacks into a directory named for its tag.
+                    expecting: dxmtVersion,
                     onProgress: { progress in
                         setProgress(progress, "Downloading DXMT")
                     },

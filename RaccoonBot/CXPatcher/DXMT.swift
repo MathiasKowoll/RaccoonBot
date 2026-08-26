@@ -31,10 +31,28 @@ private let DXMT_PATHS_RELEASE = [
     PathMap(src: "i386-windows/d3d10core.dll", dst: "/lib/dxmt/i386-windows/d3d10core.dll"),
 ]
 
+enum DXMTError: LocalizedError {
+    case sourceMissing(String)
+    case badReleaseTag(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .sourceMissing(let path):
+            return "DXMT was not unpacked where it was expected (\(path)), so it was not installed"
+        case .badReleaseTag(let tag):
+            return "DXMT's latest release is tagged \"\(tag)\", which does not make a download address"
+        }
+    }
+}
+
 func getDXMTDownloadURL() async throws -> (url: URL, versionTag: String) {
     let path = "https://api.github.com/repos/3Shain/dxmt"
     let version = try await fetchLatestRelease(from: path)
-    return (URL(string: "https://github.com/3Shain/dxmt/releases/download/\(version)/dxmt-\(version)-builtin.tar.gz")!, versionTag: version)
+    // Built from a tag that came off the network, so not force-unwrapped.
+    guard let url = URL(string: "https://github.com/3Shain/dxmt/releases/download/\(version)/dxmt-\(version)-builtin.tar.gz") else {
+        throw DXMTError.badReleaseTag(version)
+    }
+    return (url, versionTag: version)
 }
 
 func installDXMT(srcURL: URL, destUrl: URL, versionTag: String) throws {
@@ -70,7 +88,11 @@ func installDXMT(srcURL: URL, destUrl: URL, versionTag: String) throws {
             try safeFileCopy(source: releaseSrc, dest: releaseDest)
         }
     } else {
-//        console.log("Could not find dxmt source at '\(artifactTestPath)' nor '\(releaseTestPath)', skipping installation")
-        console.log("Could not find dxmt source at '\(releaseTestPath)', skipping installation")
+        // Thrown, not logged. This used to return normally, and the patching
+        // run carried on to sign and mark the engine -- so a cache that macOS
+        // had emptied produced a finished, patched CrossOver with no DXMT in
+        // it and nothing anywhere to say so. Direct3D 11 titles then fall back
+        // to whatever CrossOver ships, which is the problem DXMT is here for.
+        throw DXMTError.sourceMissing(releaseTestPath)
     }
 }

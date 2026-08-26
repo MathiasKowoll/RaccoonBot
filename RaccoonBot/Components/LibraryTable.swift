@@ -109,10 +109,14 @@ struct LibraryTable: View {
             Text(row.name).lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            Text(row.platforms.isEmpty ? "—"
-                 : row.platforms.sorted().map { $0 == "macos" ? "Mac" : $0.capitalized }.joined(separator: ", "))
-                .font(.caption).foregroundStyle(.secondary)
-                .frame(width: 130, alignment: .trailing)
+            Group {
+                if row.platforms.isEmpty {
+                    Text("—").font(.caption).foregroundStyle(.secondary)
+                } else {
+                    PlatformBadges(platforms: row.platforms)
+                }
+            }
+            .frame(width: 130, alignment: .trailing)
 
             // A dash rather than a guess: nothing on disk records the size of
             // something that is not installed.

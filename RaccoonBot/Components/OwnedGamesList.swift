@@ -155,12 +155,7 @@ struct OwnedGameCard: View {
                 Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
 
                 HStack(spacing: 6) {
-                    ForEach(game.platforms.sorted(), id: \.self) { platform in
-                        Text(platform == "macos" ? "Mac" : platform.capitalized)
-                            .font(.caption2)
-                            .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(.quaternary, in: Capsule())
-                    }
+                    PlatformBadges(platforms: game.platforms)
                     Spacer()
                     Button(action: hide) {
                         Image(systemName: "eye.slash")

@@ -267,9 +267,11 @@ struct GamesList: View {
                     TextField("", text: $libraryPageGlobals.filter)
                         .textFieldStyle(.plain)
                         .disableAutocorrection(true)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(.black.opacity(0.22), in: RoundedRectangle(cornerRadius: 6))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        // The same track the switchers use, so the two capsules
+                        // are built from one palette rather than two.
+                        .background(.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 7))
                         .frame(maxWidth: .infinity)
 
                     // Answers the same question the field asks, and stays
@@ -284,16 +286,26 @@ struct GamesList: View {
 
                     Divider().frame(height: 14)
 
-                    Picker("", selection: $libraryPageGlobals.sortBy) {
-                        Text("Name").tag(SortingOptions.name)
-                        Text("Release Date").tag(SortingOptions.releaseDate)
-                        Text("Publisher").tag(SortingOptions.publisher)
-                        Text("Developer").tag(SortingOptions.developer)
-                        Text("Installed").tag(SortingOptions.installed)
+                    // A borderless menu with a glyph, like the platform filter
+                    // beside it. As a .menu Picker it drew its own bordered box
+                    // around a bare chevron -- a second button shape inside the
+                    // capsule, labelled with nothing.
+                    Menu {
+                        Picker("", selection: $libraryPageGlobals.sortBy) {
+                            Text("Name").tag(SortingOptions.name)
+                            Text("Release Date").tag(SortingOptions.releaseDate)
+                            Text("Publisher").tag(SortingOptions.publisher)
+                            Text("Developer").tag(SortingOptions.developer)
+                            Text("Installed").tag(SortingOptions.installed)
+                        }
+                        .pickerStyle(.inline)
+                    } label: {
+                        Image(systemName: "arrow.up.arrow.down")
                     }
-                    .pickerStyle(.menu)
-                    .controlSize(.small)
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
                     .fixedSize()
+                    .help("Sort order")
 
                     Divider().frame(height: 14)
 

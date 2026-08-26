@@ -126,6 +126,89 @@ struct OptionsView: View {
                         Text(progressLabel).font(.footnote)
                     }.padding(.top)
                 }
+                // The application's, not any one store's. Moving the bottle
+                // pickers into the store panel swept these in with them, so
+                // selecting Epic made Patch all and the GStreamer status
+                // vanish -- for settings that have nothing to do with which
+                // store is selected.
+                    // Said here rather than discovered later: a title whose
+                    // video needs a decoder is silent in exactly the same way
+                    // whether the framework is missing, the staging was never
+                    // built, or it was built against a CrossOver that has since
+                    // been updated.
+                    // Every installed title that needs its fix, in one go.
+                    let targets = PatchAll.targets(from: libraryPageGlobals.gamesMeta,
+                                                   needsPatch: { fixLibrary.needsPatch(folder: $0) })
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(alignment: .top, spacing: 6) {
+                            Image(systemName: targets.isEmpty ? "checkmark.circle" : "wand.and.sparkles")
+                                .foregroundStyle(targets.isEmpty ? .green : .orange)
+                            Text(targets.isEmpty
+                                 ? "Every installed title that needs a fix has one."
+                                 : "^[\(targets.count) installed title](inflect: true) needs its video fix.")
+                                .font(.footnote)
+                            Spacer()
+                            if !targets.isEmpty {
+                                Button(patchAll.running
+                                       ? "Patching \(patchAll.done)/\(patchAll.total)…"
+                                       : "Patch all") {
+                                    Task { await patchAll.run(targets) }
+                                }
+                                .disabled(patchAll.running)
+                            }
+                        }
+                        if let current = patchAll.current {
+                            Text(current).font(.footnote).foregroundStyle(.secondary)
+                        }
+                        // Refused rather than attempted: not an error, a reason.
+                        if let refused = patchAll.refusedReason {
+                            Text(refused).font(.footnote).foregroundStyle(.orange)
+                        }
+                        if !patchAll.patched.isEmpty && !patchAll.running {
+                            Text("^[Patched \(patchAll.patched.count) title](inflect: true).")
+                                .font(.footnote).foregroundStyle(.secondary)
+                        }
+                        // Named, not counted. "3 failed" tells you nothing you
+                        // can act on.
+                        ForEach(patchAll.failures) { failure in
+                            Text("\(failure.title): \(failure.reason)")
+                                .font(.footnote).foregroundStyle(.orange)
+                        }
+                    }
+                    Group {
+                        if let gst = gstStatus {
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(alignment: .top, spacing: 6) {
+                                    Image(systemName: gst.isOK ? "checkmark.circle" : "exclamationmark.triangle")
+                                        .foregroundStyle(gst.isOK ? .green : .orange)
+                                    Text(gst.summary).font(.footnote)
+                                        .foregroundStyle(gst.isOK ? .secondary : .primary)
+                                    Spacer()
+                                    if case .missing = gst.framework {
+                                        Button(gstBusy ? "Downloading…" : "Install GStreamer…") {
+                                            Task { await installGStreamer() }
+                                        }.disabled(gstBusy)
+                                    }
+                                }
+                                if let gstMessage {
+                                    Text(gstMessage).font(.footnote).foregroundStyle(.secondary)
+                                }
+                            }
+                        } else {
+                            HStack(spacing: 6) {
+                                ProgressView().controlSize(.small)
+                                Text("Checking GStreamer…").font(.footnote).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .task(id: appGlobals.cxAppPath ?? "") {
+                        let path = appGlobals.cxAppPath
+                        gstStatus = await Task.detached { GStreamerStatus.read(engineAppPath: path) }.value
+                    }
+                    Text("ARM bottles draw through DXMT, which reaches Direct3D 11. Direct3D 12 titles will not run in one.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+
                 // One section per store: the bottle its client lives in, the
                 // ARM bottle where that applies, and where its games are
                 // installed. Switched rather than stacked -- at three stores
@@ -196,85 +279,6 @@ struct OptionsView: View {
                             Text("No ARM bottle found. Create one in CrossOver, choosing the ARM architecture, on CrossOver 27 — it is the engine that ships FEX to emulate x86.")
                                 .font(.footnote)
                                 .foregroundStyle(.orange)
-                        }
-                        Text("ARM bottles draw through DXMT, which reaches Direct3D 11. Direct3D 12 titles will not run in one.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-
-                        // Said here rather than discovered later: a title whose
-                        // video needs a decoder is silent in exactly the same way
-                        // whether the framework is missing, the staging was never
-                        // built, or it was built against a CrossOver that has since
-                        // been updated.
-                        // Every installed title that needs its fix, in one go.
-                        let targets = PatchAll.targets(from: libraryPageGlobals.gamesMeta,
-                                                       needsPatch: { fixLibrary.needsPatch(folder: $0) })
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack(alignment: .top, spacing: 6) {
-                                Image(systemName: targets.isEmpty ? "checkmark.circle" : "wand.and.sparkles")
-                                    .foregroundStyle(targets.isEmpty ? .green : .orange)
-                                Text(targets.isEmpty
-                                     ? "Every installed title that needs a fix has one."
-                                     : "^[\(targets.count) installed title](inflect: true) needs its video fix.")
-                                    .font(.footnote)
-                                Spacer()
-                                if !targets.isEmpty {
-                                    Button(patchAll.running
-                                           ? "Patching \(patchAll.done)/\(patchAll.total)…"
-                                           : "Patch all") {
-                                        Task { await patchAll.run(targets) }
-                                    }
-                                    .disabled(patchAll.running)
-                                }
-                            }
-                            if let current = patchAll.current {
-                                Text(current).font(.footnote).foregroundStyle(.secondary)
-                            }
-                            // Refused rather than attempted: not an error, a reason.
-                            if let refused = patchAll.refusedReason {
-                                Text(refused).font(.footnote).foregroundStyle(.orange)
-                            }
-                            if !patchAll.patched.isEmpty && !patchAll.running {
-                                Text("^[Patched \(patchAll.patched.count) title](inflect: true).")
-                                    .font(.footnote).foregroundStyle(.secondary)
-                            }
-                            // Named, not counted. "3 failed" tells you nothing you
-                            // can act on.
-                            ForEach(patchAll.failures) { failure in
-                                Text("\(failure.title): \(failure.reason)")
-                                    .font(.footnote).foregroundStyle(.orange)
-                            }
-                        }
-
-                        Group {
-                            if let gst = gstStatus {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    HStack(alignment: .top, spacing: 6) {
-                                        Image(systemName: gst.isOK ? "checkmark.circle" : "exclamationmark.triangle")
-                                            .foregroundStyle(gst.isOK ? .green : .orange)
-                                        Text(gst.summary).font(.footnote)
-                                            .foregroundStyle(gst.isOK ? .secondary : .primary)
-                                        Spacer()
-                                        if case .missing = gst.framework {
-                                            Button(gstBusy ? "Downloading…" : "Install GStreamer…") {
-                                                Task { await installGStreamer() }
-                                            }.disabled(gstBusy)
-                                        }
-                                    }
-                                    if let gstMessage {
-                                        Text(gstMessage).font(.footnote).foregroundStyle(.secondary)
-                                    }
-                                }
-                            } else {
-                                HStack(spacing: 6) {
-                                    ProgressView().controlSize(.small)
-                                    Text("Checking GStreamer…").font(.footnote).foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                        .task(id: appGlobals.cxAppPath ?? "") {
-                            let path = appGlobals.cxAppPath
-                            gstStatus = await Task.detached { GStreamerStatus.read(engineAppPath: path) }.value
                         }
                     } else if(bottles.isEmpty) {
                         if appGlobals.cxAppPath != nil {

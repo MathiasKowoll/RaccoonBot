@@ -704,6 +704,15 @@ class LibraryPageGlobals: ObservableObject {
     }
     
     /// The rows for whichever tab is showing, filtered and sorted.
+    /// How many titles this tab holds before any filtering.
+    var tabTotal: Int {
+        switch tab {
+        case .installed:    return allGamesCount
+        case .notInstalled: return ownedGames.count
+        case .all:          return allGamesCount + ownedGames.count
+        }
+    }
+
     var rows: [LibraryRow] {
         let rows: [LibraryRow]
         switch tab {

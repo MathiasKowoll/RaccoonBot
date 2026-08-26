@@ -181,9 +181,14 @@ struct GamesList: View {
             ToolbarItem(placement: .principal) {
                 TabSwitcher(selection: $libraryPageGlobals.tab)
             }
-            // Two capsules, two questions. This one is how the library is
-            // drawn: rescan it, stop what is running, grid or list.
-            ToolbarItemGroup(placement: .secondaryAction) {
+            // One pill, everything inside it.
+            //
+            // Two capsules kept vanishing: macOS collapses a trailing toolbar
+            // group into an overflow menu when it decides there is not room,
+            // and with the wider tab labels showing there was not -- so the
+            // whole right-hand half of the toolbar disappeared depending on
+            // which tab you were on. One group cannot be half-collapsed.
+            ToolbarItemGroup(placement: .principal) {
                 HStack(spacing: 8) {
                     Button {
                         api.deleteOwnedGamesIDsCache()
@@ -210,17 +215,11 @@ struct GamesList: View {
                                  options: LibraryViewMode.allCases,
                                  symbol: { $0.symbol },
                                  help: { $0 == .grid ? "Grid" : "List" })
-                }
-                .padding(.horizontal, 10)
-                .frame(height: toolbarCapsuleHeight)
-                .background(.quaternary, in: Capsule())
-                .controlSize(.small)
-            }
 
-            // And this one is which titles are in it: platform, search, count,
-            // order -- plus the account, which has nowhere better to be.
-            ToolbarItemGroup(placement: .automatic) {
-                HStack(spacing: 8) {
+                    TabSwitcher(selection: $libraryPageGlobals.tab)
+
+                    Divider().frame(height: 14)
+
                     Menu {
                         ForEach(["windows", "macos", "linux"], id: \.self) { platform in
                             Toggle(PlatformBadge.name(for: platform), isOn: Binding(
@@ -249,8 +248,7 @@ struct GamesList: View {
                             if !libraryPageGlobals.hiddenAppIDs.isEmpty {
                                 Image(systemName: "eye.slash").font(.caption2)
                             }
-                            // Glyphs, not names. "Windows" and "macOS" are
-                            // different widths, and a bar that resizes as you
+                            // Glyphs, not names: a bar that resizes as you
                             // filter is a bar that will not hold still.
                             ForEach(libraryPageGlobals.platformFilter.sorted(), id: \.self) { platform in
                                 Image(systemName: PlatformBadge.symbol(for: platform))
@@ -266,41 +264,31 @@ struct GamesList: View {
                           : "Showing only " + libraryPageGlobals.platformFilter.sorted()
                                 .map(PlatformBadge.name(for:)).joined(separator: ", "))
 
-                    Divider().frame(height: 14)
-
                     Image(systemName: libraryPageGlobals.filter.isEmpty ? "magnifyingglass" : "xmark.circle")
                         .foregroundStyle(.secondary)
                         .onTapGesture { libraryPageGlobals.filter = "" }
-                    // A darker well than the capsule around it, so the part
-                    // you can type into looks like a place rather than a gap.
+
+                    // A darker well than the pill around it, so the part you can
+                    // type into reads as a place rather than a gap. Same track,
+                    // inset and radius as the switchers.
                     TextField("", text: $libraryPageGlobals.filter)
                         .textFieldStyle(.plain)
                         .disableAutocorrection(true)
                         .padding(.horizontal, 8)
                         .frame(height: toolbarCapsuleHeight - switcherInset * 2)
-                        // The same track, inset and radius the switchers use, so
-                        // the toolbar is built from one set of numbers rather
-                        // than several that nearly agree.
                         .background(.black.opacity(0.18),
                                     in: RoundedRectangle(cornerRadius: switcherSelectionRadius))
-                        .frame(maxWidth: .infinity)
+                        .frame(minWidth: 90, maxWidth: .infinity)
 
                     // Answers the same question the field asks, and stays
-                    // readable while typing, which a placeholder would not.
-                    Text("\(libraryPageGlobals.rows.count)/\(libraryPageGlobals.tab == .installed ? libraryPageGlobals.allGamesCount : libraryPageGlobals.tab == .notInstalled ? libraryPageGlobals.ownedGames.count : libraryPageGlobals.allGamesCount + libraryPageGlobals.ownedGames.count)")
+                    // readable while typing. Fixed, because 58/58 and 334/334
+                    // are not the same width even in monospaced digits.
+                    Text("\(libraryPageGlobals.rows.count)/\(libraryPageGlobals.tabTotal)")
                         .font(.caption2.monospacedDigit())
                         .foregroundStyle(.secondary)
-                        // Fixed, because 58/58 and 334/334 are not the same
-                        // width even in monospaced digits.
-                        .frame(width: 54, alignment: .trailing)
+                        .frame(width: 58, alignment: .trailing)
                         .help("Showing this many of the titles in this tab")
 
-                    Divider().frame(height: 14)
-
-                    // A borderless menu with a glyph, like the platform filter
-                    // beside it. As a .menu Picker it drew its own bordered box
-                    // around a bare chevron -- a second button shape inside the
-                    // capsule, labelled with nothing.
                     Menu {
                         Picker("", selection: $libraryPageGlobals.sortBy) {
                             Text("Name").tag(SortingOptions.name)
@@ -333,11 +321,6 @@ struct GamesList: View {
                 }
                 .padding(.horizontal, 10)
                 .frame(height: toolbarCapsuleHeight)
-                // One width, always. Everything variable inside is pinned --
-                // the count, the filter glyphs -- and the search field takes up
-                // whatever slack is left, so this capsule stops shifting under
-                // the pointer as the library is filtered.
-                .frame(width: 470)
                 .background(.quaternary, in: Capsule())
                 .controlSize(.small)
             }

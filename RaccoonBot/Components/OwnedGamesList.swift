@@ -148,23 +148,29 @@ struct OwnedGameCard: View {
         // container's corner radius clips it, rather than floating inside a
         // padded box with its own smaller radius.
         VStack(alignment: .leading, spacing: 6) {
-            Group {
-                if let cover = game.coverURL {
-                    // fill, not fit. Steam's local cache holds portrait grid art
-                    // as often as landscape headers, and forcing a 600x900 into
-                    // a 2.15 box stretches the faces. Cropping is honest; the
-                    // aspect stays the card's.
-                    KFImage(cover)
-                        .placeholder { CoverPlaceholder(title: game.displayName) }
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } else {
-                    CoverPlaceholder(title: game.displayName)
+            // The box decides the shape; the picture fills it and the rest is
+            // cut off.
+            //
+            // Steam's cache holds portrait grid art -- 600x900 -- as often as a
+            // landscape header, and a card that sizes itself to its picture
+            // ends up twice as tall as the ones beside it. Asking the IMAGE for
+            // an aspect ratio does that; asking a clear box for one, and
+            // overlaying the image inside it, does not. The middle band is what
+            // survives, which for cover art is where the subject is.
+            Color.clear
+                .aspectRatio(2.15, contentMode: .fit)
+                .frame(maxWidth: .infinity)
+                .overlay {
+                    if let cover = game.coverURL {
+                        KFImage(cover)
+                            .placeholder { CoverPlaceholder(title: game.displayName) }
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } else {
+                        CoverPlaceholder(title: game.displayName)
+                    }
                 }
-            }
-            .frame(maxWidth: .infinity)
-            .aspectRatio(2.15, contentMode: .fit)
-            .clipped()
+                .clipped()
             .overlay(alignment: .center) {
                 if isOpening {
                     ProgressView().controlSize(.small)

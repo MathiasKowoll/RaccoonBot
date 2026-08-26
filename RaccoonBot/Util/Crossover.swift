@@ -106,17 +106,10 @@ func bottleInfo(_ bottleURL: URL) -> BottleInfo? {
 /// finished -- `.complete` is written last, precisely so a half-built directory
 /// never reads as ready.
 func stagedCodecPath(cxAppPath: String, arch: String) -> String? {
-    let bundle = URL(fileURLWithPath: cxAppPath).deletingPathExtension().lastPathComponent
-    let slug = String(bundle.map { c in
-        c.isLetter || c.isNumber || c == "." || c == "_" || c == "-" ? c : "-"
-    })
-    let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("MacGameVideoFix/gst-codecs")
-        .appendingPathComponent(slug)
-        .appendingPathComponent(arch)
+    let root = CodecStaging.directory(engineAppPath: cxAppPath, arch: arch)
     guard FileManager.default.fileExists(atPath: root.appendingPathComponent(".complete").path(percentEncoded: false))
     else { return nil }
-    return root.appendingPathComponent("gstreamer-1.0").path(percentEncoded: false)
+    return CodecStaging.pluginPath(engineAppPath: cxAppPath, arch: arch)
 }
 
 /// Set one key in a bottle's [EnvironmentVariables], leaving every other key

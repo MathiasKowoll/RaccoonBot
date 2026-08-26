@@ -120,8 +120,7 @@ struct CodecStagingTests {
         // stagedCodecPath builds this path independently; if the two ever
         // disagree the staging is built somewhere nothing reads.
         let engine = "/Applications/CrossOver.app"
-        let mine = CodecStaging.directory(engineAppPath: engine, arch: "x86_64")
-            .appendingPathComponent("gstreamer-1.0").path(percentEncoded: false)
+        let mine = CodecStaging.pluginPath(engineAppPath: engine, arch: "x86_64")
         let f = FileManager.default
         let complete = CodecStaging.directory(engineAppPath: engine, arch: "x86_64")
             .appendingPathComponent(".complete")

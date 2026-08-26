@@ -122,6 +122,17 @@ nonisolated enum CodecStaging {
         return FileManager.default.fileExists(atPath: dir.path(percentEncoded: false)) ? dir : nil
     }
 
+    /// The directory a bottle's GST_PLUGIN_PATH is pointed at.
+    ///
+    /// The one spelling. It used to be built independently here and in
+    /// stagedCodecPath, and the two drifted: one grew a trailing slash from
+    /// appendingPathComponent consulting the file system, the other did not,
+    /// so the same directory went into cxbottle.conf two different ways.
+    static func pluginPath(engineAppPath: String, arch: String, into base: URL? = nil) -> String {
+        directory(engineAppPath: engineAppPath, arch: arch, into: base)
+            .path(percentEncoded: false) + "/gstreamer-1.0"
+    }
+
     /// Which architectures this engine can actually be staged for.
     static func architectures(ofEngineAt path: String) -> [String] {
         ["x86_64", "aarch64"].filter { engineLibrary(engineAppPath: path, arch: $0) != nil }

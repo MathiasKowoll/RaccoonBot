@@ -271,46 +271,66 @@ func getSteamUserDataFallback (usingPath: URL) -> UserInfo? {
     return nil
 }
 
+/// Steam's own list of where it keeps games, read through the bottle's drives.
+///
+/// Returns every library the configuration names, including ones whose disk is
+/// not plugged in at the moment. An external drive that is unplugged is still a
+/// library, and dropping it here is how a game ends up looking uninstalled.
 func getSteamLibraryFolders(bottleURL: URL, from: URL) -> [URL] {
     let f = FileManager.default
     var steamLibraries: [URL] = []
-    let drives = getBottleDrives(bottleURL: bottleURL)
-    console.log("drives: \(String(describing: drives))")
+    var offline: [URL] = []
+    // Read once for the whole scan rather than once per library.
+    let drives = BottleDrives(bottle: bottleURL)
+    console.log("drives: \(drives.letters.keys.sorted().joined(separator: " "))")
+
     let steamSettingsPaths = [
         from.appendingPathComponent("libraryfolders.vdf"),
         f.homeDirectoryForCurrentUser
             .appendingPathComponent(DEFAULT_STEAM_MAC_CONFIG_PATH)
             .appendingPathComponent("libraryfolders.vdf")
-    ].filter{ f.fileExists(atPath: $0.path(percentEncoded: false)) }
+    ].filter { f.fileExists(atPath: $0.path(percentEncoded: false)) }
+
     for steamSettingsPath in steamSettingsPaths {
         do {
-            let steamSettingsFile = try String(contentsOfFile: steamSettingsPath.path(percentEncoded: false), encoding: .utf8)
+            let steamSettingsFile = try String(contentsOfFile: steamSettingsPath.path(percentEncoded: false),
+                                               encoding: .utf8)
             let parsed = parseVDFToDict(from: steamSettingsFile)
-            if let libraries = parsed["libraryfolders"] as? [String: Any] {
-                for (_, value) in libraries { // Refactor this mess
-                    if let val = (value as? [String: Any]) {
-                        if let path = val["path"] as? String{
-                            let driveAlias = String(path.split(separator: ":\\")[0]) + ":"
-                            let splitPath = path.split(separator: ":")
-                            if (splitPath.count > 1){
-                                let partial = splitPath[1].replacingOccurrences(of: "\\\\", with: "/")
-                                if let newPath = drives[driveAlias]?.appendingPathComponent(partial).appendingPathComponent("/steamapps") {
-                                    steamLibraries.append(newPath)
-                                } else {
-                                    console.log("couldn't find Windows Steam config")
-                                }
-                            } else {
-                                let macNewPath = URL(fileURLWithPath: path).appendingPathComponent("/steamapps")
-                                steamLibraries.append(macNewPath)
-                            }
-                        }
-                    }
+            guard let libraries = parsed["libraryfolders"] as? [String: Any] else { continue }
+
+            for (_, value) in libraries {
+                guard let val = value as? [String: Any],
+                      let path = val["path"] as? String else { continue }
+
+                // A macOS Steam writes an absolute POSIX path; a Windows one
+                // writes a drive letter. Only the second needs the bottle.
+                if path.hasPrefix("/") {
+                    steamLibraries.append(URL(fileURLWithPath: path).appendingPathComponent("steamapps"))
+                    continue
+                }
+
+                switch drives.resolve(path) {
+                case .resolved(let url):
+                    steamLibraries.append(url.appendingPathComponent("steamapps"))
+                case .volumeOffline(let url):
+                    // Kept. The disk comes back and so does the library.
+                    offline.append(url)
+                    steamLibraries.append(url.appendingPathComponent("steamapps"))
+                case .missing(let url):
+                    // The drive is mounted and the folder is not on it, so
+                    // Steam's configuration is stale rather than the disk absent.
+                    console.log("steam library no longer at \(url.path(percentEncoded: false))")
+                case .noSuchDrive(let letter):
+                    console.log("no drive \(letter) in this bottle for steam library \(path)")
                 }
             }
         } catch {
             console.error(String(reflecting: error))
             return []
         }
+    }
+    if !offline.isEmpty {
+        console.log("\(offline.count) steam librar\(offline.count == 1 ? "y is" : "ies are") on a disk that is not mounted")
     }
     console.log("all steam libraries \(steamLibraries.debugDescription)")
     return steamLibraries

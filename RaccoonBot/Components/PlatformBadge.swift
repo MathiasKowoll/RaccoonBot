@@ -70,9 +70,14 @@ struct PlatformGlyph: View {
             case "windows", "win":
                 WindowsGlyph().frame(width: 9, height: 9)
             case "linux", "steamos":
-                // Tux, because there is no penguin in SF Symbols and a terminal
-                // prompt is a different idea.
-                Text("\u{1F427}").font(.system(size: 10))
+                // The real Tux, shipped as a vector asset. Larry Ewing's terms
+                // are attribution, not copyleft -- see CREDITS.md, which is the
+                // attribution. The emoji penguin that stood here first is a
+                // different bird.
+                Image("Tux")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 11, height: 11)
             default:
                 Image(systemName: PlatformBadge.symbol(for: platform))
                     .font(.system(size: 10))

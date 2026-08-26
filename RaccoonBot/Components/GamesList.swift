@@ -33,6 +33,7 @@ struct GamesList: View {
     @State private var showProfile: Bool = false
     @State private var warnAboutFix = false
     @State private var fixWarningGame: Game?
+    @State private var optionsGame: Game?
     @StateObject private var fixes = MGVFLibrary.shared
     
     var load: @Sendable () async -> Void
@@ -74,7 +75,12 @@ struct GamesList: View {
                                  },
                                  secondarySymbol: "play.fill",
                                  secondaryHelp: "Play",
-                                 secondaryAction: { row in play(row) })
+                                 secondaryAction: { row in play(row) },
+                                 tertiarySymbol: "gearshape",
+                                 tertiaryHelp: "Options for this title",
+                                 tertiaryAction: { row in
+                                     optionsGame = libraryPageGlobals.allGames.first { $0.id == row.id }
+                                 })
                 } else {
                     ScrollView {
                         LazyVGrid(columns: columns, spacing: 10) {
@@ -101,7 +107,12 @@ struct GamesList: View {
                                  },
                                  secondarySymbol: "play.fill",
                                  secondaryHelp: "Play",
-                                 secondaryAction: { row in play(row) })
+                                 secondaryAction: { row in play(row) },
+                                 tertiarySymbol: "gearshape",
+                                 tertiaryHelp: "Options for this title",
+                                 tertiaryAction: { row in
+                                     optionsGame = libraryPageGlobals.allGames.first { $0.id == row.id }
+                                 })
                 } else {
                     ScrollView {
                         LazyVGrid(columns: columns, spacing: 10) {
@@ -114,6 +125,16 @@ struct GamesList: View {
                             .padding(.bottom, dockClearance)
                     }
                 }
+            }
+        }
+        // Per-title options, reachable without opening the detail page first.
+        .sheet(item: $optionsGame) { game in
+            Modal("Options for \(game.name)", showModal: Binding(
+                get: { optionsGame != nil },
+                set: { if !$0 { optionsGame = nil } })) {
+                GameOptionsView(game: Binding(
+                    get: { optionsGame },
+                    set: { optionsGame = $0 }))
             }
         }
         .alert("This title needs its video fix", isPresented: $warnAboutFix) {

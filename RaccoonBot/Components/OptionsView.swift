@@ -78,6 +78,8 @@ struct OptionsView: View {
     /// evaluates a body repeatedly and re-entrantly. Doing that inside the
     /// body getter segfaulted the application on opening this screen.
     @State private var gstStatus: GStreamerStatus?
+    @StateObject private var patchAll = PatchAll()
+    @StateObject private var fixLibrary = MGVFLibrary.shared
     
     var body: some View {
         Modal(
@@ -179,6 +181,46 @@ struct OptionsView: View {
                     // whether the framework is missing, the staging was never
                     // built, or it was built against a CrossOver that has since
                     // been updated.
+                    // Every installed title that needs its fix, in one go.
+                    let targets = PatchAll.targets(from: libraryPageGlobals.gamesMeta,
+                                                   needsPatch: { fixLibrary.needsPatch(folder: $0) })
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(alignment: .top, spacing: 6) {
+                            Image(systemName: targets.isEmpty ? "checkmark.circle" : "wand.and.sparkles")
+                                .foregroundStyle(targets.isEmpty ? .green : .orange)
+                            Text(targets.isEmpty
+                                 ? "Every installed title that needs a fix has one."
+                                 : "^[\(targets.count) installed title](inflect: true) needs its video fix.")
+                                .font(.footnote)
+                            Spacer()
+                            if !targets.isEmpty {
+                                Button(patchAll.running
+                                       ? "Patching \(patchAll.done)/\(patchAll.total)…"
+                                       : "Patch all") {
+                                    Task { await patchAll.run(targets) }
+                                }
+                                .disabled(patchAll.running)
+                            }
+                        }
+                        if let current = patchAll.current {
+                            Text(current).font(.footnote).foregroundStyle(.secondary)
+                        }
+                        // Refused rather than attempted: not an error, a reason.
+                        if let refused = patchAll.refusedReason {
+                            Text(refused).font(.footnote).foregroundStyle(.orange)
+                        }
+                        if !patchAll.patched.isEmpty && !patchAll.running {
+                            Text("^[Patched \(patchAll.patched.count) title](inflect: true).")
+                                .font(.footnote).foregroundStyle(.secondary)
+                        }
+                        // Named, not counted. "3 failed" tells you nothing you
+                        // can act on.
+                        ForEach(patchAll.failures) { failure in
+                            Text("\(failure.title): \(failure.reason)")
+                                .font(.footnote).foregroundStyle(.orange)
+                        }
+                    }
+
                     Group {
                         if let gst = gstStatus {
                             VStack(alignment: .leading, spacing: 4) {

@@ -23,6 +23,18 @@ struct LibraryTable: View {
     var secondarySymbol: String? = nil
     var secondaryHelp: String = ""
     var secondaryAction: ((LibraryRow) -> Void)? = nil
+    var tertiarySymbol: String? = nil
+    var tertiaryHelp: String = ""
+    var tertiaryAction: ((LibraryRow) -> Void)? = nil
+
+    /// Rows are sized around the cover, which is the thing being read at a
+    /// glance. A 24pt strip of a 460x215 header is not enough of it.
+    private var actionColumnWidth: CGFloat {
+        var width: CGFloat = 40
+        if secondaryAction != nil { width += 32 }
+        if tertiaryAction != nil { width += 32 }
+        return width
+    }
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
 
     private static let played: DateFormatter = {
@@ -60,7 +72,7 @@ struct LibraryTable: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            Color.clear.frame(width: 52, height: 1)
+            Color.clear.frame(width: 64, height: 1)
             ForEach(LibraryColumn.allCases) { column in
                 Button {
                     if libraryPageGlobals.sortColumn == column {
@@ -84,7 +96,7 @@ struct LibraryTable: View {
                 .frame(maxWidth: width(of: column) == nil ? .infinity : width(of: column),
                        alignment: column == .name ? .leading : .trailing)
             }
-            Color.clear.frame(width: secondaryAction == nil ? 40 : 72, height: 1)
+            Color.clear.frame(width: actionColumnWidth, height: 1)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
@@ -109,9 +121,9 @@ struct LibraryTable: View {
                     Rectangle().fill(.black.opacity(0.5))
                 }
             }
-            .frame(width: 52, height: 24)
+            .frame(width: 64, height: 30)
             .clipped()
-            .clipShape(RoundedRectangle(cornerRadius: 3))
+            .clipShape(RoundedRectangle(cornerRadius: 4))
 
             Text(row.name).lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -142,6 +154,14 @@ struct LibraryTable: View {
                 .buttonStyle(.plain)
                 .help(actionHelp)
 
+                if let tertiarySymbol, let tertiaryAction {
+                    Button { tertiaryAction(row) } label: {
+                        Image(systemName: tertiarySymbol)
+                    }
+                    .buttonStyle(.plain)
+                    .help(tertiaryHelp)
+                }
+
                 if let secondarySymbol, let secondaryAction {
                     Button { secondaryAction(row) } label: {
                         Image(systemName: secondarySymbol)
@@ -150,10 +170,10 @@ struct LibraryTable: View {
                     .help(secondaryHelp)
                 }
             }
-            .frame(width: secondaryAction == nil ? 40 : 72, alignment: .trailing)
+            .frame(width: actionColumnWidth, alignment: .trailing)
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 4)
+        .padding(.vertical, 5)
         .background(striped ? Color.white.opacity(0.04) : Color.clear)
         .contentShape(Rectangle())
         // The row opens; only the button plays. A whole row that launches a

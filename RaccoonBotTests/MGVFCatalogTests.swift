@@ -392,3 +392,50 @@ struct LaunchGateTests {
         #expect(GameLauncher.outcome(for: game(), isPlaying: true, needsFix: true) == .alreadyPlaying)
     }
 }
+
+struct PatchAllTargetTests {
+
+    private func meta(_ dir: String, downloaded: Bool = true, root: URL) -> GamesMeta {
+        let m = GamesMeta(appid: "1", installdir: dir,
+                          bytesDownloaded: downloaded ? "0" : "5",
+                          BytesTodownload: downloaded ? "0" : "10")
+        m.gameURL = root.appendingPathComponent(dir)
+        m.name = dir
+        return m
+    }
+
+    @Test func skipsTitlesWhoseFolderIsNotThere() throws {
+        // Steam libraries live on external drives. An entry for an unmounted
+        // one is a path that simply is not there, and patching it would be
+        // writing into nothing -- or worse, into a mount point.
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("patchall-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root.appendingPathComponent("Here"),
+                                                withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let targets = PatchAll.targets(from: [meta("Here", root: root),
+                                              meta("Gone", root: root)],
+                                       needsPatch: { _ in true })
+        #expect(targets.map(\.title) == ["Here"])
+    }
+
+    @Test func skipsWhatIsNotFinishedDownloading() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("patchall-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root.appendingPathComponent("Half"),
+                                                withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        // A half-downloaded game has no executable to patch yet.
+        #expect(PatchAll.targets(from: [meta("Half", downloaded: false, root: root)],
+                                 needsPatch: { _ in true }).isEmpty)
+    }
+
+    @Test func skipsOwnedTitlesThatAreNotInstalled() {
+        // fetchOwnedGamesIDs used to append metas with an empty installdir.
+        // Those are titles you own, not titles that are here.
+        let m = GamesMeta(appid: "1", installdir: "", bytesDownloaded: "0", BytesTodownload: "0")
+        #expect(PatchAll.targets(from: [m], needsPatch: { _ in true }).isEmpty)
+    }
+}

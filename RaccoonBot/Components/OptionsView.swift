@@ -14,6 +14,11 @@ struct OptionsView: View {
     @State var progressLabel = "Processing..."
     @State var downloading: Bool = false
     @State var shouldShowBottleSelector: Bool = false
+    /// Which store's settings are on screen. One panel, switched, rather than
+    /// every store's settings stacked -- with three stores that becomes a page
+    /// nobody reads to the bottom of.
+    @State private var configuringStore: Store = .steam
+    @State private var storeBottle: String = ""
     @State private var gstBusy = false
     @State private var gstMessage: String?
 
@@ -297,7 +302,52 @@ struct OptionsView: View {
                 } else {
                     ProgressView().progressViewStyle(.linear).frame(maxWidth: .infinity)
                 }
-                GameLibrariesList(load: load)
+                // One section per store. Each one owns the bottle its client
+                // lives in and where its games are installed -- which are
+                // different questions per store even when the controls look
+                // alike: Steam finds its libraries from the bottle, Epic
+                // records one install path per title.
+                VStack(alignment: .leading, spacing: 10) {
+                    Picker("", selection: $configuringStore) {
+                        ForEach(Store.allCases) { store in
+                            Text(store.label).tag(store)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+
+                    if configuringStore != .steam {
+                        // Steam's bottle is still the application-wide one --
+                        // the scan, the launcher and the fixes all read it from
+                        // AppGlobals. Every other store keeps its own here, and
+                        // this is the setting that has to exist whatever we
+                        // decide about one-bottle-per-store: RaccoonBot cannot
+                        // launch a client it cannot find.
+                        HStack {
+                            Picker("Bottle", selection: $storeBottle) {
+                                Text("Not set").tag("")
+                                ForEach(bottles, id: \.absoluteString) { bottle in
+                                    Text(Array(bottle.pathComponents.suffix(2)).joined(separator: "/"))
+                                        .tag(bottle.absoluteString)
+                                }
+                            }
+                            .onChange(of: storeBottle) { _, newValue in
+                                var settings = StoreConfig.settings(for: configuringStore)
+                                settings.bottle = newValue
+                                StoreConfig.save(settings, for: configuringStore)
+                            }
+                        }
+                        if let floor = configuringStore.minimumEngine {
+                            Text("\(configuringStore.label) needs a bottle on CrossOver \(floor) or newer.")
+                                .font(.footnote).foregroundStyle(.secondary)
+                        }
+                    }
+
+                    GameLibrariesList(store: configuringStore, load: load)
+                }
+                .task(id: configuringStore) {
+                    storeBottle = StoreConfig.settings(for: configuringStore).bottle
+                }
                 .padding(.vertical)
                 VStack(alignment: .leading) {
                     if appGlobals.selectedBottle != "" {

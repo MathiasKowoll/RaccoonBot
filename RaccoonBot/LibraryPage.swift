@@ -82,6 +82,11 @@ struct LibraryPage: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .sheet(isPresented: $libraryPageGlobals.showOptions) {
                 OptionsView(load: load)
+                    // It holds the engine, the bottles, GStreamer, Patch all
+                    // and now a panel per store. At its content width that is a
+                    // column you scroll for a while.
+                    .frame(width: 620)
+                    .frame(minHeight: 520, idealHeight: 760, maxHeight: 900)
             }
             .sheet(isPresented: $libraryPageGlobals.showTools) {
                 ToolsView(load: load)

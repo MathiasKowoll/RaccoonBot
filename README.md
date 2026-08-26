@@ -62,9 +62,9 @@ the library and warned about *before* it launches, not after the cutscene fails.
 | [GStreamer](https://gstreamer.freedesktop.org/download/) | The universal macOS framework. RaccoonBot checks for it and offers to fetch it |
 | Steam | Installed inside a CrossOver bottle, and signed in |
 
-Apple's Game Porting Toolkit is optional and supplied by you. RaccoonBot copies
-it into the patched CrossOver if you point it at one; it does not redistribute
-it.
+Apple's Game Porting Toolkit (D3DMetal) and the Wine components used for the
+32-bit path travel with the repository, inherited from Procyon — RaccoonBot
+copies them into the patched CrossOver rather than asking you to find them.
 
 ---
 
@@ -272,7 +272,28 @@ work and for showing the shape of the problem.
   dxvk-macos
 - **[@nastys](https://github.com/nastys)** — the UE4 MoltenVK hack
 
-<!-- LICENCES: pending verification -->
+### The projects this stands on
+
+None of these belong to RaccoonBot. It works because they exist.
+
+- **[CrossOver](https://www.codeweavers.com/crossover)** — CodeWeavers. The Wine
+  distribution that actually runs the games. Nothing here works without it, and
+  it is worth paying for.
+- **[Wine](https://www.winehq.org)** — decades of work by hundreds of people, and
+  the reason any of this is possible at all.
+- **[GStreamer](https://gstreamer.freedesktop.org)** and
+  **[FFmpeg](https://ffmpeg.org)** — the decoders that turn a black screen back
+  into a cutscene. The whole video layer is a thin arrangement of their work.
+- **[DXMT](https://github.com/3Shain/dxmt)** — Direct3D 11 on Metal.
+- **[MoltenVK](https://github.com/KhronosGroup/MoltenVK)** — Vulkan on Metal.
+- **[Apple](https://developer.apple.com/games/game-porting-toolkit/)** — the Game
+  Porting Toolkit and D3DMetal, and Metal underneath all of it.
+- **[Valve](https://store.steampowered.com)** — Steam, whose local files are
+  where RaccoonBot reads your library from.
+
+Trademarks belong to their owners. RaccoonBot is not affiliated with, endorsed
+by, or connected to CodeWeavers, Apple, Valve, or any game publisher named
+anywhere in this repository.
 
 ---
 

@@ -147,14 +147,24 @@ struct GamesList: View {
                 TabSwitcher(selection: $libraryPageGlobals.tab)
             }
             ToolbarItemGroup(placement: .automatic) {
+                // The count lives in the field rather than in a bubble beside
+                // it. It answers the same question the field asks -- how much
+                // of the library am I looking at -- so it belongs there, and it
+                // stays visible while typing, which a placeholder would not.
                 HStack(spacing: 6) {
                     Image(systemName: libraryPageGlobals.filter.isEmpty ? "magnifyingglass" : "xmark.circle")
                         .foregroundStyle(.secondary)
                         .onTapGesture { libraryPageGlobals.filter = "" }
-                    TextField("Search…", text: $libraryPageGlobals.filter)
+                    TextField("", text: $libraryPageGlobals.filter)
                         .textFieldStyle(.plain)
                         .disableAutocorrection(true)
-                        .frame(minWidth: 120, idealWidth: 160)
+                        .frame(minWidth: 110, idealWidth: 150)
+                    Text(libraryPageGlobals.tab == .installed
+                         ? "\(libraryPageGlobals.filteredGames.count)/\(libraryPageGlobals.allGamesCount)"
+                         : "\(libraryPageGlobals.filteredOwnedGames.count)/\(libraryPageGlobals.ownedGames.count)")
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .help("Showing this many of the titles in this tab")
                 }
                 .padding(.horizontal, 8).padding(.vertical, 3)
                 .background(.quaternary, in: Capsule())
@@ -217,10 +227,6 @@ struct GamesList: View {
                 .controlSize(.small)
                 .fixedSize()
 
-                Text(libraryPageGlobals.tab == .installed
-                     ? "\(libraryPageGlobals.filteredGames.count)/\(libraryPageGlobals.allGamesCount)"
-                     : "\(libraryPageGlobals.filteredOwnedGames.count)/\(libraryPageGlobals.ownedGames.count)")
-                    .font(.footnote).foregroundStyle(.secondary)
             }
         }
     }

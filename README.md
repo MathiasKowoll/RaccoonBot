@@ -5,12 +5,25 @@
 A Steam launcher for macOS that runs Windows games through CrossOver — and fixes
 the ones whose cutscenes do not play.
 
-RaccoonBot is a fork of [Procyon](https://github.com/italomandara/Procyon) by
-Italo Mandara. Procyon is the launcher: the library, the per-game options, the
-CrossOver patching. RaccoonBot adds a second thing on top — a video-decoding
-layer and a catalogue of per-title fixes for games that install correctly and
-then show a black screen, a green screen, or crash when the first cutscene
-starts.
+> **RaccoonBot is not a replacement for anything. It needs CrossOver, and it
+> needs it installed and licensed by you.**
+>
+> It is an enhancement layer on two other projects: it will not run a single
+> game without [CrossOver](https://www.codeweavers.com/crossover), and its
+> entire interface is [Procyon](https://github.com/italomandara/Procyon). What
+> RaccoonBot adds is the video layer on top.
+
+CrossOver, by CodeWeavers, is what actually runs the games — it is a commercial
+Wine distribution, you buy it, and RaccoonBot neither includes nor replaces it.
+
+Procyon, by Italo Mandara, is the launcher: the library, the bottle handling,
+the per-game options, the CrossOver patching, the whole interface you see in the
+screenshots below. RaccoonBot is a fork of it.
+
+What RaccoonBot adds is one thing: a video-decoding layer and a catalogue of
+per-title fixes, for games that install correctly under CrossOver and then show
+a black screen, a green screen, or exit when the first cutscene starts. If your
+games already play their cutscenes, you want Procyon, not this.
 
 ---
 
@@ -71,7 +84,6 @@ seconds — see [the FAQ](#macos-says-raccoonbot-cannot-be-opened) below.
 
 ### The library
 
-<!-- docs/images/01-list.png -->
 ![The library, list view](docs/images/01-list.png)
 
 Three tabs:
@@ -87,15 +99,22 @@ shows cover art. `Installed` is the platform a title is installed *as*;
 `Available` is what it ships *for* — a game can offer three and be installed as
 one.
 
-<!-- docs/images/02-grid.png -->
 ![The library, grid view](docs/images/02-grid.png)
 
 Search filters the list you are looking at, and the count beside the field tells
 you how much of it you are seeing.
 
+### A game's page
+
+![A game's detail page](docs/images/05-game-detail.png)
+
+Click a cover or a row and you get the store page for that title — description,
+genres, release date, and what it is available for. From here you can play it,
+open its options, or reveal its folder. For a title you have not installed, the
+same page appears with an Install button instead.
+
 ### Settings
 
-<!-- docs/images/03-app-settings.png -->
 ![Application settings](docs/images/03-app-settings.png)
 
 This is where you point RaccoonBot at CrossOver, choose a bottle, and see
@@ -105,7 +124,6 @@ first, and skips anything you have chosen to leave alone.
 
 ### Per-game options
 
-<!-- docs/images/04-game-settings.png -->
 ![Per-game options](docs/images/04-game-settings.png)
 
 Every title carries its own graphics backend, environment variables and launch
@@ -235,6 +253,16 @@ interface — and
 [CXPatcher](https://github.com/italomandara/CXPatcher) before it, which is where
 the CrossOver-patching approach comes from. Without those two this project would
 not exist; it would be a shell script.
+
+### WineVideo
+
+**[Jfishin/winevideo](https://github.com/Jfishin/winevideo)** — "Drop-in
+VP9/WebM video support + d3dmetal crash fix for CrossOver 26.2 (Apple Silicon)".
+The same problem RaccoonBot's video layer exists to solve, solved first and
+solved directly. Worth reading if you want the fix without a launcher around it.
+
+It declares no licence, so nothing of it is reused here; the credit is for the
+work and for showing the shape of the problem.
 
 ### Carried over from Procyon's own credits
 

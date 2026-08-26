@@ -28,16 +28,15 @@ xcodebuild -project "$HERE/Procyon.xcodeproj" \
            PROVISIONING_PROFILE_SPECIFIER= \
            build "${@:2}"
 
-# Install it beside the sources, under a name that cannot be confused with the
-# released Procyon. Both bundles declare the same identifier, so Spotlight and
-# Launchpad will happily open the wrong one; the path is the only thing that
-# tells them apart, and keeping ours in the checkout means there is never a
-# stale copy of unknown vintage sitting in ~/Applications.
+# Install it beside the sources. The bundle identifier is now our own, so
+# this no longer competes with the released Procyon for the same identity --
+# but keeping it in the checkout still means there is never a stale copy of
+# unknown vintage sitting in ~/Applications.
 PRODUCT="$(xcodebuild -project "$HERE/Procyon.xcodeproj" -scheme Procyon \
              -configuration "$CONFIG" -showBuildSettings 2>/dev/null \
            | awk -F' = ' '/ BUILT_PRODUCTS_DIR /{print $2; exit}')"
 if [ -n "$PRODUCT" ] && [ -d "$PRODUCT/Procyon.app" ]; then
-  DEST="$HERE/build/Procyon-mgvf.app"
+  DEST="$HERE/build/RaccoonBot.app"
   mkdir -p "$HERE/build"
   rm -rf "$DEST" && cp -R "$PRODUCT/Procyon.app" "$DEST" \
     && echo "installed: $DEST"

@@ -26,6 +26,13 @@ var api = SteamAPI()
 
 @main
 struct ProcyonApp: App {
+    init() {
+        // Before anything reads a setting: the bundle identifier changed when
+        // this stopped sharing one with the application it came from, and
+        // UserDefaults.standard follows the identifier.
+        Migration.run()
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()

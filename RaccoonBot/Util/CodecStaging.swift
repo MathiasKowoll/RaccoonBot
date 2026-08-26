@@ -133,6 +133,19 @@ nonisolated enum CodecStaging {
             .path(percentEncoded: false) + "/gstreamer-1.0"
     }
 
+    /// Where this engine should keep its GStreamer plugin cache.
+    ///
+    /// One per engine and architecture. GStreamer's default is
+    /// ~/.cache/gstreamer-1.0/registry.<arch>.bin -- a single file shared by
+    /// the user's own framework and by every engine on the machine. Two
+    /// engines with different plugin sets, which is exactly what staging
+    /// creates, take turns writing one another's view of what exists. Nothing
+    /// checks, and the symptom is a decoder that is there and then is not.
+    static func registryPath(engineAppPath: String, arch: String, into base: URL? = nil) -> String {
+        directory(engineAppPath: engineAppPath, arch: arch, into: base)
+            .path(percentEncoded: false) + "/registry.bin"
+    }
+
     /// Which architectures this engine can actually be staged for.
     static func architectures(ofEngineAt path: String) -> [String] {
         ["x86_64", "aarch64"].filter { engineLibrary(engineAppPath: path, arch: $0) != nil }

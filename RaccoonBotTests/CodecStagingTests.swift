@@ -296,3 +296,24 @@ struct GStreamerStalenessTests {
         #expect(s.summary.contains("no codecs are staged"))
     }
 }
+
+/// The plugin cache, which GStreamer keeps in one file per architecture for
+/// the whole machine.
+struct CodecStagingRegistryTests {
+
+    @Test func eachEngineAndArchitectureGetsItsOwnCache() {
+        let a = CodecStaging.registryPath(engineAppPath: "/Applications/CrossOver.app", arch: "x86_64")
+        let b = CodecStaging.registryPath(engineAppPath: "/x/Crossover_patched.app", arch: "x86_64")
+        let c = CodecStaging.registryPath(engineAppPath: "/x/Crossover_patched.app", arch: "aarch64")
+        #expect(a != b, "two engines sharing a cache overwrite each other's view")
+        #expect(b != c, "two architectures sharing a cache is worse")
+        #expect(!a.contains(".cache/gstreamer-1.0"), "that is the shared one it exists to avoid")
+    }
+
+    @Test func theCacheSitsBesideTheStagingItDescribes() {
+        let dir = CodecStaging.directory(engineAppPath: "/x/Crossover_patched.app", arch: "aarch64")
+            .path(percentEncoded: false)
+        #expect(CodecStaging.registryPath(engineAppPath: "/x/Crossover_patched.app", arch: "aarch64")
+                == dir + "/registry.bin")
+    }
+}

@@ -187,6 +187,10 @@ func applyStagedCodecs(to bottleURL: URL, cxAppPath: String?) -> CodecPointing {
         return .nothingStaged(arch: arch)
     }
     setBottleEnv(bottleURL, key: "GST_PLUGIN_PATH", value: path)
+    // And a cache of its own, so this engine's view of what exists is not
+    // overwritten by the next engine to run.
+    setBottleEnv(bottleURL, key: "GST_REGISTRY",
+                 value: CodecStaging.registryPath(engineAppPath: cxAppPath, arch: arch))
     return .pointed(arch: arch)
 }
 

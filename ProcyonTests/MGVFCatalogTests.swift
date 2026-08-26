@@ -241,6 +241,37 @@ struct MGVFRecommendedOptionsTests {
     }
 
     @MainActor
+    @Test func aRecommendationCarriesOnlyWhatItRecommends() {
+        // The one that would have cost real settings. GameOptionsData has two
+        // initialisers and they mean opposite things: init(data:) is a snapshot
+        // of a whole GameOptions, and 19 of that class's 23 fields are not
+        // optional, so a fresh one is nineteen concrete defaults wearing the
+        // costume of an empty patch. importAutoConfig writes every non-nil
+        // field, so "recommend dxmt for this title" would also have reset the
+        // frame cap, the environment, the ARM bottle and sixteen others -- to
+        // legal values, which is why nothing would have looked wrong.
+        let patch = options(entry(backend: "dxmt", gptk: nil))
+        #expect(patch?.cxGraphicsBackend == "dxmt")
+        #expect(patch?.envVariables == nil)
+        #expect(patch?.gameArguments == nil)
+        #expect(patch?.useArmBottle == nil)
+        #expect(patch?.wineMSync == nil)
+        #expect(patch?.mtlHudEnabled == nil)
+        #expect(patch?.x87PatchEnabled == nil)
+        #expect(patch?.dx9PatchEnabled == nil)
+        #expect(patch?.advertiseAVX == nil)
+        #expect(patch?.dxmtPreferredMaxFrameRate == nil)
+        #expect(patch?.dxmtMetalFXSpatial == nil)
+        #expect(patch?.dxmtMetalSpatialUpscaleFactor == nil)
+
+        // And the same for the environment branch: it must not drag a backend
+        // along with it.
+        let envOnly = options(entry(backend: nil, gptk: nil, env: ["FEX_X87REDUCEDPRECISION": "1"]))
+        #expect(envOnly?.envVariables == "FEX_X87REDUCEDPRECISION=1")
+        #expect(envOnly?.cxGraphicsBackend == nil)
+    }
+
+    @MainActor
     @Test func dxmtIsOneChoiceNotTwo() {
         #expect(options(entry(backend: "dxmt", gptk: nil))?.cxGraphicsBackend == "dxmt")
         #expect(options(entry(backend: "dxmt", gptk: "3"))?.cxGraphicsBackend == "dxmt")

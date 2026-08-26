@@ -13,6 +13,45 @@ import AppKit
 import Combine
 
 @MainActor
+extension GameOptionsData {
+    /// A patch with nothing in it.
+    ///
+    /// The other initialiser, `init(data:)`, is a SNAPSHOT: it copies a whole
+    /// `GameOptions`, and 19 of that class's 23 fields are not optional, so a
+    /// freshly constructed one arrives carrying nineteen concrete defaults
+    /// rather than nineteen absences. `importAutoConfig` writes every non-nil
+    /// field it is given. Building a one-field recommendation on top of a
+    /// snapshot therefore overwrites every other setting the user had saved for
+    /// that game -- silently, because each written value is a legal one.
+    ///
+    /// A recommendation is a patch. It has to start empty.
+    init() {
+        self.cxGraphicsBackend = nil
+        self.wineMSync = nil
+        self.mtlHudEnabled = nil
+        self.d3dMtl4Enabled = nil
+        self.x87PatchEnabled = nil
+        self.useArmBottle = nil
+        self.dx9PatchEnabled = nil
+        self.gameArguments = nil
+        self.dxmtPreferredMaxFrameRate = nil
+        self.dxmtMetalFXSpatial = nil
+        self.dxmtMetalSpatialUpscaleFactor = nil
+        self.advertiseAVX = nil
+        self.envVariables = nil
+        self.enableSDL = nil
+        self.disableHidraw = nil
+        self.ue4Hack = nil
+        self.mvkArgBuff = nil
+        self.vulkanLib = nil
+        self.dxvk = nil
+        self.wineEsync = nil
+        self.d3dMEnableMetalFX = nil
+        self.d3dSupportDXR = nil
+        self.d3dMaxFPS = nil
+    }
+}
+
 final class MGVFCoordinator: ObservableObject {
     @Published private(set) var state: GameFixState = .noFix
     @Published private(set) var entry: MGVFGame?
@@ -47,7 +86,7 @@ final class MGVFCoordinator: ObservableObject {
     /// guessing, because a wrong backend is worse than none.
     var recommendedOptions: GameOptionsData? {
         guard let entry else { return nil }
-        var data = GameOptionsData(data: GameOptions())
+        var data = GameOptionsData()   // a patch, never a snapshot -- see init() above
         var touched = false
 
         // The backend id the picker uses folds the two together: DXMT is one

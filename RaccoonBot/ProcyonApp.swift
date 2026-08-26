@@ -17,8 +17,14 @@ let appName = "procyon"
 /// 1100 of content.
 let windowWidth: CGFloat = 1280
 let windowHeight: CGFloat = 820
-/// Never let the layout collapse below three columns.
-let windowMinWidth: CGFloat = 860
+/// Never narrower than the toolbar needs.
+///
+/// 1024 was this window's fixed size before it could be resized, and it is
+/// still the right floor -- not for the grid, which reflows happily at 860, but
+/// for the toolbar. macOS collapses a toolbar group into an overflow menu the
+/// moment it decides there is no room, and it decides that silently: controls
+/// simply stop existing. A minimum that fits the pill means it never has to.
+let windowMinWidth: CGFloat = 1024
 let windowMinHeight: CGFloat = 600
 
 /// Resizable, and therefore able to go full screen.

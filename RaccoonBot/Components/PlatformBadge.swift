@@ -71,7 +71,7 @@ struct PlatformGlyph: View {
         Group {
             switch platform.lowercased() {
             case "windows", "win":
-                WindowsGlyph(side: 12)
+                WindowsGlyph(side: 15)
             case "linux", "steamos":
                 // The real Tux, shipped as a vector asset. Larry Ewing's terms
                 // are attribution, not copyleft -- see CREDITS.md, which is the
@@ -80,13 +80,13 @@ struct PlatformGlyph: View {
                 Image("Tux")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: 14, height: 14)
+                    .frame(width: 18, height: 18)
             default:
                 Image(systemName: PlatformBadge.symbol(for: platform))
-                    .font(.system(size: 13))
+                    .font(.system(size: 16))
             }
         }
-        .frame(width: 24, height: 24)
+        .frame(width: 28, height: 28)
         .background(.quaternary, in: Circle())
         .help(PlatformBadge.name(for: platform))
         .accessibilityLabel(PlatformBadge.name(for: platform))

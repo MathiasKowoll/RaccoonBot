@@ -26,6 +26,8 @@ struct OwnedGamesList: View {
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
     @EnvironmentObject var appGlobals: AppGlobals
     @State private var asking: InstallTarget?
+    /// The app id currently being fetched, so its card can say so.
+    @State private var opening: String?
 
     var body: some View {
         Group {
@@ -56,8 +58,10 @@ struct OwnedGamesList: View {
                     LazyVGrid(columns: columns, spacing: 10) {
                         ForEach(libraryPageGlobals.filteredOwnedGames) { game in
                             OwnedGameCard(game: game,
+                                          isOpening: opening == game.appID,
                                           install: { install(game) },
-                                          hide: { libraryPageGlobals.hide(appID: game.appID) })
+                                          hide: { libraryPageGlobals.hide(appID: game.appID) },
+                                          open: { Task { await open(game) } })
                         }
                     }
                     .padding(.horizontal)
@@ -76,6 +80,24 @@ struct OwnedGamesList: View {
                 Text("\(game.displayName) ships for both. The Windows version runs in the bottle, which is where the video fixes apply; the macOS version is handled by the Steam app on this Mac.")
             }
         }
+    }
+
+    /// Fetch this one title's store record and show it.
+    ///
+    /// One request, for the title actually being looked at, and cached after
+    /// that. The alternative was fetching all 334 up front, which is 334
+    /// requests for descriptions nobody had asked to read.
+    private func open(_ game: OwnedGame) async {
+        opening = game.appID
+        defer { opening = nil }
+        guard let info = try? await api.fetchGameInfo(appID: game.appID) else { return }
+        libraryPageGlobals.selectedGame = Game(from: info,
+                                               id: game.appID,
+                                               isNative: game.runsOnMac && !game.runsOnWindows,
+                                               downloadProgress: 0,
+                                               isInstalled: false,
+                                               appNames: [])
+        libraryPageGlobals.showDetailView = true
     }
 
     private func install(_ game: OwnedGame) {
@@ -109,8 +131,10 @@ struct OwnedGamesList: View {
 
 struct OwnedGameCard: View {
     let game: OwnedGame
+    let isOpening: Bool
     let install: () -> Void
     let hide: () -> Void
+    let open: () -> Void
 
     private static let played: DateFormatter = {
         let f = DateFormatter(); f.dateStyle = .medium; f.timeStyle = .none; return f
@@ -144,9 +168,20 @@ struct OwnedGameCard: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .top)
+            .overlay(alignment: .center) {
+                if isOpening {
+                    ProgressView().controlSize(.small)
+                        .padding(8)
+                        .background(.black.opacity(0.55), in: Circle())
+                }
+            }
+            .contentShape(Rectangle())
+            .onTapGesture(perform: open)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(game.displayName).font(.headline).lineLimit(2)
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: open)
 
                 // What the disk actually knows about a title that is not
                 // installed. No description or genre: those come from the

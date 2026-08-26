@@ -8,18 +8,36 @@
 import SwiftUI
 import CoreData
 
+/// NOT renamed with the application: it is a path component of the downloads
+/// cache (see Misc.swift), so changing it abandons what is there rather than
+/// moving it. Same rule as the bottles directory and the app group.
 let appName = "procyon"
-let windowWidth: CGFloat = 1024
-let windowHeight: CGFloat = 750
+/// Wide enough that the adaptive grid opens at four columns: the cards ask for
+/// 250 points minimum, so four of them plus spacing and padding needs roughly
+/// 1100 of content.
+let windowWidth: CGFloat = 1280
+let windowHeight: CGFloat = 820
+/// Never let the layout collapse below three columns.
+let windowMinWidth: CGFloat = 860
+let windowMinHeight: CGFloat = 600
+
+/// Resizable, and therefore able to go full screen.
+///
+/// This defaulted to FALSE, and together with .frame(width:height:) and
+/// .windowResizability(.contentSize) it pinned the window at 1024x750 with the
+/// green button inert. There was no reason for it: the library grid is
+/// GridItem(.adaptive(minimum: 250, maximum: 325)) and already reflows, so the
+/// only thing the lock achieved was keeping it at three columns forever.
+///
+/// The environment variable stays as an escape hatch, under both names, in case
+/// a layout somewhere really does need the old fixed geometry.
 let appWindowResizable: Bool = {
-    let env = ProcessInfo.processInfo.environment["PROCYON_LAYOUT_RESIZABLE"]?.lowercased()
-    switch env {
-    case "1", "true", "yes":
-        return true
-    case "0", "false", "no":
-        return false
-    default:
-        return false
+    let environment = ProcessInfo.processInfo.environment
+    let value = (environment["RACCOONBOT_LAYOUT_RESIZABLE"]
+                 ?? environment["PROCYON_LAYOUT_RESIZABLE"])?.lowercased()
+    switch value {
+    case "0", "false", "no": return false
+    default: return true
     }
 }()
 var api = SteamAPI()
@@ -36,7 +54,10 @@ struct RaccoonBotApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .frame(width: appWindowResizable ? nil : windowWidth, height: appWindowResizable ? nil : windowHeight)
+                .frame(minWidth: appWindowResizable ? windowMinWidth : windowWidth,
+                       maxWidth: appWindowResizable ? .infinity : windowWidth,
+                       minHeight: appWindowResizable ? windowMinHeight : windowHeight,
+                       maxHeight: appWindowResizable ? .infinity : windowHeight)
                 .onAppear {
                     // Disable "Show Tab Bar" globally
                     NSWindow.allowsAutomaticWindowTabbing = false
@@ -44,7 +65,10 @@ struct RaccoonBotApp: App {
         }
         .windowToolbarStyle(.unified)
         .defaultSize(width: windowWidth, height: windowHeight)
-        .windowResizability(.contentSize)
+        // contentSize pins the window to exactly what the content asks for,
+        // which with a fixed frame means it cannot be dragged or zoomed at all.
+        // contentMinSize honours the minimum and lets the user have the rest.
+        .windowResizability(appWindowResizable ? .contentMinSize : .contentSize)
         .commands {
             CommandGroup(replacing: .newItem) { } // replaces "New Window" with nothing
         }

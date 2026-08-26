@@ -84,7 +84,10 @@ class WineRegSection {
             values[index].value.type = .dword(value)
             values[index].value.rawLine = "\"\(key)\"=dword:\(String(format: "%08x", value))"
         } else {
-            let val = WineRegValue(type: .dword(value), rawLine: "\"\(key)\"=\"\(String(format: "%08x", value))\"")
+            // dword:, not a quoted string. Written as a string, wine stores a
+            // REG_SZ where it expects a REG_DWORD and the setting has no
+            // effect -- and the value looks right in a registry editor.
+            let val = WineRegValue(type: .dword(value), rawLine: "\"\(key)\"=dword:\(String(format: "%08x", value))")
             values.append((key: key, value: val))
         }
     }
@@ -144,7 +147,10 @@ class WineRegistryFile {
         var currentSection: WineRegSection? = nil
         var inHeader = true
 
-        for line in lines {
+        var index = 0
+        while index < lines.count {
+            let line = lines[index]
+            index += 1
             let trimmed = line.trimmingCharacters(in: .whitespaces)
 
             // Detect section header: [Path\\Key] optional_timestamp
@@ -192,8 +198,26 @@ class WineRegistryFile {
 
             // Parse key=value
             if let parsed = parseRegValue(line: trimmed) {
-                // Move any accumulated trailing lines back (they were between values)
-                section.values.append(parsed)
+                // A value too long for one line is written with a trailing
+                // backslash and continued on the next. Those continuations
+                // belong to this value: read line by line they match nothing,
+                // fall through to trailingLines, and save() then writes them
+                // after every value in the section -- so the backslash on the
+                // first line swallows the next value's declaration and the
+                // real bytes pile up at the end, attached to nothing.
+                //
+                // That is not a hypothetical. It is what emptied the H.264
+                // decoder's InputTypes in a bottle on this machine and left
+                // its OutputTypes carrying a format from the input list. The
+                // bottle games launch from has 739 values of this shape, and
+                // every launch rewrote the file.
+                var whole = line
+                while whole.hasSuffix("\\"), index < lines.count {
+                    whole += "\n" + lines[index]
+                    index += 1
+                }
+                let value = WineRegValue(type: parsed.value.type, rawLine: whole)
+                section.values.append((key: parsed.key, value: value))
             } else {
                 section.trailingLines.append(line)
             }

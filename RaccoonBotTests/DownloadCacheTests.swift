@@ -16,6 +16,10 @@ import Testing
 import Foundation
 @testable import RaccoonBot
 
+/// Serialised: these share one directory on disk -- the real download cache --
+/// and swift-testing runs a suite in parallel by default, so one test's clean
+/// slate was another's missing files.
+@Suite(.serialized)
 struct DownloadCacheTests {
 
     private func key(for url: URL) -> String {

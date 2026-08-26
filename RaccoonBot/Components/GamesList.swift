@@ -158,11 +158,26 @@ struct GamesList: View {
                     Divider()
                     Button("All platforms") { libraryPageGlobals.platformFilter.removeAll() }
                 } label: {
-                    Image(systemName: libraryPageGlobals.platformFilter.isEmpty
-                          ? "line.3.horizontal.decrease.circle"
-                          : "line.3.horizontal.decrease.circle.fill")
+                    // Shows what is on rather than only that something is. A
+                    // filter you cannot see the state of is a filter you forget
+                    // you left on, and then the library looks broken.
+                    HStack(spacing: 4) {
+                        Image(systemName: libraryPageGlobals.platformFilter.isEmpty
+                              ? "line.3.horizontal.decrease.circle"
+                              : "line.3.horizontal.decrease.circle.fill")
+                        if !libraryPageGlobals.platformFilter.isEmpty {
+                            ForEach(libraryPageGlobals.platformFilter.sorted(), id: \.self) { platform in
+                                Text(PlatformBadge.name(for: platform))
+                                    .font(.caption2)
+                            }
+                        }
+                    }
                 }
-                .help("Filter by platform")
+                .fixedSize()
+                .help(libraryPageGlobals.platformFilter.isEmpty
+                      ? "Filter by platform"
+                      : "Showing only " + libraryPageGlobals.platformFilter.sorted()
+                            .map(PlatformBadge.name(for:)).joined(separator: ", "))
 
                 Picker("", selection: $libraryPageGlobals.sortBy) {
                     Text("Name").tag(SortingOptions.name)

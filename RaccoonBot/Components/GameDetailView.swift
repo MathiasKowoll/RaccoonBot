@@ -17,20 +17,24 @@ struct GameDetailView: View {
     
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
     @StateObject var gameOptions = GameOptions()
-    var gameFolder: String {
-        let meta = getMeta(libraryPageGlobals.gamesMeta, byID: String(game!.id))!
-        return meta.libraryFolder.appendingPathComponent(meta.installdir).path(percentEncoded: false)
-    }
+    // A `gameFolder` computed property used to sit here, force-unwrapping
+    // getMeta(...) for the current title. Nothing referenced it, and a title
+    // that is not installed has no meta -- so it was a crash waiting for its
+    // first caller. Removed rather than guarded.
     
     var body: some View {
         if (game != nil) {
             VStack (alignment: .leading) {
                 ZStack(alignment: .bottom ) {
                     if (game!.movies != nil && !game!.movies!.isEmpty) {
+                        // The banner fills the width it is given. It used to
+                        // carry .position(x: 460, y: 260) -- absolute points,
+                        // correct only in a window pinned to 1024x750, which is
+                        // no longer a window this application has.
                         PlayerLayerView(player: player)
-                            .ignoresSafeArea()
-                            .frame(height: 540)
-                            .position(x: 460, y: 260)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 340)
+                            .clipped()
                             .onAppear {
                                 let url = URL(string: game!.movies![0].hlsH264!)!
                                 player = AVPlayer(url: url)
@@ -43,10 +47,13 @@ struct GameDetailView: View {
                     } else {
                         KFImage(URL(string: game!.headerImage))
                             .placeholder {
-                                ProgressView()
+                                CoverPlaceholder(title: game!.name)
                             }
                             .resizable()
-                            .scaledToFit()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 340)
+                            .clipped()
                     }
                     GameHeader(game: $game, showDetailView: $libraryPageGlobals.showDetailView)
                         .padding(30)

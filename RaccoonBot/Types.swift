@@ -580,14 +580,23 @@ enum LibraryViewMode: String, CaseIterable, Identifiable {
 
 /// The columns of the list view, which is also the sort order.
 enum LibraryColumn: String, CaseIterable, Identifiable {
-    case name, platform, size, lastPlayed
+    case name
+    /// What it is installed AS -- which is one platform, the one that will run.
+    case installedOn
+    /// What it is available FOR. A different question: a title can ship for
+    /// three systems and be installed as one of them.
+    case supported
+    case size
+    case played
+
     var id: String { rawValue }
     var label: String {
         switch self {
         case .name: return "Name"
-        case .platform: return "Platform"
+        case .installedOn: return "Installed"
+        case .supported: return "Available"
         case .size: return "Size"
-        case .lastPlayed: return "Last played"
+        case .played: return "Played"
         }
     }
 }
@@ -601,7 +610,14 @@ struct LibraryRow: Identifiable {
     let id: String
     let appID: String
     let name: String
+    /// Every platform the title ships for.
     let platforms: Set<String>
+    /// The one it is installed as, if it is installed. Not derivable from the
+    /// set above: a title available for three systems is installed as one.
+    let installedOn: String?
+    /// Minutes, from Steam's own per-account config. The store API has no idea
+    /// how long anyone has played anything.
+    let playtimeMinutes: Int?
     /// Only known for installed titles: nothing on disk records the size of
     /// something that is not there.
     let sizeBytes: Int64?
@@ -622,6 +638,10 @@ class LibraryPageGlobals: ObservableObject {
     @Published var ownedLoaded: Bool = false
     /// Empty means every platform; a non-empty set is a whitelist.
     @Published var platformFilter: Set<String> = []
+    /// app id -> how long, and when last. Read from localconfig.vdf, which is
+    /// where Steam keeps it; `appdetails` is a store record and knows nothing
+    /// about any particular person's play time.
+    @Published var playStats: [String: (lastPlayed: Date?, playtime: Int?)] = [:]
     /// Titles hidden from the not-installed tab, remembered across launches.
     ///
     /// localconfig.vdf lists what this Steam has heard of, not what the account
@@ -734,7 +754,10 @@ class LibraryPageGlobals: ObservableObject {
             case .name:
                 let result = lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
                 return ascending ? result : !result
-            case .platform:
+            case .installedOn:
+                let result = (lhs.installedOn ?? "~") < (rhs.installedOn ?? "~")
+                return ascending ? result : !result
+            case .supported:
                 let result = lhs.platforms.sorted().joined() < rhs.platforms.sorted().joined()
                 return ascending ? result : !result
             case .size:
@@ -746,7 +769,7 @@ class LibraryPageGlobals: ObservableObject {
                 case (_?, nil):    return true
                 case (nil, nil):   return lhs.name < rhs.name
                 }
-            case .lastPlayed:
+            case .played:
                 switch (lhs.lastPlayed, rhs.lastPlayed) {
                 case let (l?, r?): return ascending ? l > r : l < r
                 case (nil, _?):    return false
@@ -765,12 +788,18 @@ class LibraryPageGlobals: ObservableObject {
             if game.platforms.windows { platforms.insert("windows") }
             if game.platforms.mac { platforms.insert("macos") }
             if game.platforms.linux { platforms.insert("linux") }
+            let stats = playStats[String(game.steamAppID)]
             return LibraryRow(id: game.id,
                               appID: String(game.steamAppID),
                               name: game.name,
                               platforms: platforms,
+                              // What it is installed AS: the scan knows, because
+                              // a native title comes out of a different library
+                              // folder than one that runs in the bottle.
+                              installedOn: game.isNative ? "macos" : "windows",
+                              playtimeMinutes: stats?.playtime,
                               sizeBytes: sizes[game.id] ?? nil,
-                              lastPlayed: nil,
+                              lastPlayed: stats?.lastPlayed,
                               coverURL: game.headerImage.isEmpty ? nil : URL(string: game.headerImage),
                               isInstalled: true)
         }
@@ -779,7 +808,12 @@ class LibraryPageGlobals: ObservableObject {
     private var ownedRows: [LibraryRow] {
         ownedGames.filter { !hiddenAppIDs.contains($0.appID) }.map {
             LibraryRow(id: $0.appID, appID: $0.appID, name: $0.displayName,
-                       platforms: $0.platforms, sizeBytes: nil, lastPlayed: $0.lastPlayed,
+                       platforms: $0.platforms,
+                       // Nothing is installed, so there is nothing it is
+                       // installed as. A dash, not a guess.
+                       installedOn: nil,
+                       playtimeMinutes: $0.playtimeMinutes,
+                       sizeBytes: nil, lastPlayed: $0.lastPlayed,
                        coverURL: $0.coverURL, isInstalled: false)
         }
     }
@@ -801,16 +835,16 @@ class LibraryPageGlobals: ObservableObject {
             case .name:
                 let result = lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
                 return ascending ? result : !result
-            case .platform:
+            case .supported:
                 let result = lhs.platforms.sorted().joined() < rhs.platforms.sorted().joined()
                 return ascending ? result : !result
-            case .size:
-                // Nothing on disk records the size of something not installed,
-                // so this orders by nothing and keeps the order stable rather
-                // than shuffling rows under the pointer.
+            case .installedOn, .size:
+                // Neither applies to something that is not installed, so this
+                // keeps the order stable rather than shuffling rows under the
+                // pointer for a column with nothing in it.
                 let result = lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
                 return ascending ? result : !result
-            case .lastPlayed:
+            case .played:
                 // Never played sorts last in both directions: it is an absence,
                 // not a very old date.
                 switch (lhs.lastPlayed, rhs.lastPlayed) {

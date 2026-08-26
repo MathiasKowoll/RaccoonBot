@@ -228,6 +228,23 @@ struct LibraryPage: View {
             console.error("fetchOwnedGamesIDs \(String(reflecting: error))")
         }
         
+        // How long each title has been played, and when last. Read once, from
+        // Steam's own per-account config: the store API is a catalogue and has
+        // no idea what anybody has played. Off the main thread, and a failure
+        // here costs two columns rather than the library.
+        libraryPageGlobals.playStats = await Task.detached(priority: .utility) {
+            var stats: [String: (lastPlayed: Date?, playtime: Int?)] = [:]
+            for steam in OwnedLibrary.steamRoots() {
+                for config in OwnedLibrary.localConfigs(inSteamAt: steam) {
+                    for (appID, value) in OwnedLibrary.ownedApps(inLocalConfigAt: config)
+                    where stats[appID] == nil {
+                        stats[appID] = value
+                    }
+                }
+            }
+            return stats
+        }.value
+
         // The disk first. Every installed title has a name in its .acf and most
         // have a cover in Steam's own art cache, so the library is complete
         // enough to use before a single request goes out -- and stays that way

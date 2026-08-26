@@ -109,9 +109,7 @@ struct GameHeader: View {
         }
         .foregroundStyle(.white)
         .sheet(isPresented: $showGameOptions) {
-            Modal("Options for \(game!.name)", showModal: $showGameOptions) {
-                GameOptionsView(game: $game)
-            }
+            GameOptionsSheet(game: $game, isPresented: $showGameOptions)
         }
     }
     

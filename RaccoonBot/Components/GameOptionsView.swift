@@ -37,7 +37,14 @@ struct GameOptionsView: View {
     }
     
     var body: some View {
-        let id = game!.steamAppID != 0 ? String(describing: game!.steamAppID) : String(describing: game!.id)
+        // Guarded rather than forced. A body getter that traps takes the whole
+        // application down with no message -- which is what opening this from
+        // the list did, because GameOptionsView force-unwraps its game and
+        // requires a GameOptions in the environment that only the detail page
+        // happened to provide. GameOptionsSheet supplies both now; this is the
+        // second lock on the same door.
+        if let current = game {
+        let id = current.steamAppID != 0 ? String(describing: current.steamAppID) : String(describing: current.id)
         let gameOptKey = namespacedKey("GameOptions", id)
         VStack (alignment: .leading, spacing: 5){
             Text("id:\(id)").font(Font.footnote).foregroundStyle(.procyonBrightGray)
@@ -46,13 +53,13 @@ struct GameOptionsView: View {
                     Section("Generic options") {
                         HStack(alignment: .top, spacing: 20) {
                             VStack(alignment: .trailing){
-                                if !game!.isNative {
+                                if !current.isNative {
                                     DropDown(options: cxGraphicsBackend, label: "Graphics Backend", value: $gameOptions.cxGraphicsBackend)
                                 }
                                 Divider()
                                 TextField("Game arguments", text: $gameOptions.gameArguments)
                                 TextField("Env variables", text: $gameOptions.envVariables)
-                                if !game!.isNative {
+                                if !current.isNative {
                                     Divider()
                                     Toggle("Run in the ARM bottle", isOn: $gameOptions.useArmBottle)
                                         .onChange(of: gameOptions.useArmBottle) { _, newValue in
@@ -84,7 +91,7 @@ struct GameOptionsView: View {
                             VStack(alignment: .trailing) {
                                 Toggle("Metal HUD", isOn: $gameOptions.mtlHudEnabled)
                                 Toggle("Advertise AVX", isOn: $gameOptions.advertiseAVX)
-                                if !game!.isNative {
+                                if !current.isNative {
                                     Toggle("MSync", isOn: $gameOptions.wineMSync)
                                     Toggle("Enable SDL", isOn: $gameOptions.enableSDL)
                                     Toggle("Disable Hidraw", isOn: $gameOptions.disableHidraw)
@@ -246,6 +253,9 @@ struct GameOptionsView: View {
             if !cxGraphicsBackend.contains(where: { $0.id == self.gameOptions.cxGraphicsBackend }) {
                 self.gameOptions.cxGraphicsBackend = "d3dmetal4"
             }
+        }
+            } else {
+            EmptyView()
         }
     }
     

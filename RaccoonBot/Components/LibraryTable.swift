@@ -103,12 +103,25 @@ struct LibraryTable: View {
         .foregroundStyle(.secondary)
     }
 
+    /// Steam records both, and neither is much use without the other.
+    private func playedSummary(_ row: LibraryRow) -> String {
+        var parts: [String] = []
+        if let minutes = row.playtimeMinutes, minutes > 0 {
+            parts.append(minutes >= 60 ? "\(minutes / 60) h" : "\(minutes) m")
+        }
+        if let date = row.lastPlayed {
+            parts.append(Self.played.string(from: date))
+        }
+        return parts.isEmpty ? "—" : parts.joined(separator: " · ")
+    }
+
     private func width(of column: LibraryColumn) -> CGFloat? {
         switch column {
         case .name: return nil
-        case .platform: return 130
-        case .size: return 90
-        case .lastPlayed: return 130
+        case .installedOn: return 76
+        case .supported: return 96
+        case .size: return 84
+        case .played: return 150
         }
     }
 
@@ -128,6 +141,18 @@ struct LibraryTable: View {
             Text(row.name).lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
+            // What it is installed AS -- one platform, the one that will run.
+            Group {
+                if let installed = row.installedOn {
+                    PlatformBadges(platforms: [installed])
+                } else {
+                    Text("—").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: 76, alignment: .trailing)
+
+            // What it is available FOR, which is a different question: a title
+            // can ship for three systems and be installed as one.
             Group {
                 if row.platforms.isEmpty {
                     Text("—").font(.caption).foregroundStyle(.secondary)
@@ -135,17 +160,19 @@ struct LibraryTable: View {
                     PlatformBadges(platforms: row.platforms)
                 }
             }
-            .frame(width: 130, alignment: .trailing)
+            .frame(width: 96, alignment: .trailing)
 
             // A dash rather than a guess: nothing on disk records the size of
             // something that is not installed.
             Text(row.sizeBytes.map { Self.size.string(fromByteCount: $0) } ?? "—")
                 .font(.caption).foregroundStyle(.secondary)
-                .frame(width: 90, alignment: .trailing)
+                .frame(width: 84, alignment: .trailing)
 
-            Text(row.lastPlayed.map { Self.played.string(from: $0) } ?? "—")
+            // Hours and when, together: either alone leaves the obvious next
+            // question unanswered.
+            Text(playedSummary(row))
                 .font(.caption).foregroundStyle(.secondary)
-                .frame(width: 130, alignment: .trailing)
+                .frame(width: 150, alignment: .trailing)
 
             HStack(spacing: 10) {
                 Button { action(row) } label: {

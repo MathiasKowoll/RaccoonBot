@@ -127,15 +127,13 @@ struct GamesList: View {
                 }
             }
         }
-        // Per-title options, reachable without opening the detail page first.
-        .sheet(item: $optionsGame) { game in
-            Modal("Options for \(game.name)", showModal: Binding(
-                get: { optionsGame != nil },
-                set: { if !$0 { optionsGame = nil } })) {
-                GameOptionsView(game: Binding(
-                    get: { optionsGame },
-                    set: { optionsGame = $0 }))
-            }
+        // Per-title options, reachable without opening the detail page first,
+        // and through the same sheet the detail page uses.
+        .sheet(isPresented: Binding(get: { optionsGame != nil },
+                                    set: { if !$0 { optionsGame = nil } })) {
+            GameOptionsSheet(game: $optionsGame,
+                             isPresented: Binding(get: { optionsGame != nil },
+                                                  set: { if !$0 { optionsGame = nil } }))
         }
         .alert("This title needs its video fix", isPresented: $warnAboutFix) {
             Button("Open options") {

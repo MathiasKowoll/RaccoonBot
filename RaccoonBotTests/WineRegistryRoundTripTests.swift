@@ -318,6 +318,34 @@ struct WineRegistryFidelityTests {
         #expect(throws: WineRegistryError.self) { try registry.save() }
     }
 
+    /// Faithful is not enough: save() has to actually go through. A guard that
+    /// refuses a file it could have written correctly is a feature that stops
+    /// working -- the controller settings would silently never be applied.
+    @Test func everyRealBottleRegistryCanActuallyBeSaved() throws {
+        let f = FileManager.default
+        let roots = [
+            f.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/RaccoonBot/CXPBottles"),
+            f.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/CrossOver/Bottles"),
+        ]
+        for root in roots {
+            for name in (try? f.contentsOfDirectory(atPath: root.path(percentEncoded: false))) ?? [] {
+                let reg = root.appendingPathComponent(name).appendingPathComponent("system.reg")
+                guard f.fileExists(atPath: reg.path(percentEncoded: false)) else { continue }
+                let copy = f.temporaryDirectory.appendingPathComponent("s-\(UUID().uuidString).reg")
+                try Data(contentsOf: reg).write(to: copy)
+                defer {
+                    try? f.removeItem(at: copy)
+                    try? f.removeItem(at: copy.appendingPathExtension("bak"))
+                }
+                let original = try String(contentsOf: copy, encoding: .utf8)
+                let registry = WineRegistryFile(fileURL: copy)
+                try registry.load()
+                #expect(throws: Never.self, "\(name) was refused") { try registry.save() }
+                #expect(try String(contentsOf: copy, encoding: .utf8) == original, "\(name) changed")
+            }
+        }
+    }
+
     /// The real thing: a bottle registry must be declared faithful, or the
     /// launcher will refuse to apply controller settings on this machine.
     @Test func realBottleRegistriesAreWritable() throws {
@@ -341,5 +369,71 @@ struct WineRegistryFidelityTests {
             }
         }
         if checked > 0 { #expect(checked > 0) }
+    }
+}
+
+/// Key names that contain the character the parser used to split on.
+///
+/// Wine's MSI writes SxS assembly identities as registry key names, and they
+/// carry an unescaped "=" inside the quoted name. There are 120 of them across
+/// the bottles on this machine. Split at the first "=", the amd64 and x86 rows
+/// of the same assembly become the same name.
+struct WineRegistryKeyNameTests {
+
+    private func loaded(_ contents: String) throws -> (WineRegistryFile, URL) {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("key-\(UUID().uuidString).reg")
+        try contents.write(to: url, atomically: true, encoding: .utf8)
+        let r = WineRegistryFile(fileURL: url)
+        try r.load()
+        return (r, url)
+    }
+
+    private static let sxs = """
+    WINE REGISTRY Version 2
+
+    [Software\\\\Classes\\\\Installer\\\\Win32Assemblies\\\\Global] 1787620920
+    #time=1dd343020bd782a
+    "Microsoft.VC90.ATL,version=\\"9.0.30729.6161\\",processorArchitecture=\\"amd64\\",type=\\"win32\\""=str(7):"a\\0"
+    "Microsoft.VC90.ATL,version=\\"9.0.30729.6161\\",processorArchitecture=\\"x86\\",type=\\"win32\\""=str(7):"b\\0"
+
+    """
+
+    @Test func twoAssembliesAreTwoKeysNotOne() throws {
+        let (registry, url) = try loaded(Self.sxs)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let section = registry.sections.first { $0.header.contains("Win32Assemblies") }
+        #expect(section?.values.count == 2)
+        let names = Set(section?.values.map(\.key) ?? [])
+        #expect(names.count == 2, "amd64 and x86 collapsed onto one name")
+        #expect(names.contains { $0.contains("amd64") })
+        #expect(names.contains { $0.contains("x86") })
+    }
+
+    /// The consequence that mattered: the guard read a loss that had not
+    /// happened and refused to write the file at all.
+    @Test func suchAFileCanStillBeSaved() throws {
+        let (registry, url) = try loaded(Self.sxs)
+        defer {
+            try? FileManager.default.removeItem(at: url)
+            try? FileManager.default.removeItem(at: url.appendingPathExtension("bak"))
+        }
+        #expect(registry.isFaithful)
+        #expect(throws: Never.self) { try registry.save() }
+        #expect(try String(contentsOf: url, encoding: .utf8) == Self.sxs)
+    }
+
+    @Test func anOrdinaryNameStillReads() throws {
+        let (registry, url) = try loaded("""
+        WINE REGISTRY Version 2
+
+        [Software\\\\Test] 1
+        "plain"="x"
+        "with spaces"="y"
+
+        """)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let keys = registry.sections.first?.values.map(\.key) ?? []
+        #expect(keys == ["plain", "with spaces"])
     }
 }

@@ -286,12 +286,30 @@ class WineRegistryFile {
         }
 
         // "Key"=value
+        //
+        // Split at the quote that closes the name, not at the first "=".
+        // A name can contain both: wine writes SxS assembly identities like
+        // "Microsoft.VC90.ATL,version=\"9.0.30729.6161\",...,type=\"win32\"",
+        // and cutting at the first "=" gave two different assemblies the same
+        // truncated name.
         guard line.hasPrefix("\"") else { return nil }
-        let parts = line.split(separator: "=", maxSplits: 1)
-        guard parts.count == 2 else { return nil }
+        var index = line.index(after: line.startIndex)
+        var escaped = false
+        var closing: String.Index? = nil
+        while index < line.endIndex {
+            let c = line[index]
+            if escaped { escaped = false }
+            else if c == "\\" { escaped = true }
+            else if c == "\"" { closing = index; break }
+            index = line.index(after: index)
+        }
+        guard let closing,
+              line.index(after: closing) < line.endIndex,
+              line[line.index(after: closing)] == "=" else { return nil }
 
-        let key = unquote(String(parts[0]))
-        let rawValue = String(parts[1]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let key = String(line[line.index(after: line.startIndex)..<closing])
+        let rawValue = String(line[line.index(closing, offsetBy: 2)...])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
 
         if rawValue.hasPrefix("dword:") {
             let hexStr = String(rawValue.dropFirst(6))
@@ -388,17 +406,28 @@ class WineRegistryFile {
         console.log("Registry file saved to \(fileURL.lastPathComponent)")
     }
 
-    /// The first value the other model has that this one does not, or has
-    /// differently. Nil when nothing was lost.
+    /// The first value the other model has that this one does not, in order.
+    /// Nil when nothing was lost.
+    ///
+    /// Compared position by position rather than through a dictionary keyed on
+    /// the parsed key name. Keying on the name assumed the name was read
+    /// correctly, and this file has 120 keys where it is not: wine's SxS
+    /// assembly identities carry an unescaped "=" inside the quoted name --
+    /// `"Microsoft.VC90.ATL,version=\"9.0.30729.6161\",...,type=\"win32\""` --
+    /// so the amd64 and x86 rows collapsed onto one entry and the check
+    /// reported a loss that had not happened. A guard that refuses a file it
+    /// could have written correctly is a feature that quietly stops working.
     fileprivate func firstValueMissing(comparedTo other: WineRegistryFile) -> String? {
-        var mine: [String: String] = [:]
-        for s in sections {
-            for e in s.values { mine["\(s.header)|\(e.key)"] = e.value.rawLine }
+        if sections.count != other.sections.count {
+            return "\(other.sections.count) sections read, \(sections.count) written"
         }
-        for s in other.sections {
-            for e in s.values {
-                let id = "\(s.header)|\(e.key)"
-                if mine[id] != e.value.rawLine { return "\(e.key) in \(s.path)" }
+        for (mine, theirs) in zip(sections, other.sections) {
+            if mine.header != theirs.header { return "section \(theirs.header)" }
+            if mine.values.count != theirs.values.count {
+                return "\(theirs.values.count) values in \(theirs.path), \(mine.values.count) written"
+            }
+            for (a, b) in zip(mine.values, theirs.values) where a.value.rawLine != b.value.rawLine {
+                return "\(b.key) in \(theirs.path)"
             }
         }
         return nil

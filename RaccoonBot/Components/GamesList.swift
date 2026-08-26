@@ -277,10 +277,12 @@ struct GamesList: View {
                         .textFieldStyle(.plain)
                         .disableAutocorrection(true)
                         .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        // The same track the switchers use, so the two capsules
-                        // are built from one palette rather than two.
-                        .background(.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 7))
+                        .frame(height: toolbarCapsuleHeight - switcherInset * 2)
+                        // The same track, inset and radius the switchers use, so
+                        // the toolbar is built from one set of numbers rather
+                        // than several that nearly agree.
+                        .background(.black.opacity(0.18),
+                                    in: RoundedRectangle(cornerRadius: switcherSelectionRadius))
                         .frame(maxWidth: .infinity)
 
                     // Answers the same question the field asks, and stays

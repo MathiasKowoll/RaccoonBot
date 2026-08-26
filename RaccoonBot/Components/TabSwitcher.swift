@@ -14,6 +14,16 @@
 
 import SwiftUI
 
+/// The inset between the track and the thing selected inside it.
+///
+/// The selected rectangle's radius is derived from the track's minus this, so
+/// the two curves stay concentric. Left as independent numbers they drift: at
+/// one point the selection was a 5pt corner inside a 10pt capsule with almost
+/// no margin, which reads as a square trying to escape a round hole.
+let switcherInset: CGFloat = 4
+let switcherTrackRadius: CGFloat = 10
+var switcherSelectionRadius: CGFloat { switcherTrackRadius - switcherInset }
+
 struct TabSwitcher: View {
     @Binding var selection: LibraryTab
 
@@ -23,10 +33,10 @@ struct TabSwitcher: View {
                 Text(tab.label)
                     .font(.system(size: 11, weight: selection == tab ? .semibold : .regular))
                     .padding(.horizontal, 14)
-                    .padding(.vertical, 5)
+                    .frame(height: toolbarCapsuleHeight - switcherInset * 2)
                     .background {
                         if selection == tab {
-                            RoundedRectangle(cornerRadius: 5)
+                            RoundedRectangle(cornerRadius: switcherSelectionRadius)
                                 .fill(.white.opacity(0.20))
                         }
                     }
@@ -38,9 +48,9 @@ struct TabSwitcher: View {
         // Four points of track around the selection rather than two: at two,
         // the selected rectangle sat close enough to the capsule's edge to look
         // like it was escaping it.
-        .padding(.horizontal, 4)
+        .padding(.horizontal, switcherInset)
         .frame(height: toolbarCapsuleHeight)
-        .background(.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 10))
+        .background(.black.opacity(0.18), in: RoundedRectangle(cornerRadius: switcherTrackRadius))
         .fixedSize()
     }
 }
@@ -61,10 +71,10 @@ struct IconSwitcher<Value: Hashable & Identifiable>: View {
             ForEach(options) { option in
                 Image(systemName: symbol(option))
                     .font(.system(size: 11))
-                    .frame(width: 22, height: 18)
+                    .frame(width: 24, height: toolbarCapsuleHeight - switcherInset * 2)
                     .background {
                         if selection == option {
-                            RoundedRectangle(cornerRadius: 5)
+                            RoundedRectangle(cornerRadius: switcherSelectionRadius)
                                 .fill(.white.opacity(0.20))
                         }
                     }
@@ -74,8 +84,9 @@ struct IconSwitcher<Value: Hashable & Identifiable>: View {
                     .accessibilityAddTraits(selection == option ? [.isSelected, .isButton] : .isButton)
             }
         }
-        .padding(2)
-        .background(.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 7))
+        .padding(.horizontal, switcherInset)
+        .frame(height: toolbarCapsuleHeight)
+        .background(.black.opacity(0.18), in: RoundedRectangle(cornerRadius: switcherTrackRadius))
         .fixedSize()
     }
 }

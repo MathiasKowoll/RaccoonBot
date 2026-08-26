@@ -38,7 +38,11 @@ func getMeta(_ gameMetaArray: [GamesMeta], byID: String) -> GamesMeta? {
 
 func mapDictToGamesMeta(from: [String:Any]) -> GamesMeta {
     /**
-     Incomplete it only maps appid and installdir
+     Maps the fields the application actually uses. `name` was in this
+     dictionary all along and was being dropped -- which is why naming an
+     installed game used to require a network call.
      */
-    return GamesMeta(appid: from["appid"] as? String ?? "unknown", installdir: from["installdir"] as? String ?? "unknown", bytesDownloaded: from["BytesDownloaded"] as? String ?? "0", BytesTodownload: from["BytesToDownload"] as? String ?? "0")
+    let meta = GamesMeta(appid: from["appid"] as? String ?? "unknown", installdir: from["installdir"] as? String ?? "unknown", bytesDownloaded: from["BytesDownloaded"] as? String ?? "0", BytesTodownload: from["BytesToDownload"] as? String ?? "0")
+    meta.name = from["name"] as? String
+    return meta
 }

@@ -187,12 +187,28 @@ struct LibraryPage: View {
             console.error("fetchOwnedGamesIDs \(String(reflecting: error))")
         }
         
+        // The disk first. Every installed title has a name in its .acf and most
+        // have a cover in Steam's own art cache, so the library is complete
+        // enough to use before a single request goes out -- and stays that way
+        // if every one of them fails. It used to come up empty and silent.
+        libraryPageGlobals.games = libraryPageGlobals.gamesMeta.map { Game(local: $0) }
+        progress = 100
+
+        // Then the store, if there is one, to fill in what the disk does not
+        // have. Merged rather than assigned: a remote answer for forty titles
+        // must not delete the seventeen the disk knew about.
         do {
-            libraryPageGlobals.games = try await api.fetchGamesInfo(meta: libraryPageGlobals.gamesMeta, setProgress: { self.progress = $0 })
+            let enriched = try await api.fetchGamesInfo(meta: libraryPageGlobals.gamesMeta, setProgress: { self.progress = $0 })
+            if !enriched.isEmpty {
+                var byID = Dictionary(uniqueKeysWithValues: libraryPageGlobals.games.map { ($0.id, $0) })
+                for game in enriched { byID[game.id] = game }
+                libraryPageGlobals.games = Array(byID.values)
+            }
             progress = 100
         } catch {
             console.error("fetchGamesInfo \(String(reflecting: error))")
         }
+
     }
 }
 

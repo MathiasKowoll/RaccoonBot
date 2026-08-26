@@ -15,8 +15,8 @@
 
 import Foundation
 
-struct GStreamerStatus {
-    enum Framework: Equatable {
+struct GStreamerStatus: Sendable {
+    enum Framework: Equatable, Sendable {
         case missing
         case present(version: String)
     }

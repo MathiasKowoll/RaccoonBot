@@ -15,6 +15,21 @@ let path = Bundle.main.object(forInfoDictionaryKey: "API_PATH") as? String ?? ""
 let pathm = Bundle.main.object(forInfoDictionaryKey: "API_PATH_M") as? String ?? ""
 let pathCustom = Bundle.main.object(forInfoDictionaryKey: "API_PATH_CUSTOM") as? String ?? ""
 
+/// Hosts this fork must never contact.
+///
+/// The upstream application ships `prapi-chi.vercel.app` in its Info.plist and
+/// its proxy does not check the api key, so any build carrying that host would
+/// spend another person's Vercel quota on users who are not his. Leaving our
+/// API_HOST blank already achieves that, but blankness is a configuration
+/// accident and this is a decision: if the host is ever filled in with theirs,
+/// by a merge or by a copied xcconfig, the request does not go out.
+let FORBIDDEN_API_HOSTS = ["prapi-chi.vercel.app"]
+
+var apiHostIsForbidden: Bool { FORBIDDEN_API_HOSTS.contains(host.lowercased()) }
+
+/// True when there is somewhere to send a request at all.
+var apiIsConfigured: Bool { !host.isEmpty && !apiHostIsForbidden }
+
 let baseAPIURL = "\(pr)://\(host)\(path)"
 let baseAPIMURL = "\(pr)://\(host)\(pathm)"
 
@@ -35,6 +50,9 @@ struct SteamGameResponseArray: Codable, Sendable {
 }
 
 enum APIError: Error {
+    /// No host, or a host this fork refuses to contact. Distinct from badURL so
+    /// "we chose not to ask" is never read as "the request failed".
+    case notConfigured
     case badURL
     case invalidResponse
 }
@@ -204,6 +222,27 @@ final class SteamAPI {
             console.cache(appID, key: "gameCache")
             return self.cache[appID]
         }
+        if !apiIsConfigured {
+            // No proxy -- by configuration, or because the host is one this
+            // fork refuses. Go to Steam itself, through the adapter that turns
+            // its answer into the shape these types expect.
+            console.log("fetching \(appID) from the steam store")
+            guard let game = try await SteamStore.shared.fetch(appID: appID) else {
+                // A store record that says success:false is an answer, not a
+                // failure: delisted, unreleased, or not a store item. Same
+                // treatment the proxy's empty array got.
+                console.warn("Game with id: \(appID) has no store record, blacklisting")
+                self.cacheBlacklist.append(appID)
+                return nil
+            }
+            cache[appID] = game
+            saveGameCache()
+            // Paced at roughly one a second. Fifty-seven titles is under a
+            // minute once, and the endpoint publishes no limit to aim at, so
+            // the pace is set by what is polite rather than by what is fast.
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            return game
+        }
         console.log("fetching \(appID) from the api")
         let urlString = "\(baseAPIURL)?appid=\(appID)"
         let headers: HTTPHeaders = ["x-api-key": apiKey]
@@ -239,6 +278,12 @@ final class SteamAPI {
                 if let gameInfo = try await self.fetchGameInfo(appID: meta.appid) {
                     items.append(Game(from: gameInfo, id: meta.id, isNative: meta.isNative, downloadProgress: Double(downloadProgress), isInstalled: meta.installdir.isEmpty == false, appNames: []))
                 }
+            } catch SteamStoreError.rateLimited {
+                // Stop, do not carry on through the remaining titles. Whatever
+                // arrived is already saved, so the next launch picks up where
+                // this one left off instead of starting over.
+                console.warn("Steam is rate limiting; stopping after \(items.count) of \(total)")
+                break
             } catch {
                 console.warn("Game with id: \(meta.appid) failed gracefully")
                 console.error(String(reflecting: error))

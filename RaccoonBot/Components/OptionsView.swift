@@ -73,6 +73,11 @@ struct OptionsView: View {
     @MainActor var load: @Sendable () async -> Void
     @State var createBtlPrc: Process?
     @State var cleard3dmCacheStatus: DeleteStatus = DeleteStatus.idle
+    /// Read once, off the main thread, and remembered. NEVER computed in the
+    /// body: reading it runs otool and blocks on waitUntilExit(), and SwiftUI
+    /// evaluates a body repeatedly and re-entrantly. Doing that inside the
+    /// body getter segfaulted the application on opening this screen.
+    @State private var gstStatus: GStreamerStatus?
     
     var body: some View {
         Modal(
@@ -174,23 +179,35 @@ struct OptionsView: View {
                     // whether the framework is missing, the staging was never
                     // built, or it was built against a CrossOver that has since
                     // been updated.
-                    let gst = GStreamerStatus.read(engineAppPath: appGlobals.cxAppPath)
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(alignment: .top, spacing: 6) {
-                            Image(systemName: gst.isOK ? "checkmark.circle" : "exclamationmark.triangle")
-                                .foregroundStyle(gst.isOK ? .green : .orange)
-                            Text(gst.summary).font(.footnote)
-                                .foregroundStyle(gst.isOK ? .secondary : .primary)
-                            Spacer()
-                            if case .missing = gst.framework {
-                                Button(gstBusy ? "Downloading…" : "Install GStreamer…") {
-                                    Task { await installGStreamer() }
-                                }.disabled(gstBusy)
+                    Group {
+                        if let gst = gstStatus {
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(alignment: .top, spacing: 6) {
+                                    Image(systemName: gst.isOK ? "checkmark.circle" : "exclamationmark.triangle")
+                                        .foregroundStyle(gst.isOK ? .green : .orange)
+                                    Text(gst.summary).font(.footnote)
+                                        .foregroundStyle(gst.isOK ? .secondary : .primary)
+                                    Spacer()
+                                    if case .missing = gst.framework {
+                                        Button(gstBusy ? "Downloading…" : "Install GStreamer…") {
+                                            Task { await installGStreamer() }
+                                        }.disabled(gstBusy)
+                                    }
+                                }
+                                if let gstMessage {
+                                    Text(gstMessage).font(.footnote).foregroundStyle(.secondary)
+                                }
+                            }
+                        } else {
+                            HStack(spacing: 6) {
+                                ProgressView().controlSize(.small)
+                                Text("Checking GStreamer…").font(.footnote).foregroundStyle(.secondary)
                             }
                         }
-                        if let gstMessage {
-                            Text(gstMessage).font(.footnote).foregroundStyle(.secondary)
-                        }
+                    }
+                    .task(id: appGlobals.cxAppPath ?? "") {
+                        let path = appGlobals.cxAppPath
+                        gstStatus = await Task.detached { GStreamerStatus.read(engineAppPath: path) }.value
                     }
                 } else if(bottles.isEmpty) {
                     if appGlobals.cxAppPath != nil {

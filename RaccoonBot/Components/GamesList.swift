@@ -100,6 +100,12 @@ struct GamesList: View {
             // search, account -- each with its own background, which is four
             // shapes for one bar. The tabs stay centred on their own because
             // they are navigation, not a control; the rest live here.
+            // Centred and on their own: navigation, not a control. The
+            // capsule beside them holds things you do TO the library; these
+            // choose which library you are looking at.
+            ToolbarItem(placement: .principal) {
+                TabSwitcher(selection: $libraryPageGlobals.tab)
+            }
             ToolbarItemGroup(placement: .automatic) {
                 HStack(spacing: 8) {
                     Button {

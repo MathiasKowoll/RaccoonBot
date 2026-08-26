@@ -171,6 +171,15 @@ nonisolated enum CodecPointing: Equatable, Sendable {
     /// Nothing is staged for that architecture, so nothing was written. The
     /// bottle looks exactly like a working one and its cutscenes are silent.
     case nothingStaged(arch: String)
+    /// Pointed, but this bottle was last updated by a different engine than
+    /// the one the staging was built against.
+    ///
+    /// The staging symlinks its GStreamer core into the engine it was built
+    /// for. A bottle carried to an older engine then loads that core beside
+    /// the engine's own -- two cores in one process, which is the crash this
+    /// whole arrangement exists to avoid. Seen on this machine: a 26.3 bottle
+    /// pointing at a staging built for 27.
+    case pointedAtAnotherEngine(arch: String, bottle: String, engine: String)
     case unreadableBottle
     case noEngine
 }
@@ -191,6 +200,16 @@ func applyStagedCodecs(to bottleURL: URL, cxAppPath: String?) -> CodecPointing {
     // overwritten by the next engine to run.
     setBottleEnv(bottleURL, key: "GST_REGISTRY",
                  value: CodecStaging.registryPath(engineAppPath: cxAppPath, arch: arch))
+
+    // Written for the engine that is selected, which is the engine we will
+    // launch with -- so this is right whenever we do the launching. It stops
+    // being right when something else opens the bottle, and the bottle says
+    // so: its Version is whichever engine last updated it.
+    let engineVersion = (NSDictionary(contentsOfFile: cxAppPath + "/Contents/Info.plist")?["CFBundleVersion"] as? String)
+    if let engineVersion, !info.version.isEmpty, info.version != engineVersion {
+        console.warn("\(info.name) was last updated by \(info.version) but now points at a staging built for \(engineVersion)")
+        return .pointedAtAnotherEngine(arch: arch, bottle: info.version, engine: engineVersion)
+    }
     return .pointed(arch: arch)
 }
 

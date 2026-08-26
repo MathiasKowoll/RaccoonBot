@@ -113,8 +113,23 @@ struct OptionsView: View {
             if case .nothingStaged(let arch) = r.result { return "\(r.bottle) (\(arch))" }
             return nil
         }
-        guard !unpointed.isEmpty else { return }
-        stagingMessage = "Nothing staged for \(unpointed.joined(separator: ", ")) — its videos will be silent until you stage the codecs."
+        // Said louder than the others: this one ends in a crash rather than a
+        // silent video.
+        let mismatched = results.compactMap { r -> String? in
+            if case .pointedAtAnotherEngine(_, let bottle, let engine) = r.result {
+                return "\(r.bottle) was made by CrossOver \(bottle) and this is \(engine)"
+            }
+            return nil
+        }
+        var lines: [String] = []
+        if !unpointed.isEmpty {
+            lines.append("Nothing staged for \(unpointed.joined(separator: ", ")) — its videos will be silent until you stage the codecs.")
+        }
+        if !mismatched.isEmpty {
+            lines.append("\(mismatched.joined(separator: "; ")). Let CrossOver update the bottle before playing.")
+        }
+        guard !lines.isEmpty else { return }
+        stagingMessage = lines.joined(separator: "\n")
     }
 
     /// The GStreamer series each installed CrossOver runs, read from its own

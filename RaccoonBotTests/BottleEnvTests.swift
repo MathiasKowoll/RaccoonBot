@@ -215,3 +215,73 @@ struct ApplyStagedCodecsTests {
         #expect(conf.contains("\"WINEMSYNC\" = \"1\""))
     }
 }
+
+/// A bottle carried between engines.
+///
+/// The staging symlinks its GStreamer core into the engine it was built for.
+/// Point a bottle at it and then open that bottle with an older engine, and
+/// two cores load in one process -- which is the crash the whole staging
+/// arrangement exists to avoid. On this machine a 26.3 bottle points at a
+/// staging built for 27, and nothing said so.
+struct EngineMismatchTests {
+
+    private func bottle(arch: String, version: String) throws -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("m-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try """
+        [Bottle]
+        "WineArch" = "\(arch)"
+        "Version" = "\(version)"
+
+        [EnvironmentVariables]
+        "WINEMSYNC" = "1"
+
+        """.write(to: dir.appendingPathComponent("cxbottle.conf"), atomically: true, encoding: .utf8)
+        return dir
+    }
+
+    /// Only meaningful where this machine has a staging to point at.
+    private func engineWithStaging() -> (path: String, version: String, arch: String)? {
+        let f = FileManager.default
+        for name in ["Crossover_patched.app", "CrossOver.app"] {
+            for root in [f.homeDirectoryForCurrentUser.appendingPathComponent("Applications").path(percentEncoded: false),
+                         "/Applications"] {
+                let app = root + "/" + name
+                guard f.fileExists(atPath: app),
+                      let version = NSDictionary(contentsOfFile: app + "/Contents/Info.plist")?["CFBundleVersion"] as? String
+                else { continue }
+                for arch in CodecStaging.architectures(ofEngineAt: app) where stagedCodecPath(cxAppPath: app, arch: arch) != nil {
+                    return (app, version, arch)
+                }
+            }
+        }
+        return nil
+    }
+
+    @Test func aBottleFromTheSameEngineIsJustPointed() throws {
+        guard let e = engineWithStaging() else { return }
+        let b = try bottle(arch: e.arch == "aarch64" ? "arm64" : "win64", version: e.version)
+        #expect(applyStagedCodecs(to: b, cxAppPath: e.path) == .pointed(arch: e.arch))
+    }
+
+    @Test func aBottleFromAnotherEngineIsPointedAndSaidSo() throws {
+        guard let e = engineWithStaging() else { return }
+        let b = try bottle(arch: e.arch == "aarch64" ? "arm64" : "win64", version: "1.2.3.4")
+        let result = applyStagedCodecs(to: b, cxAppPath: e.path)
+        #expect(result == .pointedAtAnotherEngine(arch: e.arch, bottle: "1.2.3.4", engine: e.version))
+        // Pointed all the same: it is right for the engine we launch with,
+        // and refusing would leave whatever stale value was there before.
+        let conf = try String(contentsOf: b.appendingPathComponent("cxbottle.conf"), encoding: .utf8)
+        #expect(conf.contains("\"GST_PLUGIN_PATH\""))
+        #expect(conf.contains("\"GST_REGISTRY\""))
+    }
+
+    /// A bottle that has never been through an engine has no version to
+    /// compare, and a guess is not an answer.
+    @Test func aBottleWithNoVersionIsNotAccused() throws {
+        guard let e = engineWithStaging() else { return }
+        let b = try bottle(arch: e.arch == "aarch64" ? "arm64" : "win64", version: "")
+        #expect(applyStagedCodecs(to: b, cxAppPath: e.path) == .pointed(arch: e.arch))
+    }
+}

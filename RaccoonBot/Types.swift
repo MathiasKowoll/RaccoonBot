@@ -614,6 +614,26 @@ class LibraryPageGlobals: ObservableObject {
     /// somebody who never looks at it.
     @Published var ownedGames: [OwnedGame] = []
     @Published var ownedLoaded: Bool = false
+    /// Titles hidden from the not-installed tab, remembered across launches.
+    ///
+    /// localconfig.vdf lists what this Steam has heard of, not what the account
+    /// owns -- free weekends, trials and family-shared titles are all in it, and
+    /// installing one answers "No licenses". Steam encrypts licensecache, so
+    /// there is no way to tell from disk which is which. The user can, once, by
+    /// trying; this remembers the answer so nobody has to try twice.
+    @Published var hiddenAppIDs: Set<String> = Set(
+        UserDefaults.standard.stringArray(forKey: "raccoonbot.hiddenAppIDs") ?? []
+    )
+
+    func hide(appID: String) {
+        hiddenAppIDs.insert(appID)
+        UserDefaults.standard.set(Array(hiddenAppIDs), forKey: "raccoonbot.hiddenAppIDs")
+    }
+
+    func unhideAll() {
+        hiddenAppIDs.removeAll()
+        UserDefaults.standard.removeObject(forKey: "raccoonbot.hiddenAppIDs")
+    }
     @Published var gamesMeta: [GamesMeta] = []
     @Published var folders: [String] = []
     @Published var showOptions: Bool = false
@@ -725,7 +745,7 @@ class LibraryPageGlobals: ObservableObject {
     }
 
     private var ownedRows: [LibraryRow] {
-        ownedGames.map {
+        ownedGames.filter { !hiddenAppIDs.contains($0.appID) }.map {
             LibraryRow(id: $0.appID, appID: $0.appID, name: $0.displayName,
                        platforms: $0.platforms, sizeBytes: nil, lastPlayed: $0.lastPlayed,
                        coverURL: $0.coverURL, isInstalled: false)
@@ -733,7 +753,7 @@ class LibraryPageGlobals: ObservableObject {
     }
 
     var filteredOwnedGames: [OwnedGame] {
-        var owned = self.ownedGames
+        var owned = self.ownedGames.filter { !hiddenAppIDs.contains($0.appID) }
         if self.filter.count >= 3 {
             let needle = self.filter.lowercased()
             owned = owned.filter {

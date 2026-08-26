@@ -55,7 +55,9 @@ struct OwnedGamesList: View {
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 10) {
                         ForEach(libraryPageGlobals.filteredOwnedGames) { game in
-                            OwnedGameCard(game: game) { install(game) }
+                            OwnedGameCard(game: game,
+                                          install: { install(game) },
+                                          hide: { libraryPageGlobals.hide(appID: game.appID) })
                         }
                     }
                     .padding(.horizontal)
@@ -108,6 +110,23 @@ struct OwnedGamesList: View {
 struct OwnedGameCard: View {
     let game: OwnedGame
     let install: () -> Void
+    let hide: () -> Void
+
+    private static let played: DateFormatter = {
+        let f = DateFormatter(); f.dateStyle = .medium; f.timeStyle = .none; return f
+    }()
+
+    private var subtitle: String {
+        var parts: [String] = []
+        if let minutes = game.playtimeMinutes, minutes > 0 {
+            parts.append(minutes >= 60 ? "\(minutes / 60) h played" : "\(minutes) min played")
+        }
+        if let date = game.lastPlayed {
+            parts.append("last \(Self.played.string(from: date))")
+        }
+        if parts.isEmpty { parts.append("Never played") }
+        return parts.joined(separator: " · ")
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -123,6 +142,12 @@ struct OwnedGameCard: View {
 
             Text(game.displayName).font(.headline).lineLimit(2)
 
+            // What the disk actually knows about a title that is not installed.
+            // There is no description or genre here because those come from the
+            // store, and asking for 373 of them would be 373 requests for
+            // titles nobody has asked to look at yet.
+            Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+
             HStack(spacing: 6) {
                 ForEach(game.platforms.sorted(), id: \.self) { platform in
                     Text(platform == "macos" ? "Mac" : platform.capitalized)
@@ -131,6 +156,12 @@ struct OwnedGameCard: View {
                         .background(.quaternary, in: Capsule())
                 }
                 Spacer()
+                Button(action: hide) {
+                    Image(systemName: "eye.slash")
+                }
+                .controlSize(.small)
+                .buttonStyle(.plain)
+                .help("Hide this title. Steam lists titles the account has no licence for -- free weekends and trials -- and there is no way to tell from disk.")
                 Button(action: install) {
                     Label("Install", systemImage: "square.and.arrow.down")
                 }

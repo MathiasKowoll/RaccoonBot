@@ -107,7 +107,10 @@ struct GamesList: View {
                     }
                 }
             }
-            ToolbarItem(placement: .secondaryAction) {
+            // One capsule, not three. macOS gives each ToolbarItem its own
+            // group, so refresh, stop and the view switch were rendering as
+            // separate floating pills for controls that belong together.
+            ToolbarItemGroup(placement: .secondaryAction) {
                 Button {
                     api.deleteOwnedGamesIDsCache()
                     libraryPageGlobals.gamesMeta.removeAll()
@@ -115,8 +118,8 @@ struct GamesList: View {
                 } label: {
                     Image(systemName: "arrow.clockwise")
                 }
-            }
-            ToolbarItem(placement: .secondaryAction) {
+                .help("Rescan the library")
+
                 Button {
                     Task {
                         try! await closeWineActivities()
@@ -125,20 +128,12 @@ struct GamesList: View {
                 } label: {
                     Image(systemName: "exclamationmark.octagon")
                 }
-            }
-            // Grid or list sits with the other view controls on the left rather
-            // than out among the filters: it changes how the library is drawn,
-            // not which titles are in it.
-            ToolbarItem(placement: .secondaryAction) {
-                Picker("", selection: $libraryPageGlobals.viewMode) {
-                    ForEach(LibraryViewMode.allCases) { mode in
-                        Image(systemName: mode.symbol).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .controlSize(.small)
-                .fixedSize()
-                .help("Grid or list")
+                .help("Stop everything running under Wine")
+
+                IconSwitcher(selection: $libraryPageGlobals.viewMode,
+                             options: LibraryViewMode.allCases,
+                             symbol: { $0.symbol },
+                             help: { $0 == .grid ? "Grid" : "List" })
             }
             // The tabs alone in the centre. Everything else was in here with
             // them and the search field ended up squeezed to nothing -- typing

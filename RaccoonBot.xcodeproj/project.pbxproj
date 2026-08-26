@@ -498,7 +498,7 @@
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RaccoonBot/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = RaccoonBot;
+				INFOPLIST_KEY_CFBundleDisplayName = "RaccoonBot Dev";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Events are used to dynamically update your game library as soon as drive is disconnected or become available";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -512,8 +512,14 @@
 					"$(PROJECT_DIR)/Procyon/Libs/d3dMetal3/external",
 				);
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = io.github.mathiaskowoll.raccoonbot;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.mathiaskowoll.raccoonbot.dev;
+				/* The artifact on disk is RaccoonBot-Dev.app so it cannot be
+				   confused with the stable build -- different name, different
+				   bundle id, so LaunchServices cannot open one thinking it is the
+				   other. The MODULE keeps its name: that is code identity, and
+				   @testable import follows it. */
+				PRODUCT_MODULE_NAME = RaccoonBot;
+				PRODUCT_NAME = "RaccoonBot-Dev";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
@@ -614,7 +620,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RaccoonBot.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/RaccoonBot";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RaccoonBot-Dev.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/RaccoonBot-Dev";
 			};
 			name = Debug;
 		};

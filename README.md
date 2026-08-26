@@ -310,6 +310,11 @@ cd RaccoonBot
 The application lands in `build/`. Signing is ad-hoc, so no Apple developer
 account is needed to build or run your own copy.
 
+A Debug build produces **RaccoonBot-Dev.app** with its own bundle identifier, so
+it sits beside a stable copy rather than replacing it — and macOS cannot open
+one thinking it is the other. The two share your bottles and your per-game
+options; the view you were on and which titles you hid are per build.
+
 Tests:
 
 ```bash

@@ -266,9 +266,6 @@ VP9/WebM video support + d3dmetal crash fix for CrossOver 26.2 (Apple Silicon)".
 The same problem RaccoonBot's video layer exists to solve, solved first and
 solved directly. Worth reading if you want the fix without a launcher around it.
 
-It declares no licence, so nothing of it is reused here; the credit is for the
-work and for showing the shape of the problem.
-
 ### Carried over from Procyon's own credits
 
 - **[@Lifeisawful](https://github.com/Lifeisawful)** — rosettax87, which is how

@@ -45,6 +45,9 @@ struct LibraryTable: View {
                         self.row(row, striped: index.isMultiple(of: 2))
                         Divider().opacity(0.15)
                     }
+                    // The dock floats over this too, and a row hidden behind it
+                    // is a row you cannot click.
+                    Color.clear.frame(height: dockClearance)
                 }
             }
         }

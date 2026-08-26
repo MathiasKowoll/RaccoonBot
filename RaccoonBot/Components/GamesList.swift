@@ -11,6 +11,13 @@ let columns = [
     GridItem(.adaptive(minimum: 250, maximum: 325), spacing: 10),
 ]
 
+/// Room kept clear at the bottom of every scrolling library view.
+///
+/// The dock floats over the content rather than sitting under it -- a 35pt
+/// capsule inside 16pt of padding, so 67 -- and without this the last row's
+/// Play button ends up behind it, reachable only by scrolling past the end.
+let dockClearance: CGFloat = 80
+
 struct GamesList: View {
     @EnvironmentObject var router: Router
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
@@ -40,7 +47,7 @@ struct GamesList: View {
                             }
                         }
                         .padding(.horizontal)
-                        .padding(.bottom)
+                        .padding(.bottom, dockClearance)
                     }
                 }
             case .notInstalled:

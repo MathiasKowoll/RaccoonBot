@@ -65,7 +65,7 @@ struct OwnedGamesList: View {
                         }
                     }
                     .padding(.horizontal)
-                    .padding(.bottom)
+                    .padding(.bottom, dockClearance)
                 }
             }
         }

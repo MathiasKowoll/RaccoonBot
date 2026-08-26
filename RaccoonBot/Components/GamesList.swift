@@ -126,6 +126,20 @@ struct GamesList: View {
                     Image(systemName: "exclamationmark.octagon")
                 }
             }
+            // Grid or list sits with the other view controls on the left rather
+            // than out among the filters: it changes how the library is drawn,
+            // not which titles are in it.
+            ToolbarItem(placement: .secondaryAction) {
+                Picker("", selection: $libraryPageGlobals.viewMode) {
+                    ForEach(LibraryViewMode.allCases) { mode in
+                        Image(systemName: mode.symbol).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .controlSize(.small)
+                .fixedSize()
+                .help("Grid or list")
+            }
             // The tabs alone in the centre. Everything else was in here with
             // them and the search field ended up squeezed to nothing -- typing
             // worked, there was simply nowhere for the text to appear.
@@ -209,16 +223,6 @@ struct GamesList: View {
                 .pickerStyle(.menu)
                 .controlSize(.small)
                 .fixedSize()
-
-                Picker("", selection: $libraryPageGlobals.viewMode) {
-                    ForEach(LibraryViewMode.allCases) { mode in
-                        Image(systemName: mode.symbol).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .controlSize(.small)
-                .fixedSize()
-                .help("Grid or list")
 
                 Text(libraryPageGlobals.tab == .installed
                      ? "\(libraryPageGlobals.filteredGames.count)/\(libraryPageGlobals.allGamesCount)"

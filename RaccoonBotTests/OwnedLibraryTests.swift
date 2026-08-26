@@ -105,10 +105,11 @@ struct OwnedGameShapeTests {
         #expect(!game([]).isCrossPlatform)
     }
 
-    @Test func showsAnAppIdRatherThanABlankRow() {
-        // 36 of 427 owned titles had no record in appinfo.vdf. Hiding them
-        // loses games the user owns; naming them by id keeps them reachable,
-        // and the cover usually carries the real title anyway.
+    @Test func stillHasAnIdBasedNameAsALastResort() {
+        // Entries appinfo cannot name are now dropped before they become an
+        // OwnedGame -- a card reading "App 1139900" tells nobody anything --
+        // but the fallback stays, because a name arriving empty from somewhere
+        // else should degrade rather than render a blank row.
         #expect(game([]).displayName == "App 1")
         #expect(OwnedGame(appID: "1", name: "Half-Life 2", platforms: [], lastPlayed: nil,
                           playtimeMinutes: nil, coverURL: nil).displayName == "Half-Life 2")

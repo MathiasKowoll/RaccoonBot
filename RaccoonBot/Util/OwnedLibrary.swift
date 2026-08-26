@@ -191,13 +191,16 @@ enum OwnedLibrary {
         let caches = LocalLibrary.artCaches(fileManager: fileManager)
         return owned.compactMap { appID, played -> OwnedGame? in
             if installed.contains(appID) { return nil }
-            let entry = info[appID]
-            // A known non-game is dropped; an UNKNOWN one is kept, because not
-            // knowing what something is differs from knowing it is a soundtrack.
-            if let entry, !entry.isGame { return nil }
+            // Only titles appinfo can actually name. A card reading "App
+            // 1139900" tells nobody anything, and there is no cheap way to
+            // learn the name: it would be one store request each, for entries
+            // that are disproportionately the odd ones -- tools, delisted
+            // things, and apps this Steam merely heard about.
+            guard let entry = info[appID], !entry.name.isEmpty else { return nil }
+            if !entry.isGame { return nil }
             return OwnedGame(appID: appID,
-                             name: entry?.name ?? "",
-                             platforms: entry?.platforms ?? [],
+                             name: entry.name,
+                             platforms: entry.platforms,
                              lastPlayed: played.lastPlayed,
                              playtimeMinutes: played.playtime,
                              coverURL: LocalLibrary.coverURL(forAppID: appID, caches: caches,

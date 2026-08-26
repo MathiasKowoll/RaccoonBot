@@ -549,14 +549,20 @@ enum SortingOptions {
 enum LibraryTab: String, CaseIterable, Identifiable {
     case installed
     case notInstalled
+    /// Both at once, for when you would rather scroll than choose.
+    case all
 
     var id: String { rawValue }
     var label: String {
         switch self {
         case .installed: return "Installed"
         case .notInstalled: return "Not installed"
+        case .all: return "All"
         }
     }
+
+    /// Whether this tab needs the owned library read off the disk.
+    var needsOwned: Bool { self != .installed }
 }
 
 enum LibraryViewMode: String, CaseIterable, Identifiable {
@@ -699,7 +705,12 @@ class LibraryPageGlobals: ObservableObject {
     
     /// The rows for whichever tab is showing, filtered and sorted.
     var rows: [LibraryRow] {
-        let rows: [LibraryRow] = tab == .installed ? installedRows : ownedRows
+        let rows: [LibraryRow]
+        switch tab {
+        case .installed:    rows = installedRows
+        case .notInstalled: rows = ownedRows
+        case .all:          rows = installedRows + ownedRows
+        }
         var shown = rows
         if !platformFilter.isEmpty {
             shown = shown.filter { !$0.platforms.isDisjoint(with: platformFilter) }

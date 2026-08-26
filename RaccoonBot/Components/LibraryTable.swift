@@ -19,6 +19,10 @@ struct LibraryTable: View {
     let actionSymbol: String
     let actionHelp: String
     let action: (LibraryRow) -> Void
+    /// Shown after the first, when there is something to play.
+    var secondarySymbol: String? = nil
+    var secondaryHelp: String = ""
+    var secondaryAction: ((LibraryRow) -> Void)? = nil
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
 
     private static let played: DateFormatter = {
@@ -80,7 +84,7 @@ struct LibraryTable: View {
                 .frame(maxWidth: width(of: column) == nil ? .infinity : width(of: column),
                        alignment: column == .name ? .leading : .trailing)
             }
-            Color.clear.frame(width: 40, height: 1)
+            Color.clear.frame(width: secondaryAction == nil ? 40 : 72, height: 1)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
@@ -131,17 +135,29 @@ struct LibraryTable: View {
                 .font(.caption).foregroundStyle(.secondary)
                 .frame(width: 130, alignment: .trailing)
 
-            Button { action(row) } label: {
-                Image(systemName: actionSymbol)
+            HStack(spacing: 10) {
+                Button { action(row) } label: {
+                    Image(systemName: actionSymbol)
+                }
+                .buttonStyle(.plain)
+                .help(actionHelp)
+
+                if let secondarySymbol, let secondaryAction {
+                    Button { secondaryAction(row) } label: {
+                        Image(systemName: secondarySymbol)
+                    }
+                    .buttonStyle(.plain)
+                    .help(secondaryHelp)
+                }
             }
-            .buttonStyle(.plain)
-            .frame(width: 40, alignment: .trailing)
-            .help(actionHelp)
+            .frame(width: secondaryAction == nil ? 40 : 72, alignment: .trailing)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 4)
         .background(striped ? Color.white.opacity(0.04) : Color.clear)
         .contentShape(Rectangle())
+        // The row opens; only the button plays. A whole row that launches a
+        // game is a row you cannot click to look at one.
         .onTapGesture { action(row) }
     }
 }

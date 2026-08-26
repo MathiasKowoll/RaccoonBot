@@ -22,8 +22,8 @@ struct TabSwitcher: View {
             ForEach(LibraryTab.allCases) { tab in
                 Text(tab.label)
                     .font(.system(size: 11, weight: selection == tab ? .semibold : .regular))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 3)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 5)
                     .background {
                         if selection == tab {
                             RoundedRectangle(cornerRadius: 5)
@@ -35,8 +35,11 @@ struct TabSwitcher: View {
                     .accessibilityAddTraits(selection == tab ? [.isSelected, .isButton] : .isButton)
             }
         }
-        .padding(2)
-        .background(.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 7))
+        // Four points of track around the selection rather than two: at two,
+        // the selected rectangle sat close enough to the capsule's edge to look
+        // like it was escaping it.
+        .padding(4)
+        .background(.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 10))
         .fixedSize()
     }
 }

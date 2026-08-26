@@ -170,66 +170,23 @@ struct GameThumbnail: View {
     
     @MainActor
     func PlayGame () {
-        libraryPageGlobals.selectedGame = updatedItem
-        libraryPageGlobals.setLoader(state: true)
-        if (isPlaying) {
-            return
-        }
-        Task {
-            do {
-                let id = item.steamAppID != 0 ? String(describing: item.steamAppID) : String(describing: item.id)
-                let gameOptKey = namespacedKey("GameOptions", id)
-                let gameOptions: GameOptions = GameOptions()
-                if let gameOptionsData: GameOptionsData = readUsrDefData(key: gameOptKey) {
-                    gameOptions.set(data: gameOptionsData)
-                    console.log("options retrieved")
-                } else {
-                    console.warn("failed to retrieve game options")
-                }
-                Task(priority: .background) {
-                    tObserver = try await getGameTracker(appNames: updatedItem.appNames, cxAppPath: appGlobals.cxAppPath!, bottleName: appGlobals.selectedBottle, onLoad: { appName in 
-                        libraryPageGlobals.playingID = item.id
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
-                            libraryPageGlobals.setLoader(state: false)
-                            Task {
-                                activateApp(appName)
-                            }
-                        }
-                    }, onTerminate: {
-                        libraryPageGlobals.setLoader(state: false) // if doesn't get loaded i need to close the loader
-                        libraryPageGlobals.playingID = nil
-                        tObserver = nil
-                    }, isNative: item.isNative, steamID: item.isCustom == true ? nil : item.steamAppID, steamPath: appGlobals.windowsSteamFolder?.path(percentEncoded: false) ?? "")
-                }
-                if(item.isNative) {
-                    try await launchNativeGame(id: String(item.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions, appExeURL: item.appExeURL)
-                } else {
-                    if(item.isCustom == true && item.appExeURL == nil) {
-                        console.error("custom game doesn't have an executable associated")
-                        libraryPageGlobals.setLoader(state: false)
-                        return
-                    }
-                    // Asked before the game starts: that is the moment the
-                    // reason is obvious, and the only moment a user who never
-                    // opens the options will hear it at all. It asks rather
-                    // than acts -- applying a fix renames a file in the game
-                    // folder, and doing that behind a play button is not
-                    // something to do quietly.
-                    if fixes.needsPatch(folder: gameFolder) {
-                        warnAboutFix = true
-                        libraryPageGlobals.setLoader(state: false)
-                        return
-                    }
-                    let steamExePath = appGlobals.windowsSteamFolder?.appendingPathComponent("Steam.exe").path(percentEncoded: false) ?? "C:\\Program Files (x86)\\Steam\\Steam.exe"
-                    try await launchWindowsGame(id: String(item.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: gameOptions.useArmBottle ? appGlobals.selectedArmBottle : appGlobals.selectedBottle, steamExePath: steamExePath, options: gameOptions, appExeURL: item.appExeURL)
-                }
-            } catch {
-                console.error(String(reflecting: error))
-                libraryPageGlobals.setLoader(state: false)
-            }
+        // One launch path, shared with the list view. The fix gate lives inside
+        // it, so neither view can start an unpatched title by forgetting to
+        // check -- which is exactly what a second copy of this would risk.
+        switch GameLauncher.shared.play(item,
+                                        updatedItem: updatedItem,
+                                        isPlaying: isPlaying,
+                                        gameFolder: gameFolder,
+                                        appGlobals: appGlobals,
+                                        libraryPageGlobals: libraryPageGlobals,
+                                        fixes: fixes) {
+        case .needsFix:
+            warnAboutFix = true
+        case .started, .noExecutable, .alreadyPlaying:
+            break
         }
     }
-    
+
     func openDetailPage() {
         libraryPageGlobals.selectedGame = updatedItem
         libraryPageGlobals.showDetailView =  true

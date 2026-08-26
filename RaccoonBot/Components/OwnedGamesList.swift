@@ -55,17 +55,8 @@ struct OwnedGamesList: View {
                 }
             } else {
                 ScrollView {
-                    LazyVGrid(columns: columns, spacing: 10) {
-                        ForEach(libraryPageGlobals.filteredOwnedGames) { game in
-                            OwnedGameCard(game: game,
-                                          isOpening: opening == game.appID,
-                                          install: { install(game) },
-                                          hide: { libraryPageGlobals.hide(appID: game.appID) },
-                                          open: { Task { await open(game) } })
-                        }
-                    }
-                    .padding(.horizontal)
-                    .padding(.bottom, dockClearance)
+                    OwnedGamesGrid()
+                        .padding(.bottom, dockClearance)
                 }
             }
         }
@@ -218,5 +209,83 @@ struct OwnedGameCard: View {
         .background(.procyonAccent.mix(with: .black, by: 0.6).opacity(0.8))
         .cornerRadius(30)
         .foregroundStyle(.white)
+    }
+}
+
+/// Just the cards, with their actions. Used on its own by the All tab, which
+/// shows them under the installed ones, and by OwnedGamesList in grid mode.
+///
+/// It carries install and open rather than taking them as closures: a first
+/// version passed `install: {}` and `open: {}` here, which is a card whose
+/// buttons quietly do nothing -- and a dead control is worse than an absent
+/// one, because it is indistinguishable from a broken one.
+struct OwnedGamesGrid: View {
+    @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
+    @EnvironmentObject var appGlobals: AppGlobals
+    @State private var asking: InstallTarget?
+    @State private var opening: String?
+
+    var body: some View {
+        LazyVGrid(columns: columns, spacing: 10) {
+            ForEach(libraryPageGlobals.filteredOwnedGames) { game in
+                OwnedGameCard(game: game,
+                              isOpening: opening == game.appID,
+                              install: { install(game) },
+                              hide: { libraryPageGlobals.hide(appID: game.appID) },
+                              open: { Task { await open(game) } })
+            }
+        }
+        .padding(.horizontal)
+        .confirmationDialog("Which version?", isPresented: .constant(asking != nil), presenting: asking) { target in
+            if case .choose(let game) = target {
+                Button("Windows version") { send(game, toMac: false) }
+                Button("macOS version") { send(game, toMac: true) }
+                Button("Cancel", role: .cancel) { asking = nil }
+            }
+        } message: { target in
+            if case .choose(let game) = target {
+                Text("\(game.displayName) ships for both. The Windows version runs in the bottle, which is where the video fixes apply; the macOS version is handled by the Steam app on this Mac.")
+            }
+        }
+    }
+
+    /// One request, for the title actually being looked at, cached after that.
+    private func open(_ game: OwnedGame) async {
+        opening = game.appID
+        defer { opening = nil }
+        guard let info = try? await api.fetchGameInfo(appID: game.appID) else { return }
+        libraryPageGlobals.selectedGame = Game(from: info,
+                                               id: game.appID,
+                                               isNative: game.runsOnMac && !game.runsOnWindows,
+                                               downloadProgress: 0,
+                                               isInstalled: false,
+                                               appNames: [])
+        libraryPageGlobals.showDetailView = true
+    }
+
+    /// Only asks when there is genuinely a choice.
+    private func install(_ game: OwnedGame) {
+        if game.isCrossPlatform {
+            asking = .choose(game)
+        } else {
+            send(game, toMac: game.runsOnMac && !game.runsOnWindows)
+        }
+    }
+
+    private func send(_ game: OwnedGame, toMac: Bool) {
+        asking = nil
+        if toMac {
+            if let url = URL(string: "steam://install/\(game.appID)") {
+                NSWorkspace.shared.open(url)
+            }
+            return
+        }
+        let steamX86AppPath = appGlobals.windowsSteamFolder?
+            .appendingPathComponent("Steam.exe").path(percentEncoded: false)
+            ?? "C:\\Program Files (x86)\\Steam\\Steam.exe"
+        installGame(id: game.appID,
+                    cxAppPath: appGlobals.cxAppPath,
+                    selectedBottle: appGlobals.selectedBottle,
+                    SteamX86AppPath: steamX86AppPath)
     }
 }

@@ -356,3 +356,39 @@ private func makeSharedFolder() throws -> String {
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     return dir.path(percentEncoded: false)
 }
+
+struct LaunchGateTests {
+
+    private func game(native: Bool = false, custom: Bool = false, exe: URL? = nil) -> Game {
+        var g = Game(from: Game.steamMock, id: "1", isNative: native,
+                     downloadProgress: 100, isInstalled: true, appNames: [])
+        g.isCustom = custom
+        g.appExeURL = exe
+        return g
+    }
+
+    @Test func refusesToStartAWindowsTitleThatNeedsItsFix() {
+        // The gate this whole project exists for. It used to live inside
+        // GameThumbnail, which meant the grid was the only place that checked;
+        // adding Play to the list by copying the launch code would have been a
+        // second copy of a safety check, free to drift out of step.
+        #expect(GameLauncher.outcome(for: game(), isPlaying: false, needsFix: true) == .needsFix)
+        #expect(GameLauncher.outcome(for: game(), isPlaying: false, needsFix: false) == .started)
+    }
+
+    @Test func doesNotGateANativeTitle() {
+        // The fixes are for Windows video decoding under CrossOver. A macOS
+        // build has nothing to patch, and stopping it would be a warning about
+        // something that cannot apply.
+        #expect(GameLauncher.outcome(for: game(native: true), isPlaying: false, needsFix: true) == .started)
+    }
+
+    @Test func willNotStartACustomEntryWithNothingToRun() {
+        #expect(GameLauncher.outcome(for: game(custom: true, exe: nil),
+                                     isPlaying: false, needsFix: false) == .noExecutable)
+    }
+
+    @Test func doesNotStartWhatIsAlreadyRunning() {
+        #expect(GameLauncher.outcome(for: game(), isPlaying: true, needsFix: true) == .alreadyPlaying)
+    }
+}

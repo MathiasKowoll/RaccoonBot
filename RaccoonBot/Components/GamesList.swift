@@ -23,9 +23,33 @@ struct GamesList: View {
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
     @EnvironmentObject var appGlobals: AppGlobals
     @State private var showProfile: Bool = false
+    @State private var warnAboutFix = false
+    @State private var fixWarningGame: Game?
+    @StateObject private var fixes = MGVFLibrary.shared
     
     var load: @Sendable () async -> Void
     
+    /// Play from the list, through the same launcher the cards use -- fix
+    /// gate included, so this cannot start an unpatched title by omission.
+    private func play(_ row: LibraryRow) {
+        guard let game = libraryPageGlobals.allGames.first(where: { $0.id == row.id }) else { return }
+        let folder = getMeta(libraryPageGlobals.gamesMeta, byID: game.id)?
+            .gameURL?.path(percentEncoded: false)
+        switch GameLauncher.shared.play(game,
+                                        updatedItem: game,
+                                        isPlaying: libraryPageGlobals.playingID == game.id,
+                                        gameFolder: folder,
+                                        appGlobals: appGlobals,
+                                        libraryPageGlobals: libraryPageGlobals,
+                                        fixes: fixes) {
+        case .needsFix:
+            fixWarningGame = game
+            warnAboutFix = true
+        case .started, .noExecutable, .alreadyPlaying:
+            break
+        }
+    }
+
     var body: some View {
         Group {
             switch libraryPageGlobals.tab {
@@ -33,12 +57,16 @@ struct GamesList: View {
                 if libraryPageGlobals.viewMode == .list {
                     LibraryTable(rows: libraryPageGlobals.rows,
                                  actionSymbol: "info.circle",
-                                 actionHelp: "Open this title") { row in
-                        if let game = libraryPageGlobals.allGames.first(where: { $0.id == row.id }) {
-                            libraryPageGlobals.selectedGame = game
-                            libraryPageGlobals.showDetailView = true
-                        }
-                    }
+                                 actionHelp: "Open this title",
+                                 action: { row in
+                                     if let game = libraryPageGlobals.allGames.first(where: { $0.id == row.id }) {
+                                         libraryPageGlobals.selectedGame = game
+                                         libraryPageGlobals.showDetailView = true
+                                     }
+                                 },
+                                 secondarySymbol: "play.fill",
+                                 secondaryHelp: "Play",
+                                 secondaryAction: { row in play(row) })
                 } else {
                     ScrollView {
                         LazyVGrid(columns: columns, spacing: 10) {
@@ -52,13 +80,52 @@ struct GamesList: View {
                 }
             case .notInstalled:
                 OwnedGamesList()
+            case .all:
+                if libraryPageGlobals.viewMode == .list {
+                    LibraryTable(rows: libraryPageGlobals.rows,
+                                 actionSymbol: "info.circle",
+                                 actionHelp: "Open this title",
+                                 action: { row in
+                                     if let game = libraryPageGlobals.allGames.first(where: { $0.id == row.id }) {
+                                         libraryPageGlobals.selectedGame = game
+                                         libraryPageGlobals.showDetailView = true
+                                     }
+                                 },
+                                 secondarySymbol: "play.fill",
+                                 secondaryHelp: "Play",
+                                 secondaryAction: { row in play(row) })
+                } else {
+                    ScrollView {
+                        LazyVGrid(columns: columns, spacing: 10) {
+                            ForEach(libraryPageGlobals.filteredGames) { item in
+                                GameThumbnail(item: item, isResizable: appWindowResizable)
+                            }
+                        }
+                        .padding(.horizontal)
+                        OwnedGamesGrid()
+                            .padding(.bottom, dockClearance)
+                    }
+                }
             }
+        }
+        .alert("This title needs its video fix", isPresented: $warnAboutFix) {
+            Button("Open options") {
+                libraryPageGlobals.selectedGame = fixWarningGame
+                libraryPageGlobals.showDetailView = true
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            let folder = fixWarningGame
+                .flatMap { getMeta(libraryPageGlobals.gamesMeta, byID: $0.id) }?
+                .gameURL?.path(percentEncoded: false)
+            Text(folder.flatMap { fixes.entry(for: $0)?.why }
+                 ?? "Its video will not play without it.")
         }
         // Read only when the tab is first opened. It walks a 4.7 MB binary
         // cache, and there is no reason to make somebody who never leaves the
         // installed tab pay for it -- off the main thread either way.
         .task(id: libraryPageGlobals.tab) {
-            guard libraryPageGlobals.tab == .notInstalled else { return }
+            guard libraryPageGlobals.tab.needsOwned else { return }
 
             // The list is read once; the art is resumed every time. Leaving the
             // tab cancels this, and guarding both halves on the same flag would
@@ -186,16 +253,19 @@ struct GamesList: View {
                     Image(systemName: libraryPageGlobals.filter.isEmpty ? "magnifyingglass" : "xmark.circle")
                         .foregroundStyle(.secondary)
                         .onTapGesture { libraryPageGlobals.filter = "" }
+                    // A darker well than the capsule around it, so the part
+                    // you can type into looks like a place rather than a gap.
                     TextField("", text: $libraryPageGlobals.filter)
                         .textFieldStyle(.plain)
                         .disableAutocorrection(true)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(.black.opacity(0.22), in: RoundedRectangle(cornerRadius: 6))
                         .frame(maxWidth: .infinity)
 
                     // Answers the same question the field asks, and stays
                     // readable while typing, which a placeholder would not.
-                    Text(libraryPageGlobals.tab == .installed
-                         ? "\(libraryPageGlobals.filteredGames.count)/\(libraryPageGlobals.allGamesCount)"
-                         : "\(libraryPageGlobals.filteredOwnedGames.count)/\(libraryPageGlobals.ownedGames.count)")
+                    Text("\(libraryPageGlobals.rows.count)/\(libraryPageGlobals.tab == .installed ? libraryPageGlobals.allGamesCount : libraryPageGlobals.tab == .notInstalled ? libraryPageGlobals.ownedGames.count : libraryPageGlobals.allGamesCount + libraryPageGlobals.ownedGames.count)")
                         .font(.caption2.monospacedDigit())
                         .foregroundStyle(.secondary)
                         // Fixed, because 58/58 and 334/334 are not the same

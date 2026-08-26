@@ -20,6 +20,8 @@ struct OptionsView: View {
     @State private var configuringStore: Store = .steam
     @State private var storeBottle: String = ""
     @State private var gstBusy = false
+    @State private var stagingBusy = false
+    @State private var stagingMessage: String?
     @State private var gstMessage: String?
 
     /// Bottles that can actually serve a game marked to run on ARM: ARM
@@ -49,6 +51,48 @@ struct OptionsView: View {
         } catch {
             gstMessage = error.localizedDescription
         }
+    }
+
+    /// Build the codec directory this engine's bottles are pointed at.
+    ///
+    /// The patcher does this too, on the way past. It is here as well because
+    /// the staging outlives the patching and stops being right without anyone
+    /// touching it: CrossOver updates, GStreamer updates, the directory gets
+    /// cleared out. Re-patching a whole engine to rebuild 35MB of symlinks is
+    /// not a reasonable thing to ask.
+    private func stageCodecs() async {
+        guard let path = appGlobals.cxAppPath else { return }
+        stagingBusy = true
+        stagingMessage = nil
+        defer { stagingBusy = false }
+
+        // CodecStaging is nonisolated, so this genuinely leaves the main
+        // actor. A main-actor-isolated function handed to Task.detached hops
+        // straight back, and the copying would freeze the window.
+        let result = await Task.detached { CodecStaging.stageAll(engineAppPath: path) }.value
+
+        if !result.staged.isEmpty {
+            let where_ = result.staged.map(\.arch).joined(separator: " and ")
+            let count = result.staged.map(\.total).max() ?? 0
+            stagingMessage = "Staged \(count) libraries for \(where_)."
+            // The bottles were pointed at a directory that may not have
+            // existed until a moment ago, so say it again now that it does.
+            for bottle in [appGlobals.selectedBottle, appGlobals.selectedArmBottle] {
+                if let url = URL(string: bottle), !bottle.isEmpty {
+                    applyStagedCodecs(to: url, cxAppPath: path)
+                }
+            }
+        }
+        // Named per architecture: an engine can have two and lose only one,
+        // and "it failed" hides which half still works.
+        for failure in result.failures {
+            stagingMessage = [stagingMessage, "\(failure.arch): \(failure.reason)"]
+                .compactMap { $0 }.joined(separator: "\n")
+        }
+        if result.staged.isEmpty && result.failures.isEmpty {
+            stagingMessage = "This CrossOver has no architecture that can be staged."
+        }
+        gstStatus = await Task.detached { GStreamerStatus.read(engineAppPath: path) }.value
     }
 
     /// The GStreamer series each installed CrossOver runs, read from its own
@@ -188,10 +232,29 @@ struct OptionsView: View {
                                         Button(gstBusy ? "Downloading…" : "Install GStreamer…") {
                                             Task { await installGStreamer() }
                                         }.disabled(gstBusy)
+                                    } else if appGlobals.cxAppPath != nil {
+                                        // Offered whether or not anything is
+                                        // staged. "Stage" when there is
+                                        // nothing, "Restage" when there is --
+                                        // and always available, because the
+                                        // most common reason to want it is a
+                                        // staging that looks fine and is not.
+                                        Button(stagingBusy
+                                               ? "Staging…"
+                                               : (gst.isUsable ? "Restage codecs" : "Stage codecs")) {
+                                            Task { await stageCodecs() }
+                                        }
+                                        .disabled(stagingBusy)
+                                        .help(gst.isUsable
+                                              ? "Rebuild the decoders this CrossOver's bottles are pointed at"
+                                              : "Build the decoders CrossOver does not ship")
                                     }
                                 }
                                 if let gstMessage {
                                     Text(gstMessage).font(.footnote).foregroundStyle(.secondary)
+                                }
+                                if let stagingMessage {
+                                    Text(stagingMessage).font(.footnote).foregroundStyle(.secondary)
                                 }
                             }
                         } else {

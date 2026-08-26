@@ -129,48 +129,58 @@ struct OwnedGameCard: View {
     }
 
     var body: some View {
+        // Shaped like the installed cards: the art sits flush at the top so the
+        // container's corner radius clips it, rather than floating inside a
+        // padded box with its own smaller radius.
         VStack(alignment: .leading, spacing: 6) {
-            if let cover = game.coverURL {
-                KFImage(cover)
-                    .placeholder { CoverPlaceholder(title: game.displayName) }
-                    .resizable()
-                    .aspectRatio(2.15, contentMode: .fit)
-                    .frame(maxWidth: .infinity, alignment: .top)
-            } else {
-                CoverPlaceholder(title: game.displayName)
+            Group {
+                if let cover = game.coverURL {
+                    KFImage(cover)
+                        .placeholder { CoverPlaceholder(title: game.displayName) }
+                        .resizable()
+                        .aspectRatio(2.15, contentMode: .fit)
+                } else {
+                    CoverPlaceholder(title: game.displayName)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .top)
 
-            Text(game.displayName).font(.headline).lineLimit(2)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(game.displayName).font(.headline).lineLimit(2)
 
-            // What the disk actually knows about a title that is not installed.
-            // There is no description or genre here because those come from the
-            // store, and asking for 373 of them would be 373 requests for
-            // titles nobody has asked to look at yet.
-            Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                // What the disk actually knows about a title that is not
+                // installed. No description or genre: those come from the
+                // store, and asking for all of them would be a request each for
+                // titles nobody has opened yet.
+                Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
 
-            HStack(spacing: 6) {
-                ForEach(game.platforms.sorted(), id: \.self) { platform in
-                    Text(platform == "macos" ? "Mac" : platform.capitalized)
-                        .font(.caption2)
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(.quaternary, in: Capsule())
+                HStack(spacing: 6) {
+                    ForEach(game.platforms.sorted(), id: \.self) { platform in
+                        Text(platform == "macos" ? "Mac" : platform.capitalized)
+                            .font(.caption2)
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(.quaternary, in: Capsule())
+                    }
+                    Spacer()
+                    Button(action: hide) {
+                        Image(systemName: "eye.slash")
+                    }
+                    .controlSize(.small)
+                    .buttonStyle(.plain)
+                    .help("Hide this title. Steam lists titles the account has no licence for -- free weekends and trials -- and there is no way to tell from disk.")
+                    Button(action: install) {
+                        Label("Install", systemImage: "square.and.arrow.down")
+                    }
+                    .controlSize(.small)
+                    .cornerRadius(20)
+                    .help("Opens Steam's install dialog for this title")
                 }
-                Spacer()
-                Button(action: hide) {
-                    Image(systemName: "eye.slash")
-                }
-                .controlSize(.small)
-                .buttonStyle(.plain)
-                .help("Hide this title. Steam lists titles the account has no licence for -- free weekends and trials -- and there is no way to tell from disk.")
-                Button(action: install) {
-                    Label("Install", systemImage: "square.and.arrow.down")
-                }
-                .controlSize(.small)
-                .help("Opens Steam's install dialog for this title")
             }
+            .padding(.horizontal)
+            .padding(.bottom, 8)
         }
-        .padding(8)
-        .background(.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 10))
+        .background(.procyonAccent.mix(with: .black, by: 0.6).opacity(0.8))
+        .cornerRadius(30)
         .foregroundStyle(.white)
     }
 }

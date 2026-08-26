@@ -190,3 +190,35 @@ struct LocalConfigScannerTests {
         #expect(OwnedLibrary.ownedApps(inLocalConfig: #""Software" { "Valve" { } }"#).isEmpty)
     }
 }
+
+struct AcfFieldsTests {
+
+    /// The fields the .acf carries that the mapper used to drop.
+    ///
+    /// `name` was dropped, which is why naming an installed game once needed a
+    /// network call. `SizeOnDisk` was dropped too, which is why the size column
+    /// showed a dash for every installed title. Both were in the dictionary the
+    /// whole time; the mapper took four keys and its own comment said so.
+    @Test func readsNameAndSizeFromTheManifest() throws {
+        let acf = """
+        "AppState"
+        {
+            "appid"            "1325200"
+            "name"             "Nioh 2"
+            "installdir"       "Nioh2"
+            "SizeOnDisk"       "12149438740"
+            "BytesDownloaded"  "0"
+            "BytesToDownload"  "0"
+        }
+        """
+        let parsed = parseVDFToDict(from: acf)
+        let state = try #require(parsed["AppState"] as? [String: Any])
+        let meta = mapDictToGamesMeta(from: state)
+
+        #expect(meta.appid == "1325200")
+        #expect(meta.name == "Nioh 2")
+        #expect(meta.installdir == "Nioh2")
+        #expect(meta.SizeOnDisk == "12149438740")
+        #expect(Int64(meta.SizeOnDisk ?? "") == 12_149_438_740)
+    }
+}

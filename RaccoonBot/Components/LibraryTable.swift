@@ -74,6 +74,11 @@ struct LibraryTable: View {
         HStack(spacing: 8) {
             Color.clear.frame(width: 64, height: 1)
             ForEach(LibraryColumn.allCases) { column in
+                if column == .supported {
+                    // Mirrors the rule between the two platform columns below,
+                    // which read as one wide column of glyphs without it.
+                    Divider().frame(height: 12).opacity(0.25)
+                }
                 Button {
                     if libraryPageGlobals.sortColumn == column {
                         libraryPageGlobals.sortAscending.toggle()
@@ -93,8 +98,7 @@ struct LibraryTable: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .frame(maxWidth: width(of: column) == nil ? .infinity : width(of: column),
-                       alignment: column == .name ? .leading : .trailing)
+                .frame(width: width(of: column), alignment: column == .name ? .leading : .trailing)
             }
             Color.clear.frame(width: actionColumnWidth, height: 1)
         }
@@ -105,7 +109,10 @@ struct LibraryTable: View {
 
     private func width(of column: LibraryColumn) -> CGFloat? {
         switch column {
-        case .name: return nil
+        // Bounded. A title like "Batman: Arkham Asylum Game of the Year
+        // Edition" pushed every other column right and left the row looking
+        // like a paragraph with numbers after it.
+        case .name: return 320
         case .installedOn: return 76
         case .supported: return 96
         case .size: return 84
@@ -127,8 +134,10 @@ struct LibraryTable: View {
             .clipped()
             .clipShape(RoundedRectangle(cornerRadius: 4))
 
-            Text(row.name).lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            Text(row.name).lineLimit(1).truncationMode(.tail)
+                .frame(width: 320, alignment: .leading)
+
+            Spacer(minLength: 12)
 
             // What it is installed AS -- one platform, the one that will run.
             Group {
@@ -139,6 +148,8 @@ struct LibraryTable: View {
                 }
             }
             .frame(width: 76, alignment: .trailing)
+
+            Divider().frame(height: 16).opacity(0.25)
 
             // What it is available FOR, which is a different question: a title
             // can ship for three systems and be installed as one.

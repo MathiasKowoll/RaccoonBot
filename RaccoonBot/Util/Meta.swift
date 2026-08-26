@@ -44,5 +44,9 @@ func mapDictToGamesMeta(from: [String:Any]) -> GamesMeta {
      */
     let meta = GamesMeta(appid: from["appid"] as? String ?? "unknown", installdir: from["installdir"] as? String ?? "unknown", bytesDownloaded: from["BytesDownloaded"] as? String ?? "0", BytesTodownload: from["BytesToDownload"] as? String ?? "0")
     meta.name = from["name"] as? String
+    // Also in the dictionary all along, also being dropped. SizeOnDisk is the
+    // only record of how big an installed game is: the store knows what it
+    // ships, not what is on this disk after updates.
+    meta.SizeOnDisk = from["SizeOnDisk"] as? String
     return meta
 }

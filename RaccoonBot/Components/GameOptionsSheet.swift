@@ -30,6 +30,31 @@ struct GameOptionsSheet: View {
             if game != nil {
                 GameOptionsView(game: $game)
                     .environmentObject(gameOptions)
+                    // Loaded HERE, once per title, rather than in the view's
+                    // onAppear.
+                    //
+                    // GameOptionsView's body is wrapped in a conditional, and
+                    // SwiftUI is free to rebuild that branch -- which fires
+                    // onAppear again, which read the saved options back over
+                    // whatever the user had just changed. The setting looked
+                    // like it would not save; it was being reloaded on top of.
+                    //
+                    // .task(id:) runs when the id changes and not otherwise, so
+                    // opening the sheet loads once and nothing reloads while it
+                    // is open.
+                    .task(id: game?.id) {
+                        guard let current = game else { return }
+                        let key = namespacedKey("GameOptions",
+                                                current.steamAppID != 0
+                                                ? String(current.steamAppID)
+                                                : String(current.id))
+                        if let saved: GameOptionsData = readUsrDefData(key: key) {
+                            gameOptions.set(data: saved)
+                        }
+                        if !cxGraphicsBackend.contains(where: { $0.id == gameOptions.cxGraphicsBackend }) {
+                            gameOptions.cxGraphicsBackend = "d3dmetal4"
+                        }
+                    }
             } else {
                 // Reachable if the game is cleared while the sheet is open.
                 // Empty beats trapping.

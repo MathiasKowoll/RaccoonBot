@@ -246,14 +246,6 @@ struct GameOptionsView: View {
             }
         }
         .task(id: gameFolder) { await fix.load(folder: gameFolder, hasGame: game != nil) }
-        .onAppear() {
-            if let data: GameOptionsData = readUsrDefData(key: gameOptKey) {
-                self.gameOptions.set(data: data)
-            }
-            if !cxGraphicsBackend.contains(where: { $0.id == self.gameOptions.cxGraphicsBackend }) {
-                self.gameOptions.cxGraphicsBackend = "d3dmetal4"
-            }
-        }
             } else {
             EmptyView()
         }

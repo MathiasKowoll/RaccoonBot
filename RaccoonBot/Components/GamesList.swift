@@ -144,14 +144,7 @@ struct GamesList: View {
             // them and the search field ended up squeezed to nothing -- typing
             // worked, there was simply nowhere for the text to appear.
             ToolbarItem(placement: .principal) {
-                Picker("", selection: $libraryPageGlobals.tab) {
-                    ForEach(LibraryTab.allCases) { tab in
-                        Text(tab.label).tag(tab)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .controlSize(.small)
-                .fixedSize()
+                TabSwitcher(selection: $libraryPageGlobals.tab)
             }
             ToolbarItemGroup(placement: .automatic) {
                 HStack(spacing: 6) {

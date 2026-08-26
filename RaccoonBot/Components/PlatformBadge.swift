@@ -15,12 +15,10 @@ import SwiftUI
 
 enum PlatformBadge {
 
-    /// Apple ships no penguin, so Linux borrows the terminal.
+    /// Only Apple's own mark exists as an SF Symbol; the other two are drawn.
     static func symbol(for platform: String) -> String {
         switch platform.lowercased() {
         case "macos", "mac", "osx": return "apple.logo"
-        case "windows", "win": return "pc"
-        case "linux", "steamos": return "terminal"
         default: return "questionmark.circle"
         }
     }
@@ -37,18 +35,63 @@ enum PlatformBadge {
     }
 }
 
+/// The four panes of the Windows mark.
+///
+/// Drawn rather than named: SF Symbols carries Apple's logo and nobody else's,
+/// and "pc" is a beige desktop from 1995 that reads as "computer", not as
+/// "Windows".
+struct WindowsGlyph: View {
+    var body: some View {
+        GeometryReader { geometry in
+            let side = min(geometry.size.width, geometry.size.height)
+            let gap = side * 0.14
+            let pane = (side - gap) / 2
+            ZStack(alignment: .topLeading) {
+                ForEach(0..<4, id: \.self) { index in
+                    Rectangle()
+                        .frame(width: pane, height: pane)
+                        .offset(x: CGFloat(index % 2) * (pane + gap),
+                                y: CGFloat(index / 2) * (pane + gap))
+                }
+            }
+            .frame(width: side, height: side)
+        }
+        .aspectRatio(1, contentMode: .fit)
+    }
+}
+
+/// One platform, at the size of a caption glyph.
+struct PlatformGlyph: View {
+    let platform: String
+
+    var body: some View {
+        Group {
+            switch platform.lowercased() {
+            case "windows", "win":
+                WindowsGlyph().frame(width: 9, height: 9)
+            case "linux", "steamos":
+                // Tux, because there is no penguin in SF Symbols and a terminal
+                // prompt is a different idea.
+                Text("\u{1F427}").font(.system(size: 10))
+            default:
+                Image(systemName: PlatformBadge.symbol(for: platform))
+                    .font(.system(size: 10))
+            }
+        }
+        .frame(width: 18, height: 18)
+        .background(.quaternary, in: Circle())
+        .help(PlatformBadge.name(for: platform))
+        .accessibilityLabel(PlatformBadge.name(for: platform))
+    }
+}
+
 /// The row of glyphs, used by both the cards and the list.
 struct PlatformBadges: View {
     let platforms: Set<String>
     var body: some View {
         HStack(spacing: 4) {
             ForEach(platforms.sorted(), id: \.self) { platform in
-                Image(systemName: PlatformBadge.symbol(for: platform))
-                    .font(.caption)
-                    .frame(width: 18, height: 18)
-                    .background(.quaternary, in: Circle())
-                    .help(PlatformBadge.name(for: platform))
-                    .accessibilityLabel(PlatformBadge.name(for: platform))
+                PlatformGlyph(platform: platform)
             }
         }
     }

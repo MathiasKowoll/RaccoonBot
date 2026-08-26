@@ -169,12 +169,6 @@ struct GamesList: View {
             }
         }
         .toolbar {
-            // Everything in one capsule, in one order.
-            //
-            // It had grown into four floating pills -- view controls, tabs,
-            // search, account -- each with its own background, which is four
-            // shapes for one bar. The tabs stay centred on their own because
-            // they are navigation, not a control; the rest live here.
             // One pill, everything inside it.
             //
             // Two capsules kept vanishing: macOS collapses a trailing toolbar

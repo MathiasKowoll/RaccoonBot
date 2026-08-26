@@ -206,12 +206,20 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
     let registry = WineRegistryFile(fileURL: registryURL)
     try registry.load()
     if let controllersSection = registry.section(forPath: "System\\\\CurrentControlSet\\\\Services\\\\winebus") {
+        // Written only when it would change something. This rewrites the
+        // bottle's entire system.reg -- 160,000 lines on this machine -- and
+        // after a bottle's first launch these two values already hold what we
+        // are about to set, so every launch after the first was a rewrite for
+        // nothing. A file not written is a file not at risk.
+        var changed = false
         regOptionsDictionary.keys.forEach { key in
             let value = regOptionsDictionary[key]!
-            console.log("setting \(key) to \(value)")
-            controllersSection.addOrSetDword(forKey: key, value: value)
+            if controllersSection.addOrSetDword(forKey: key, value: value) {
+                console.log("setting \(key) to \(value)")
+                changed = true
+            }
         }
-        try registry.save()
+        if changed { try registry.save() }
     } else {
         console.error("\\\\winebus section not found in system.reg file for the bottle \(selectedBottle)")
     }

@@ -79,16 +79,26 @@ class WineRegSection {
         values[index].value.rawLine = "\"\(key)\"=dword:\(String(format: "%08x", value))"
     }
     
-    func addOrSetDword(forKey key: String, value: UInt32) {
+    /// Returns whether anything actually changed.
+    ///
+    /// The caller uses it to decide whether to write the file at all. Rewriting
+    /// 160,000 lines to set a value that already holds that value is all risk
+    /// and no work, and after the first launch of a bottle it is every launch.
+    @discardableResult
+    func addOrSetDword(forKey key: String, value: UInt32) -> Bool {
         if let index = values.firstIndex(where: { $0.key == key }) {
+            let line = "\"\(key)\"=dword:\(String(format: "%08x", value))"
+            if values[index].value.rawLine == line { return false }
             values[index].value.type = .dword(value)
-            values[index].value.rawLine = "\"\(key)\"=dword:\(String(format: "%08x", value))"
+            values[index].value.rawLine = line
+            return true
         } else {
             // dword:, not a quoted string. Written as a string, wine stores a
             // REG_SZ where it expects a REG_DWORD and the setting has no
             // effect -- and the value looks right in a registry editor.
             let val = WineRegValue(type: .dword(value), rawLine: "\"\(key)\"=dword:\(String(format: "%08x", value))")
             values.append((key: key, value: val))
+            return true
         }
     }
 }

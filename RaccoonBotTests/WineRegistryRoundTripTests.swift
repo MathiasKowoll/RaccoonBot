@@ -171,3 +171,32 @@ struct WineRegistryRealFileTests {
         }
     }
 }
+
+/// Not writing at all is the safest kind of write.
+struct WineRegistryNoOpTests {
+
+    @Test func settingAValueToWhatItAlreadyIsReportsNoChange() throws {
+        let contents = """
+        WINE REGISTRY Version 2
+
+        [System\\\\CurrentControlSet\\\\Services\\\\winebus] 1787673440
+        "DisableHidraw"=dword:00000000
+        "Enable SDL"=dword:00000001
+
+        """
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("noop-\(UUID().uuidString).reg")
+        try contents.write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let registry = WineRegistryFile(fileURL: url)
+        try registry.load()
+        let section = registry.section(forPath: "System\\\\CurrentControlSet\\\\Services\\\\winebus")!
+        #expect(section.addOrSetDword(forKey: "DisableHidraw", value: 0) == false)
+        #expect(section.addOrSetDword(forKey: "Enable SDL", value: 1) == false)
+        // And a real change still says so.
+        #expect(section.addOrSetDword(forKey: "DisableHidraw", value: 1) == true)
+        // A key that was not there is a change too.
+        #expect(section.addOrSetDword(forKey: "Something New", value: 1) == true)
+    }
+}

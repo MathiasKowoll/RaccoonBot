@@ -73,29 +73,26 @@ struct GameDetailView: View {
                             )
                         )
                 }
-                .overlay(alignment: .topLeading) {
-                    // Its own close button. The Modal puts one behind this
-                    // banner, and behind a trailer it is unreachable.
-                    Button {
-                        libraryPageGlobals.showDetailView = false
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 12, weight: .bold))
-                            .frame(width: 26, height: 26)
-                            .background(.black.opacity(0.55), in: Circle())
-                            .foregroundStyle(.white)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(14)
-                }
 
                 VStack (alignment: .leading) {
                     HStack (alignment: .top){
+                        // Both columns are bounded, which they were not.
+                        //
+                        // A Text with no width limit inside a vertical
+                        // ScrollView takes its ideal width -- one enormous line
+                        // -- and drags the HStack out with it, so the sheet's
+                        // content grew wider than the sheet and the left of
+                        // every line fell off the edge. fixedSize(horizontal:
+                        // false) is what makes it wrap instead of grow.
                         VStack(alignment: .leading) {
-                            Text(game!.detailedDescription).padding(.bottom)
+                            Text(game!.detailedDescription)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.bottom)
                             
                             if(game!.contentDescriptors?.notes != nil){
-                                Text(game!.contentDescriptors!.notes!).padding(.bottom)
+                                Text(game!.contentDescriptors!.notes!)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .padding(.bottom)
                             }
                             
                             if(game!.pcRequirements != nil){
@@ -116,8 +113,10 @@ struct GameDetailView: View {
                                     RequirementsWidget(requirements:game!.linuxRequirements)
                                 }.padding(.bottom)
                             }
-                        }.padding(.bottom).padding(.trailing, 20)
-                        Spacer()
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.bottom).padding(.trailing, 20)
+
                         VStack(alignment: .leading) {
                             Text("Release date: \(game!.releaseDate.date)").padding(.bottom)
                             
@@ -168,7 +167,9 @@ struct GameDetailView: View {
                             }
                             
                             if(game!.legalNotice != nil){
-                                Text(game!.legalNotice!).font(.footnote).padding(.bottom, 5)
+                                Text(game!.legalNotice!).font(.footnote)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .padding(.bottom, 5)
                             }
                             if(game!.supportInfo != nil) {
                                 VStack(alignment: .leading) {
@@ -181,7 +182,10 @@ struct GameDetailView: View {
                                     }
                                 }.padding(.bottom, 5)
                             }
-                        }.frame(width: 200)
+                        }
+                        // A fixed sidebar. Tag flows have no natural width
+                        // either, and two greedy columns cannot share a row.
+                        .frame(width: 280, alignment: .leading).frame(width: 200)
                     }
                     
                     VStack (alignment: .leading) {
@@ -203,7 +207,6 @@ struct GameDetailView: View {
                                 }
                             }
                         }
-                        
                         if (game!.movies != nil) {
                             Text("Videos:").font(.title2).padding(.top)
                             LazyVGrid(columns: [

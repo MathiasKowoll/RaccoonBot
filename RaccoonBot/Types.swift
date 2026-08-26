@@ -614,6 +614,8 @@ class LibraryPageGlobals: ObservableObject {
     /// somebody who never looks at it.
     @Published var ownedGames: [OwnedGame] = []
     @Published var ownedLoaded: Bool = false
+    /// Empty means every platform; a non-empty set is a whitelist.
+    @Published var platformFilter: Set<String> = []
     /// Titles hidden from the not-installed tab, remembered across launches.
     ///
     /// localconfig.vdf lists what this Steam has heard of, not what the account
@@ -661,6 +663,13 @@ class LibraryPageGlobals: ObservableObject {
     
     var filteredGames: [Game] {
         var games: [Game] = self.allGames
+        if !platformFilter.isEmpty {
+            games = games.filter { game in
+                (game.platforms.windows && platformFilter.contains("windows"))
+                || (game.platforms.mac && platformFilter.contains("macos"))
+                || (game.platforms.linux && platformFilter.contains("linux"))
+            }
+        }
         if self.filter.isEmpty || self.filter.count < 3 {
             games = self.allGames
         } else {
@@ -692,6 +701,9 @@ class LibraryPageGlobals: ObservableObject {
     var rows: [LibraryRow] {
         let rows: [LibraryRow] = tab == .installed ? installedRows : ownedRows
         var shown = rows
+        if !platformFilter.isEmpty {
+            shown = shown.filter { !$0.platforms.isDisjoint(with: platformFilter) }
+        }
         if self.filter.count >= 3 {
             let needle = self.filter.lowercased()
             shown = shown.filter { $0.name.lowercased().contains(needle) || $0.appID.contains(needle) }
@@ -754,6 +766,9 @@ class LibraryPageGlobals: ObservableObject {
 
     var filteredOwnedGames: [OwnedGame] {
         var owned = self.ownedGames.filter { !hiddenAppIDs.contains($0.appID) }
+        if !platformFilter.isEmpty {
+            owned = owned.filter { !$0.platforms.isDisjoint(with: platformFilter) }
+        }
         if self.filter.count >= 3 {
             let needle = self.filter.lowercased()
             owned = owned.filter {

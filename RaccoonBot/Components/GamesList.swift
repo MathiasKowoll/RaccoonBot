@@ -119,65 +119,76 @@ struct GamesList: View {
                     Image(systemName: "exclamationmark.octagon")
                 }
             }
-            ToolbarItemGroup(placement: .principal) {
-                HStack {
-                    Picker("", selection: $libraryPageGlobals.tab) {
-                        ForEach(LibraryTab.allCases) { tab in
-                            Text(tab.label).tag(tab)
-                        }
+            // The tabs alone in the centre. Everything else was in here with
+            // them and the search field ended up squeezed to nothing -- typing
+            // worked, there was simply nowhere for the text to appear.
+            ToolbarItem(placement: .principal) {
+                Picker("", selection: $libraryPageGlobals.tab) {
+                    ForEach(LibraryTab.allCases) { tab in
+                        Text(tab.label).tag(tab)
                     }
-                    .pickerStyle(.segmented)
-                    .controlSize(.small)
-                    .fixedSize()
-                    Divider()
-                    Picker("", selection: $libraryPageGlobals.viewMode) {
-                        ForEach(LibraryViewMode.allCases) { mode in
-                            Image(systemName: mode.symbol).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .controlSize(.small)
-                    .fixedSize()
-                    .help("Grid or list")
-                    Divider()
-                    HStack {
-                        Button {
-                            if (libraryPageGlobals.filter.isEmpty) {
-                                return
-                            } else {
-                                libraryPageGlobals.filter = ""
-                            }
-                        } label: {
-                            Image(systemName: libraryPageGlobals.filter.isEmpty ? "magnifyingglass": "xmark.circle")
-                        }
-                        .buttonStyle(.plain)
-                        TextField("Search Game...", text: $libraryPageGlobals.filter)
-                            .textFieldStyle(.plain)
-                            .disableAutocorrection(true)
-                            .focusEffectDisabled()
-                            .textFieldStyle(.plain)
-                            .frame(width: 100)
-                            
-                    }.controlSize(.small)
-                    Divider()
-                    HStack {
-                        Image(systemName: "arrow.up.arrow.down.circle")
-                        Picker("", selection: $libraryPageGlobals.sortBy) {
-                            Text("Name").tag(SortingOptions.name)
-                            Text("Release Date").tag(SortingOptions.releaseDate)
-                            Text("Publisher").tag(SortingOptions.publisher)
-                            Text("Developer").tag(SortingOptions.developer)
-                            Text("Installed").tag(SortingOptions.installed)
-                        }
-                        .pickerStyle(.menu)
-                        .controlSize(.small)
+                }
+                .pickerStyle(.segmented)
+                .controlSize(.small)
+                .fixedSize()
+            }
+            ToolbarItemGroup(placement: .automatic) {
+                HStack(spacing: 6) {
+                    Image(systemName: libraryPageGlobals.filter.isEmpty ? "magnifyingglass" : "xmark.circle")
+                        .foregroundStyle(.secondary)
+                        .onTapGesture { libraryPageGlobals.filter = "" }
+                    TextField("Search…", text: $libraryPageGlobals.filter)
+                        .textFieldStyle(.plain)
+                        .disableAutocorrection(true)
+                        .frame(minWidth: 120, idealWidth: 160)
+                }
+                .padding(.horizontal, 8).padding(.vertical, 3)
+                .background(.quaternary, in: Capsule())
+                .controlSize(.small)
+
+                Menu {
+                    ForEach(["windows", "macos", "linux"], id: \.self) { platform in
+                        Toggle(PlatformBadge.name(for: platform), isOn: Binding(
+                            get: { libraryPageGlobals.platformFilter.contains(platform) },
+                            set: { on in
+                                if on { libraryPageGlobals.platformFilter.insert(platform) }
+                                else { libraryPageGlobals.platformFilter.remove(platform) }
+                            }))
                     }
                     Divider()
-                    Text(libraryPageGlobals.tab == .installed
-                         ? "Showing \(libraryPageGlobals.filteredGames.count)/\(libraryPageGlobals.allGamesCount)"
-                         : "Showing \(libraryPageGlobals.filteredOwnedGames.count)/\(libraryPageGlobals.ownedGames.count)")
-                        .font(Font.footnote)
-                }.padding(.horizontal)
+                    Button("All platforms") { libraryPageGlobals.platformFilter.removeAll() }
+                } label: {
+                    Image(systemName: libraryPageGlobals.platformFilter.isEmpty
+                          ? "line.3.horizontal.decrease.circle"
+                          : "line.3.horizontal.decrease.circle.fill")
+                }
+                .help("Filter by platform")
+
+                Picker("", selection: $libraryPageGlobals.sortBy) {
+                    Text("Name").tag(SortingOptions.name)
+                    Text("Release Date").tag(SortingOptions.releaseDate)
+                    Text("Publisher").tag(SortingOptions.publisher)
+                    Text("Developer").tag(SortingOptions.developer)
+                    Text("Installed").tag(SortingOptions.installed)
+                }
+                .pickerStyle(.menu)
+                .controlSize(.small)
+                .fixedSize()
+
+                Picker("", selection: $libraryPageGlobals.viewMode) {
+                    ForEach(LibraryViewMode.allCases) { mode in
+                        Image(systemName: mode.symbol).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .controlSize(.small)
+                .fixedSize()
+                .help("Grid or list")
+
+                Text(libraryPageGlobals.tab == .installed
+                     ? "\(libraryPageGlobals.filteredGames.count)/\(libraryPageGlobals.allGamesCount)"
+                     : "\(libraryPageGlobals.filteredOwnedGames.count)/\(libraryPageGlobals.ownedGames.count)")
+                    .font(.footnote).foregroundStyle(.secondary)
             }
         }
     }

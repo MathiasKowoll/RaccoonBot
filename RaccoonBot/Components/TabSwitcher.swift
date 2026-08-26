@@ -38,7 +38,8 @@ struct TabSwitcher: View {
         // Four points of track around the selection rather than two: at two,
         // the selected rectangle sat close enough to the capsule's edge to look
         // like it was escaping it.
-        .padding(4)
+        .padding(.horizontal, 4)
+        .frame(height: toolbarCapsuleHeight)
         .background(.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 10))
         .fixedSize()
     }

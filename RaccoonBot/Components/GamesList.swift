@@ -11,6 +11,14 @@ let columns = [
     GridItem(.adaptive(minimum: 250, maximum: 325), spacing: 10),
 ]
 
+/// Every capsule in the toolbar is this tall.
+///
+/// They were sized by their contents, and their contents differ -- a switcher
+/// with its own track is taller than a row of glyphs -- so two bars that sit
+/// side by side ended up a few points apart, which is the kind of difference
+/// that looks like a mistake rather than a choice.
+let toolbarCapsuleHeight: CGFloat = 32
+
 /// Room kept clear at the bottom of every scrolling library view.
 ///
 /// The dock floats over the content rather than sitting under it -- a 35pt
@@ -203,7 +211,8 @@ struct GamesList: View {
                                  symbol: { $0.symbol },
                                  help: { $0 == .grid ? "Grid" : "List" })
                 }
-                .padding(.horizontal, 10).padding(.vertical, 4)
+                .padding(.horizontal, 10)
+                .frame(height: toolbarCapsuleHeight)
                 .background(.quaternary, in: Capsule())
                 .controlSize(.small)
             }
@@ -320,7 +329,8 @@ struct GamesList: View {
                     .buttonStyle(.plain)
                     .help("Options")
                 }
-                .padding(.horizontal, 10).padding(.vertical, 4)
+                .padding(.horizontal, 10)
+                .frame(height: toolbarCapsuleHeight)
                 // One width, always. Everything variable inside is pinned --
                 // the count, the filter glyphs -- and the search field takes up
                 // whatever slack is left, so this capsule stops shifting under

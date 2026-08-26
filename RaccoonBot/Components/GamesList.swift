@@ -20,14 +20,34 @@ struct GamesList: View {
     var load: @Sendable () async -> Void
     
     var body: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 10) {
-                ForEach(libraryPageGlobals.filteredGames) { item in
-                    GameThumbnail(item: item, isResizable: appWindowResizable)
+        Group {
+            switch libraryPageGlobals.tab {
+            case .installed:
+                ScrollView {
+                    LazyVGrid(columns: columns, spacing: 10) {
+                        ForEach(libraryPageGlobals.filteredGames) { item in
+                            GameThumbnail(item: item, isResizable: appWindowResizable)
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.bottom)
                 }
+            case .notInstalled:
+                OwnedGamesList()
             }
-            .padding(.horizontal)
-            .padding(.bottom)
+        }
+        // Read only when the tab is first opened. It walks a 4.7 MB binary
+        // cache, and there is no reason to make somebody who never leaves the
+        // installed tab pay for it -- off the main thread either way.
+        .task(id: libraryPageGlobals.tab) {
+            guard libraryPageGlobals.tab == .notInstalled,
+                  !libraryPageGlobals.ownedLoaded else { return }
+            let installed = Set(libraryPageGlobals.gamesMeta.map(\.appid))
+            let owned = await Task.detached(priority: .userInitiated) {
+                OwnedLibrary.notInstalled(installed: installed)
+            }.value
+            libraryPageGlobals.ownedGames = owned
+            libraryPageGlobals.ownedLoaded = true
         }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
@@ -64,6 +84,25 @@ struct GamesList: View {
             }
             ToolbarItemGroup(placement: .principal) {
                 HStack {
+                    Picker("", selection: $libraryPageGlobals.tab) {
+                        ForEach(LibraryTab.allCases) { tab in
+                            Text(tab.label).tag(tab)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .controlSize(.small)
+                    .fixedSize()
+                    Divider()
+                    Picker("", selection: $libraryPageGlobals.viewMode) {
+                        ForEach(LibraryViewMode.allCases) { mode in
+                            Image(systemName: mode.symbol).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .controlSize(.small)
+                    .fixedSize()
+                    .help("Grid or list")
+                    Divider()
                     HStack {
                         Button {
                             if (libraryPageGlobals.filter.isEmpty) {
@@ -97,7 +136,10 @@ struct GamesList: View {
                         .controlSize(.small)
                     }
                     Divider()
-                    Text("Showing \(libraryPageGlobals.filteredGames.count)/\(libraryPageGlobals.allGamesCount)").font(Font.footnote)
+                    Text(libraryPageGlobals.tab == .installed
+                         ? "Showing \(libraryPageGlobals.filteredGames.count)/\(libraryPageGlobals.allGamesCount)"
+                         : "Showing \(libraryPageGlobals.filteredOwnedGames.count)/\(libraryPageGlobals.ownedGames.count)")
+                        .font(Font.footnote)
                 }.padding(.horizontal)
             }
         }

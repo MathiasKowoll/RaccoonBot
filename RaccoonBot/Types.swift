@@ -541,7 +541,61 @@ enum SortingOptions {
     case installed
 }
 
+/// Installed and owned-but-not-installed are kept apart on purpose.
+///
+/// One list of four hundred titles where fifty-seven are playable and the rest
+/// are a shopping catalogue is not a library; it is a haystack. Two tabs means
+/// the everyday view stays the size of what you can actually run.
+enum LibraryTab: String, CaseIterable, Identifiable {
+    case installed
+    case notInstalled
+
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .installed: return "Installed"
+        case .notInstalled: return "Not installed"
+        }
+    }
+}
+
+enum LibraryViewMode: String, CaseIterable, Identifiable {
+    case grid
+    case list
+
+    var id: String { rawValue }
+    var symbol: String {
+        switch self {
+        case .grid: return "square.grid.2x2"
+        case .list: return "list.bullet"
+        }
+    }
+}
+
+/// The columns of the list view, which is also the sort order.
+enum LibraryColumn: String, CaseIterable, Identifiable {
+    case name, platform, size, lastPlayed
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .name: return "Name"
+        case .platform: return "Platform"
+        case .size: return "Size"
+        case .lastPlayed: return "Last played"
+        }
+    }
+}
+
 class LibraryPageGlobals: ObservableObject {
+    @Published var tab: LibraryTab = .installed
+    @Published var viewMode: LibraryViewMode = .grid
+    @Published var sortColumn: LibraryColumn = .name
+    @Published var sortAscending: Bool = true
+    /// Everything owned and not installed, read from the disk. Empty until the
+    /// not-installed tab is opened: there is no reason to walk appinfo.vdf for
+    /// somebody who never looks at it.
+    @Published var ownedGames: [OwnedGame] = []
+    @Published var ownedLoaded: Bool = false
     @Published var gamesMeta: [GamesMeta] = []
     @Published var folders: [String] = []
     @Published var showOptions: Bool = false
@@ -596,6 +650,42 @@ class LibraryPageGlobals: ObservableObject {
         }
     }
     
+    var filteredOwnedGames: [OwnedGame] {
+        var owned = self.ownedGames
+        if self.filter.count >= 3 {
+            let needle = self.filter.lowercased()
+            owned = owned.filter {
+                $0.displayName.lowercased().contains(needle) || $0.appID.contains(needle)
+            }
+        }
+        return owned.sorted { lhs, rhs in
+            let ascending = self.sortAscending
+            switch self.sortColumn {
+            case .name:
+                let result = lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+                return ascending ? result : !result
+            case .platform:
+                let result = lhs.platforms.sorted().joined() < rhs.platforms.sorted().joined()
+                return ascending ? result : !result
+            case .size:
+                // Nothing on disk records the size of something not installed,
+                // so this orders by nothing and keeps the order stable rather
+                // than shuffling rows under the pointer.
+                let result = lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+                return ascending ? result : !result
+            case .lastPlayed:
+                // Never played sorts last in both directions: it is an absence,
+                // not a very old date.
+                switch (lhs.lastPlayed, rhs.lastPlayed) {
+                case let (l?, r?): return ascending ? l > r : l < r
+                case (nil, _?):    return false
+                case (_?, nil):    return true
+                case (nil, nil):   return lhs.displayName < rhs.displayName
+                }
+            }
+        }
+    }
+
     func loadCustomAddedGames() {
         let groupDefaults = UserDefaults(suiteName: suiteName)!
         if let savedGamesData = groupDefaults.data(forKey: "customAddedGames") {

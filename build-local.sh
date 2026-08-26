@@ -18,8 +18,8 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 CONFIG="${1:-Debug}"
 
-xcodebuild -project "$HERE/Procyon.xcodeproj" \
-           -scheme Procyon \
+xcodebuild -project "$HERE/RaccoonBot.xcodeproj" \
+           -scheme RaccoonBot \
            -configuration "$CONFIG" \
            -destination 'platform=macOS' \
            CODE_SIGN_STYLE=Manual \
@@ -32,12 +32,28 @@ xcodebuild -project "$HERE/Procyon.xcodeproj" \
 # this no longer competes with the released Procyon for the same identity --
 # but keeping it in the checkout still means there is never a stale copy of
 # unknown vintage sitting in ~/Applications.
-PRODUCT="$(xcodebuild -project "$HERE/Procyon.xcodeproj" -scheme Procyon \
-             -configuration "$CONFIG" -showBuildSettings 2>/dev/null \
-           | awk -F' = ' '/ BUILT_PRODUCTS_DIR /{print $2; exit}')"
-if [ -n "$PRODUCT" ] && [ -d "$PRODUCT/Procyon.app" ]; then
-  DEST="$HERE/build/RaccoonBot.app"
-  mkdir -p "$HERE/build"
-  rm -rf "$DEST" && cp -R "$PRODUCT/Procyon.app" "$DEST" \
-    && echo "installed: $DEST"
+# Both the directory and the bundle name come from the build settings rather
+# than being spelled here. They have already disagreed once: this hardcoded
+# "Procyon.app" after the target was renamed. A stale bundle of the old name
+# was still sitting in BUILT_PRODUCTS_DIR, so the -d test passed and the script
+# cheerfully installed the WRONG binary -- older, and named for a product that
+# no longer exists. Deriving the name removes the chance to be right by
+# accident, and a missing product is now an error rather than a no-op.
+SETTINGS="$(xcodebuild -project "$HERE/RaccoonBot.xcodeproj" -scheme RaccoonBot \
+              -configuration "$CONFIG" -showBuildSettings 2>/dev/null)"
+PRODUCT="$(printf '%s\n' "$SETTINGS" | awk -F' = ' '/ BUILT_PRODUCTS_DIR /{print $2; exit}')"
+BUNDLE="$(printf '%s\n' "$SETTINGS" | awk -F' = ' '/ FULL_PRODUCT_NAME /{print $2; exit}')"
+
+if [ -z "$PRODUCT" ] || [ -z "$BUNDLE" ]; then
+  echo "build-local.sh: could not read BUILT_PRODUCTS_DIR / FULL_PRODUCT_NAME" >&2
+  exit 1
 fi
+if [ ! -d "$PRODUCT/$BUNDLE" ]; then
+  echo "build-local.sh: built nothing at $PRODUCT/$BUNDLE" >&2
+  exit 1
+fi
+
+DEST="$HERE/build/$BUNDLE"
+mkdir -p "$HERE/build"
+rm -rf "$DEST" && cp -R "$PRODUCT/$BUNDLE" "$DEST" || exit 1
+echo "installed: $DEST"

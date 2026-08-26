@@ -90,25 +90,6 @@ struct LibraryPage: View {
                 Modal(showModal: $libraryPageGlobals.showDetailView, collapse: true, content:  {
                     GameDetailView(game: $libraryPageGlobals.selectedGame)
                 })
-                // The close button belongs at the outermost level of the sheet,
-                // not inside it. The Modal puts one under the banner, and a
-                // trailer is a layer-backed NSView that draws over anything
-                // beneath it -- so the way out disappeared exactly when the
-                // page was at its most impressive.
-                .overlay(alignment: .topTrailing) {
-                    Button {
-                        libraryPageGlobals.showDetailView = false
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 12, weight: .bold))
-                            .frame(width: 28, height: 28)
-                            .background(.black.opacity(0.65), in: Circle())
-                            .foregroundStyle(.white)
-                    }
-                    .buttonStyle(.plain)
-                    .keyboardShortcut(.cancelAction)
-                    .padding(16)
-                }
                 // A macOS sheet takes the size of its content, and this content
                 // has none of its own -- so a long description grew the sheet
                 // past the bottom of the window with no way to reach the rest.

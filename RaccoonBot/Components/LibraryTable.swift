@@ -98,21 +98,9 @@ struct LibraryTable: View {
             }
             Color.clear.frame(width: actionColumnWidth, height: 1)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 8)
         .foregroundStyle(.secondary)
-    }
-
-    /// Steam records both, and neither is much use without the other.
-    private func playedSummary(_ row: LibraryRow) -> String {
-        var parts: [String] = []
-        if let minutes = row.playtimeMinutes, minutes > 0 {
-            parts.append(minutes >= 60 ? "\(minutes / 60) h" : "\(minutes) m")
-        }
-        if let date = row.lastPlayed {
-            parts.append(Self.played.string(from: date))
-        }
-        return parts.isEmpty ? "—" : parts.joined(separator: " · ")
     }
 
     private func width(of column: LibraryColumn) -> CGFloat? {
@@ -121,7 +109,8 @@ struct LibraryTable: View {
         case .installedOn: return 76
         case .supported: return 96
         case .size: return 84
-        case .played: return 150
+        case .played: return 70
+        case .lastPlayed: return 108
         }
     }
 
@@ -168,11 +157,15 @@ struct LibraryTable: View {
                 .font(.caption).foregroundStyle(.secondary)
                 .frame(width: 84, alignment: .trailing)
 
-            // Hours and when, together: either alone leaves the obvious next
-            // question unanswered.
-            Text(playedSummary(row))
+            // Two columns, because either can be the one worth sorting by and
+            // one column can only sort by one of them.
+            Text(row.playtimeMinutes.map { $0 >= 60 ? "\($0 / 60) h" : "\($0) m" } ?? "—")
                 .font(.caption).foregroundStyle(.secondary)
-                .frame(width: 150, alignment: .trailing)
+                .frame(width: 70, alignment: .trailing)
+
+            Text(row.lastPlayed.map { Self.played.string(from: $0) } ?? "—")
+                .font(.caption).foregroundStyle(.secondary)
+                .frame(width: 108, alignment: .trailing)
 
             HStack(spacing: 10) {
                 Button { action(row) } label: {
@@ -199,7 +192,9 @@ struct LibraryTable: View {
             }
             .frame(width: actionColumnWidth, alignment: .trailing)
         }
-        .padding(.horizontal, 12)
+        // Wider gutters than the rows need, so the table has margins rather
+        // than running into the window.
+        .padding(.horizontal, 24)
         .padding(.vertical, 5)
         .background(striped ? Color.white.opacity(0.04) : Color.clear)
         .contentShape(Rectangle())

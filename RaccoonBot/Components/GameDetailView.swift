@@ -20,6 +20,16 @@ struct GameDetailView: View {
     /// the sheet, and the left of every line fell off the edge. The page's
     /// width has nothing to do with how big the library window opens.
     static let contentWidth: CGFloat = 940
+    /// The sidebar, and the gutter between the two columns. Stated rather than
+    /// negotiated: with one column asking for infinity and the other for a
+    /// fixed width, SwiftUI resolves it -- but the description still ran under
+    /// the sidebar, because "as much as possible" and "280" do not add up to
+    /// the page on their own.
+    static let sidebarWidth: CGFloat = 280
+    static let columnGutter: CGFloat = 28
+    static var descriptionWidth: CGFloat {
+        contentWidth - sidebarWidth - columnGutter - 40   // 40: the page's own margins
+    }
 
     @Binding var game: Game?
     @State private var player = AVPlayer()
@@ -124,8 +134,10 @@ struct GameDetailView: View {
                                 }.padding(.bottom)
                             }
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.bottom).padding(.trailing, 20)
+                        .frame(width: Self.descriptionWidth, alignment: .leading)
+                        .padding(.bottom)
+
+                        Spacer(minLength: Self.columnGutter)
 
                         VStack(alignment: .leading) {
                             Text("Release date: \(game!.releaseDate.date)").padding(.bottom)
@@ -195,7 +207,7 @@ struct GameDetailView: View {
                         }
                         // A fixed sidebar. Tag flows have no natural width
                         // either, and two greedy columns cannot share a row.
-                        .frame(width: 280, alignment: .leading).frame(width: 200)
+                        .frame(width: Self.sidebarWidth, alignment: .leading).frame(width: 200)
                     }
                     
                     VStack (alignment: .leading) {

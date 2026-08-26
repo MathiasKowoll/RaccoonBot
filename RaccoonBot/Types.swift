@@ -587,7 +587,10 @@ enum LibraryColumn: String, CaseIterable, Identifiable {
     /// three systems and be installed as one of them.
     case supported
     case size
+    /// Hours, and when last, as separate columns: either can be the one you
+    /// want to sort by, and a single column can only sort by one of them.
     case played
+    case lastPlayed
 
     var id: String { rawValue }
     var label: String {
@@ -597,6 +600,7 @@ enum LibraryColumn: String, CaseIterable, Identifiable {
         case .supported: return "Available"
         case .size: return "Size"
         case .played: return "Played"
+        case .lastPlayed: return "Last"
         }
     }
 }
@@ -770,6 +774,13 @@ class LibraryPageGlobals: ObservableObject {
                 case (nil, nil):   return lhs.name < rhs.name
                 }
             case .played:
+                switch (lhs.playtimeMinutes, rhs.playtimeMinutes) {
+                case let (l?, r?): return ascending ? l > r : l < r
+                case (nil, _?):    return false
+                case (_?, nil):    return true
+                case (nil, nil):   return lhs.name < rhs.name
+                }
+            case .lastPlayed:
                 switch (lhs.lastPlayed, rhs.lastPlayed) {
                 case let (l?, r?): return ascending ? l > r : l < r
                 case (nil, _?):    return false
@@ -845,6 +856,13 @@ class LibraryPageGlobals: ObservableObject {
                 let result = lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
                 return ascending ? result : !result
             case .played:
+                switch (lhs.playtimeMinutes, rhs.playtimeMinutes) {
+                case let (l?, r?): return ascending ? l > r : l < r
+                case (nil, _?):    return false
+                case (_?, nil):    return true
+                case (nil, nil):   return lhs.displayName < rhs.displayName
+                }
+            case .lastPlayed:
                 // Never played sorts last in both directions: it is an absence,
                 // not a very old date.
                 switch (lhs.lastPlayed, rhs.lastPlayed) {

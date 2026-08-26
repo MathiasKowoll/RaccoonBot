@@ -19,6 +19,15 @@ let columns = [
 /// that looks like a mistake rather than a choice.
 let toolbarCapsuleHeight: CGFloat = 32
 
+/// The size of a glyph that stands on its own in the toolbar.
+///
+/// The ones inside the switcher tracks are 11pt on purpose -- they sit on the
+/// same line as 11pt text and belong to it. These do not: they were inheriting
+/// whatever the ambient font gave them, which under .controlSize(.small) came
+/// out at 12pt inside a 32pt capsule, and left the gear looking like an
+/// afterthought beside the 18pt profile icon next to it.
+let toolbarGlyphSize: CGFloat = 16
+
 /// Room kept clear at the bottom of every scrolling library view.
 ///
 /// The dock floats over the content rather than sitting under it -- a 35pt
@@ -237,6 +246,7 @@ struct GamesList: View {
                         Task { await load() }
                     } label: {
                         Image(systemName: "arrow.clockwise")
+                            .font(.system(size: toolbarGlyphSize))
                     }
                     .buttonStyle(.plain)
                     .help("Rescan the library")
@@ -248,6 +258,7 @@ struct GamesList: View {
                         }
                     } label: {
                         Image(systemName: "exclamationmark.octagon")
+                            .font(.system(size: toolbarGlyphSize))
                     }
                     .buttonStyle(.plain)
                     .help("Stop everything running under Wine")
@@ -261,6 +272,9 @@ struct GamesList: View {
 
                     Divider().frame(height: 14)
 
+                    // Sized rather than fonted: a borderless Menu draws its label at
+                    // the control's own font and ignores the one set on the image, so
+                    // these two stayed at 11pt while every other glyph grew.
                     Menu {
                         ForEach(["windows", "macos", "linux"], id: \.self) { platform in
                             Toggle(PlatformBadge.name(for: platform), isOn: Binding(
@@ -286,6 +300,7 @@ struct GamesList: View {
                                                && libraryPageGlobals.hiddenAppIDs.isEmpty)
                                   ? "line.3.horizontal.decrease.circle"
                                   : "line.3.horizontal.decrease.circle.fill")
+                                      .font(.system(size: toolbarGlyphSize))
                             if !libraryPageGlobals.hiddenAppIDs.isEmpty {
                                 Image(systemName: "eye.slash").font(.caption2)
                             }
@@ -297,7 +312,8 @@ struct GamesList: View {
                             }
                         }
                     }
-                    .menuStyle(.borderlessButton)
+                    .menuStyle(.button)
+                    .buttonStyle(.plain)
                     .menuIndicator(.hidden)
                     .fixedSize()
                     .help(libraryPageGlobals.platformFilter.isEmpty
@@ -306,6 +322,7 @@ struct GamesList: View {
                                 .map(PlatformBadge.name(for:)).joined(separator: ", "))
 
                     Image(systemName: libraryPageGlobals.filter.isEmpty ? "magnifyingglass" : "xmark.circle")
+                        .font(.system(size: toolbarGlyphSize))
                         .foregroundStyle(.secondary)
                         .onTapGesture { libraryPageGlobals.filter = "" }
 
@@ -341,8 +358,10 @@ struct GamesList: View {
                         .pickerStyle(.inline)
                     } label: {
                         Image(systemName: "arrow.up.arrow.down")
+                            .font(.system(size: toolbarGlyphSize))
                     }
-                    .menuStyle(.borderlessButton)
+                    .menuStyle(.button)
+                    .buttonStyle(.plain)
                     .menuIndicator(.hidden)
                     .fixedSize()
                     .help("Sort order")
@@ -356,6 +375,7 @@ struct GamesList: View {
                         libraryPageGlobals.showOptions = true
                     } label: {
                         Image(systemName: "gear")
+                            .font(.system(size: toolbarGlyphSize))
                     }
                     .buttonStyle(.plain)
                     .help("Options")

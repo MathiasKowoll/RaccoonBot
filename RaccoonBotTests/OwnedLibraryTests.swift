@@ -222,3 +222,57 @@ struct AcfFieldsTests {
         #expect(Int64(meta.SizeOnDisk ?? "") == 12_149_438_740)
     }
 }
+
+struct TwoInstallsOfOneTitleTests {
+
+    private func meta(appid: String, dir: String, library: URL) -> GamesMeta {
+        let m = GamesMeta(appid: appid, installdir: dir,
+                          bytesDownloaded: "0", BytesTodownload: "0",
+                          appNames: [])
+        m.libraryFolder = library
+        m.gameURL = library.appendingPathComponent("common").appendingPathComponent(dir)
+        m.name = "Hollow Knight"
+        return m
+    }
+
+    @Test func thesameTitleInTwoLibrariesIsTwoEntries() {
+        // A title installed as a Mac build in one library and a Windows build
+        // in another is two installations, and they differ in the ways that
+        // matter here: different folders, different platforms, different sizes,
+        // and only one of them is what a fix would be applied to.
+        //
+        // The id carries the library folder, which is what keeps them apart --
+        // an id of the app id alone would collapse them into one row and leave
+        // the second install unreachable.
+        let mac = URL(fileURLWithPath: "/Volumes/Disk/SteamLibraryMac/steamapps")
+        let win = URL(fileURLWithPath: "/Volumes/Disk/SteamLibraryCross/steamapps")
+
+        let a = meta(appid: "367520", dir: "Hollow Knight", library: mac)
+        let b = meta(appid: "367520", dir: "Hollow Knight", library: win)
+
+        #expect(a.id != b.id)
+        #expect(a.appid == b.appid)
+        #expect(a.gameURL != b.gameURL)
+    }
+
+    @Test func bothInstallsAreOfferedToPatchAll() throws {
+        // Each is a separate copy on disk with its own files, so patching one
+        // does nothing for the other.
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("two-installs-\(UUID().uuidString)")
+        let mac = root.appendingPathComponent("Mac/steamapps")
+        let win = root.appendingPathComponent("Cross/steamapps")
+        for library in [mac, win] {
+            try FileManager.default.createDirectory(
+                at: library.appendingPathComponent("common/Hollow Knight"),
+                withIntermediateDirectories: true)
+        }
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let targets = PatchAll.targets(from: [meta(appid: "367520", dir: "Hollow Knight", library: mac),
+                                              meta(appid: "367520", dir: "Hollow Knight", library: win)],
+                                       needsPatch: { _ in true })
+        #expect(targets.count == 2)
+        #expect(Set(targets.map(\.folder)).count == 2)
+    }
+}

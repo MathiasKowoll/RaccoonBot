@@ -97,8 +97,12 @@ func bottleInfo(_ bottleURL: URL) -> BottleInfo? {
                       version: value("Version") ?? "")
 }
 
-/// Where MacGameVideoFix staged the codecs CrossOver does not ship, for one
-/// engine and one architecture.
+/// Where the codecs CrossOver does not ship are staged, for one engine and one
+/// architecture.
+///
+/// Built by CodecStaging, in this application. The directory still carries
+/// MacGameVideoFix's name because moving it would orphan every staging already
+/// on a user's disk; see CodecStaging.root.
 ///
 /// The directory is named after the engine's bundle, not its version: a patched
 /// copy declares the same CFBundleVersion as the original it was copied from,
@@ -161,16 +165,58 @@ func setBottleEnv(_ bottleURL: URL, key: String, value: String) {
 /// The architecture comes from the bottle itself: an ARM bottle needs the
 /// aarch64 staging, and handing it the x86_64 one would load libraries of the
 /// wrong architecture into the process.
-func applyStagedCodecs(to bottleURL: URL, cxAppPath: String?) {
-    guard let cxAppPath, let info = bottleInfo(bottleURL) else { return }
+/// What became of pointing one bottle at the staged codecs.
+nonisolated enum CodecPointing: Equatable, Sendable {
+    case pointed(arch: String)
+    /// Nothing is staged for that architecture, so nothing was written. The
+    /// bottle looks exactly like a working one and its cutscenes are silent.
+    case nothingStaged(arch: String)
+    case unreadableBottle
+    case noEngine
+}
+
+@discardableResult
+func applyStagedCodecs(to bottleURL: URL, cxAppPath: String?) -> CodecPointing {
+    guard let cxAppPath else { return .noEngine }
+    guard let info = bottleInfo(bottleURL) else { return .unreadableBottle }
+    // From the bottle itself. Handing an ARM bottle the x86_64 staging loads
+    // libraries of the wrong architecture into the process.
     let arch = info.isARM ? "aarch64" : "x86_64"
     guard let path = stagedCodecPath(cxAppPath: cxAppPath, arch: arch) else {
         console.warn("No staged codecs for \(arch); videos needing VC-1, WMV or WMA will not play in \(info.name)")
-        return
+        return .nothingStaged(arch: arch)
     }
     setBottleEnv(bottleURL, key: "GST_PLUGIN_PATH", value: path)
+    return .pointed(arch: arch)
 }
 
+/// Point every bottle the application has selected at the staged codecs.
+///
+/// One place on purpose. There are already two -- the ordinary bottle and the
+/// ARM one -- and each store will bring its own. A bottle nobody pointed is a
+/// bottle whose cutscenes are silent, and there is nothing about it that looks
+/// wrong.
+///
+/// Only bottles this application manages, which are the ones under the patched
+/// engine's own CX_BOTTLE_PATH. A CrossOver install of its own has its own
+/// bottles elsewhere and they are not ours to write into.
+func applyStagedCodecs(toAll bottles: [String], cxAppPath: String?) -> [(bottle: String, result: CodecPointing)] {
+    var seen = Set<String>()
+    return bottles.compactMap { raw -> (bottle: String, result: CodecPointing)? in
+        guard !raw.isEmpty, seen.insert(raw).inserted, let url = URL(string: raw) else { return nil }
+        return (bottle: url.lastPathComponent.removingPercentEncoding ?? url.lastPathComponent,
+                result: applyStagedCodecs(to: url, cxAppPath: cxAppPath))
+    }
+}
+
+/// The bottles this application manages.
+///
+/// Its own, and only its own. They live under the patched engine's
+/// CX_BOTTLE_PATH -- ~/Library/Application Support/RaccoonBot/CXPBottles --
+/// which is a different directory from the one a CrossOver install of its own
+/// uses. A machine can easily have both, and the CrossOver ones are not listed
+/// here, not written into, and not pointed at the staged codecs. They belong
+/// to CrossOver.
 func getAllBottles(appDir: URL) throws -> [URL] {
     let f = FileManager.default
     let FORCE_IS_CXPATCHED = true

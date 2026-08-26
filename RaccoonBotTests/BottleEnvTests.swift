@@ -136,3 +136,82 @@ struct StagedCodecPathTests {
         #expect(real.hasSuffix("/gstreamer-1.0"))
     }
 }
+
+/// Pointing bottles at the staged codecs, and saying which ones were missed.
+///
+/// The failure this guards is quiet by nature: a bottle nobody pointed looks
+/// exactly like a working one, right up to the first cutscene.
+struct ApplyStagedCodecsTests {
+
+    private func bottle(arch: String) throws -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("b-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try """
+        [Bottle]
+        "WineArch" = "\(arch)"
+
+        [EnvironmentVariables]
+        "WINEMSYNC" = "1"
+
+        """.write(to: dir.appendingPathComponent("cxbottle.conf"), atomically: true, encoding: .utf8)
+        return dir
+    }
+
+    @Test func noEngineMeansNothingIsWritten() throws {
+        let b = try bottle(arch: "win64")
+        #expect(applyStagedCodecs(to: b, cxAppPath: nil) == .noEngine)
+        let conf = try String(contentsOf: b.appendingPathComponent("cxbottle.conf"), encoding: .utf8)
+        #expect(!conf.contains("GST_PLUGIN_PATH"))
+    }
+
+    @Test func aBottleWithNoConfigIsSaidToBeUnreadable() {
+        let nowhere = FileManager.default.temporaryDirectory
+            .appendingPathComponent("gone-\(UUID().uuidString)", isDirectory: true)
+        #expect(applyStagedCodecs(to: nowhere, cxAppPath: "/Applications/CrossOver.app") == .unreadableBottle)
+    }
+
+    /// The architecture comes from the bottle, not from the machine. An ARM
+    /// bottle handed the x86_64 staging loads libraries of the wrong
+    /// architecture into the process.
+    @Test func theArchitectureIsTheBottlesOwn() throws {
+        let arm = try bottle(arch: "arm64")
+        let win = try bottle(arch: "win64")
+        // No engine on this path, so the answer is about the arch it chose.
+        let noSuchEngine = "/Applications/NoSuchCrossOver.app"
+        #expect(applyStagedCodecs(to: arm, cxAppPath: noSuchEngine) == .nothingStaged(arch: "aarch64"))
+        #expect(applyStagedCodecs(to: win, cxAppPath: noSuchEngine) == .nothingStaged(arch: "x86_64"))
+    }
+
+    @Test func everySelectedBottleGetsAnAnswerAndBlanksAreSkipped() throws {
+        let a = try bottle(arch: "win64")
+        let b = try bottle(arch: "arm64")
+        let results = applyStagedCodecs(toAll: [a.absoluteString, "", b.absoluteString],
+                                        cxAppPath: "/Applications/NoSuchCrossOver.app")
+        #expect(results.count == 2, "an unselected slot is not a bottle")
+        #expect(results.map(\.result) == [.nothingStaged(arch: "x86_64"),
+                                          .nothingStaged(arch: "aarch64")])
+    }
+
+    /// The ordinary and the ARM slot can hold the same bottle. Writing it twice
+    /// is harmless but reporting it twice reads as two problems.
+    @Test func theSameBottleTwiceIsOneBottle() throws {
+        let a = try bottle(arch: "win64")
+        let results = applyStagedCodecs(toAll: [a.absoluteString, a.absoluteString],
+                                        cxAppPath: "/Applications/NoSuchCrossOver.app")
+        #expect(results.count == 1)
+    }
+
+    @Test func aRealStagingIsActuallyWritten() throws {
+        // Only where this machine has one. The point is that the value written
+        // is the same string stagedCodecPath hands out -- one spelling.
+        let engine = "/Applications/CrossOver.app"
+        guard let expected = stagedCodecPath(cxAppPath: engine, arch: "x86_64") else { return }
+        let b = try bottle(arch: "win64")
+        #expect(applyStagedCodecs(to: b, cxAppPath: engine) == .pointed(arch: "x86_64"))
+        let conf = try String(contentsOf: b.appendingPathComponent("cxbottle.conf"), encoding: .utf8)
+        #expect(conf.contains("\"GST_PLUGIN_PATH\" = \"\(expected)\""))
+        #expect(conf.hasSuffix("\n"))
+        #expect(conf.contains("\"WINEMSYNC\" = \"1\""))
+    }
+}

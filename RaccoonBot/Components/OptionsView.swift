@@ -85,11 +85,7 @@ struct OptionsView: View {
             stagingMessage = "Staged \(count) libraries for \(where_)."
             // The bottles were pointed at a directory that may not have
             // existed until a moment ago, so say it again now that it does.
-            for bottle in [appGlobals.selectedBottle, appGlobals.selectedArmBottle] {
-                if let url = URL(string: bottle), !bottle.isEmpty {
-                    applyStagedCodecs(to: url, cxAppPath: path)
-                }
-            }
+            pointBottlesAtCodecs()
         }
         // Named per architecture: an engine can have two and lose only one,
         // and "it failed" hides which half still works.
@@ -101,6 +97,24 @@ struct OptionsView: View {
             stagingMessage = "This CrossOver has no architecture that can be staged."
         }
         gstStatus = await Task.detached { GStreamerStatus.read(engineAppPath: path) }.value
+    }
+
+    /// Write GST_PLUGIN_PATH into every bottle the application has selected.
+    ///
+    /// Called whenever a bottle is chosen and whenever the codecs are staged,
+    /// because either one can be the thing that was missing. Silent when it
+    /// works; it says something only when a bottle was left unpointed, which
+    /// is the case nothing else would have shown.
+    private func pointBottlesAtCodecs() {
+        let results = applyStagedCodecs(toAll: [appGlobals.selectedBottle,
+                                                appGlobals.selectedArmBottle],
+                                        cxAppPath: appGlobals.cxAppPath)
+        let unpointed = results.compactMap { r -> String? in
+            if case .nothingStaged(let arch) = r.result { return "\(r.bottle) (\(arch))" }
+            return nil
+        }
+        guard !unpointed.isEmpty else { return }
+        stagingMessage = "Nothing staged for \(unpointed.joined(separator: ", ")) — its videos will be silent until you stage the codecs."
     }
 
     /// The GStreamer series each installed CrossOver runs, read from its own
@@ -320,9 +334,7 @@ struct OptionsView: View {
                                     }
                                     Task { await load() }
                                     persistUsrDefOptionString(key: "selectedBottle", value: newValue)
-                                    if let url = URL(string: newValue) {
-                                        applyStagedCodecs(to: url, cxAppPath: appGlobals.cxAppPath)
-                                    }
+                                    pointBottlesAtCodecs()
                                 }
                             }
                         }
@@ -341,9 +353,7 @@ struct OptionsView: View {
                         .labelsHidden()
                         .onChange(of: appGlobals.selectedArmBottle) { _, newValue in
                                 persistUsrDefOptionString(key: "selectedArmBottle", value: newValue)
-                                if let url = URL(string: newValue) {
-                                    applyStagedCodecs(to: url, cxAppPath: appGlobals.cxAppPath)
-                                }
+                                pointBottlesAtCodecs()
                             }
                         }
                         if armBottles.isEmpty {

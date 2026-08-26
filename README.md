@@ -64,7 +64,7 @@ the library and warned about *before* it launches, not after the cutscene fails.
 | macOS | **15 or later**, Apple Silicon. The build targets `arm64` only |
 | [CrossOver](https://www.codeweavers.com/crossover) | 26.x or 27.x. You buy and install it yourself; RaccoonBot does not include it |
 | [GStreamer](https://gstreamer.freedesktop.org/download/) | The universal macOS framework. RaccoonBot checks for it and offers to fetch it |
-| Steam | Installed inside a CrossOver bottle, and signed in |
+| Steam | Installed inside a RaccoonBot bottle, and signed in |
 
 D3DMetal and the Wine components for the 32-bit path come with RaccoonBot and
 are copied into the patched CrossOver for you, so there is nothing else to find
@@ -125,6 +125,19 @@ This is where you point RaccoonBot at CrossOver, choose a bottle, and see
 whether GStreamer is installed and current. **Patch all** applies every fix your
 installed library needs in one pass — it checks each title is really there
 first, and skips anything you have chosen to leave alone.
+
+**Stage codecs** builds the decoders CrossOver does not ship, for the engine you
+have chosen. It runs by itself when RaccoonBot patches CrossOver; the button is
+for afterwards, because a staging stops being right on its own — CrossOver
+updates, GStreamer updates — and re-patching a whole engine to rebuild it is not
+a reasonable thing to ask.
+
+> **RaccoonBot keeps its own bottles.** They live in
+> `~/Library/Application Support/RaccoonBot/CXPBottles`, which is not where
+> CrossOver keeps its own. If you already use CrossOver, its bottles will not
+> appear in this list and RaccoonBot will not write into them — including the
+> line that points a bottle at the decoders. Install Steam into a bottle you
+> create here.
 
 ### Per-game options
 

@@ -151,6 +151,37 @@ struct GamesList: View {
                 }
             }
         }
+        // Per-title options, through the same sheet the detail page uses.
+        .sheet(isPresented: Binding(get: { optionsGame != nil },
+                                    set: { if !$0 { optionsGame = nil } })) {
+            GameOptionsSheet(game: $optionsGame,
+                             isPresented: Binding(get: { optionsGame != nil },
+                                                  set: { if !$0 { optionsGame = nil } }))
+        }
+        // The gate. GameLauncher refuses to start an unpatched title and
+        // reports why; without something here to say so, Play on such a title
+        // simply does nothing, which reads as broken rather than as protected.
+        .alert("This title needs its video fix", isPresented: $warnAboutFix) {
+            Button("Open options") { optionsGame = fixWarningGame }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            let folder = fixWarningGame
+                .flatMap { getMeta(libraryPageGlobals.gamesMeta, byID: $0.id) }?
+                .gameURL?.path(percentEncoded: false)
+            Text(folder.flatMap { fixes.entry(for: $0)?.why }
+                 ?? "Its video will not play without it.")
+        }
+        // Only asked for a title that genuinely ships for both.
+        .confirmationDialog("Which version?",
+                            isPresented: Binding(get: { installChoice != nil },
+                                                 set: { if !$0 { installChoice = nil } }),
+                            presenting: installChoice) { game in
+            Button("Windows version") { sendInstall(game, toMac: false) }
+            Button("macOS version") { sendInstall(game, toMac: true) }
+            Button("Cancel", role: .cancel) { installChoice = nil }
+        } message: { game in
+            Text("\(game.displayName) ships for both. The Windows version runs in the bottle, which is where the video fixes apply; the macOS version is handled by the Steam app on this Mac.")
+        }
         // Read only when the tab is first opened. It walks a 4.7 MB binary
         // cache, and there is no reason to make somebody who never leaves the
         // installed tab pay for it -- off the main thread either way.

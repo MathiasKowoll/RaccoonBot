@@ -25,16 +25,17 @@ struct GameDetailView: View {
     var body: some View {
         if (game != nil) {
             VStack (alignment: .leading) {
-                ZStack(alignment: .bottom ) {
+                // The banner, with everything drawn ON it as overlays rather
+                // than as ZStack siblings.
+                //
+                // PlayerLayerView is a layer-backed NSView, and in a ZStack one
+                // of those composites above its SwiftUI siblings whatever the
+                // order says -- which is how the title and the close button
+                // disappeared behind a playing trailer. An overlay is a
+                // different compositing path and stays on top.
+                Group {
                     if (game!.movies != nil && !game!.movies!.isEmpty) {
-                        // The banner fills the width it is given. It used to
-                        // carry .position(x: 460, y: 260) -- absolute points,
-                        // correct only in a window pinned to 1024x750, which is
-                        // no longer a window this application has.
                         PlayerLayerView(player: player)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 340)
-                            .clipped()
                             .onAppear {
                                 let url = URL(string: game!.movies![0].hlsH264!)!
                                 player = AVPlayer(url: url)
@@ -51,10 +52,12 @@ struct GameDetailView: View {
                             }
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 340)
-                            .clipped()
                     }
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 340)
+                .clipped()
+                .overlay(alignment: .bottom) {
                     GameHeader(game: $game, showDetailView: $libraryPageGlobals.showDetailView)
                         .padding(30)
                         .padding(.top, 40)
@@ -69,8 +72,23 @@ struct GameDetailView: View {
                                 endPoint: .bottom
                             )
                         )
-                        .padding(.bottom, game!.movies != nil ? 20 : 0)
                 }
+                .overlay(alignment: .topLeading) {
+                    // Its own close button. The Modal puts one behind this
+                    // banner, and behind a trailer it is unreachable.
+                    Button {
+                        libraryPageGlobals.showDetailView = false
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .frame(width: 26, height: 26)
+                            .background(.black.opacity(0.55), in: Circle())
+                            .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(14)
+                }
+
                 VStack (alignment: .leading) {
                     HStack (alignment: .top){
                         VStack(alignment: .leading) {

@@ -159,15 +159,21 @@ struct OwnedGameCard: View {
         VStack(alignment: .leading, spacing: 6) {
             Group {
                 if let cover = game.coverURL {
+                    // fill, not fit. Steam's local cache holds portrait grid art
+                    // as often as landscape headers, and forcing a 600x900 into
+                    // a 2.15 box stretches the faces. Cropping is honest; the
+                    // aspect stays the card's.
                     KFImage(cover)
                         .placeholder { CoverPlaceholder(title: game.displayName) }
                         .resizable()
-                        .aspectRatio(2.15, contentMode: .fit)
+                        .aspectRatio(contentMode: .fill)
                 } else {
                     CoverPlaceholder(title: game.displayName)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .top)
+            .frame(maxWidth: .infinity)
+            .aspectRatio(2.15, contentMode: .fit)
+            .clipped()
             .overlay(alignment: .center) {
                 if isOpening {
                     ProgressView().controlSize(.small)

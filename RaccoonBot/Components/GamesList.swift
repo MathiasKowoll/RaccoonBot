@@ -164,14 +164,27 @@ struct GamesList: View {
                     }
                     Divider()
                     Button("All platforms") { libraryPageGlobals.platformFilter.removeAll() }
+                    // Hiding with no way back is a trap, and the card's button
+                    // is the only place hiding happens -- so the way back
+                    // belongs where the rest of "what is being left out" lives.
+                    if !libraryPageGlobals.hiddenAppIDs.isEmpty {
+                        Divider()
+                        Button("Show \(libraryPageGlobals.hiddenAppIDs.count) hidden \(libraryPageGlobals.hiddenAppIDs.count == 1 ? "title" : "titles")") {
+                            libraryPageGlobals.unhideAll()
+                        }
+                    }
                 } label: {
                     // Shows what is on rather than only that something is. A
                     // filter you cannot see the state of is a filter you forget
                     // you left on, and then the library looks broken.
                     HStack(spacing: 4) {
-                        Image(systemName: libraryPageGlobals.platformFilter.isEmpty
+                        Image(systemName: (libraryPageGlobals.platformFilter.isEmpty
+                                           && libraryPageGlobals.hiddenAppIDs.isEmpty)
                               ? "line.3.horizontal.decrease.circle"
                               : "line.3.horizontal.decrease.circle.fill")
+                        if !libraryPageGlobals.hiddenAppIDs.isEmpty {
+                            Image(systemName: "eye.slash").font(.caption2)
+                        }
                         if !libraryPageGlobals.platformFilter.isEmpty {
                             ForEach(libraryPageGlobals.platformFilter.sorted(), id: \.self) { platform in
                                 Text(PlatformBadge.name(for: platform))

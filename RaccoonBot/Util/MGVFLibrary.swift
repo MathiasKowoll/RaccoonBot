@@ -65,6 +65,10 @@ final class MGVFLibrary: ObservableObject {
         var url = URL(fileURLWithPath: folder)
         if !entry.carrierDir.isEmpty { url.appendPathComponent(entry.carrierDir) }
         let keptAside = url.appendingPathComponent(entry.keptAs).path(percentEncoded: false)
-        return !FileManager.default.fileExists(atPath: keptAside)
+        if !FileManager.default.fileExists(atPath: keptAside) { return true }
+        // The fix is on. Is it the one the bundle carries now? The catalogue
+        // memoises the answer, so this stays a dictionary lookup per row
+        // rather than a hash of every file the fix installs.
+        return catalog.isOutdated(folder: folder, game: entry)
     }
 }

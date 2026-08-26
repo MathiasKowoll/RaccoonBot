@@ -74,6 +74,45 @@ struct MGVFGame: Codable, Hashable {
     /// offer installing.
     var isCodecOnly: Bool { script.isEmpty }
 
+    /// A fingerprint of this fix as the bundle carries it right now.
+    ///
+    /// Over the entry AND the bytes it installs. The entry alone is not
+    /// enough: a fix improves most often by someone changing the script, which
+    /// leaves every field in the manifest exactly as it was. And the bundle's
+    /// own version is too coarse -- it moves when any of seventeen titles
+    /// changes, so comparing against it would call every patched game stale on
+    /// every release.
+    ///
+    /// Sorted and length-prefixed, so two different sets of fields cannot
+    /// produce one string: "ab" + "c" and "a" + "bc" are the same
+    /// concatenation and not the same fix.
+    func fingerprint(inDirectory directory: URL) -> String {
+        var parts: [String] = [
+            "schema3", script, exe, carrier, keptAs, carrierDir,
+            writesRegistry ? "reg" : "noreg",
+            codec ?? "", backend ?? "", gptk ?? "",
+        ]
+        parts += (env ?? [:]).sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }
+        parts += files.sorted()
+
+        var hasher = SHA256()
+        for part in parts {
+            hasher.update(data: Data("\(part.utf8.count):\(part)".utf8))
+        }
+        // The bytes, not just the names. This is the part that actually
+        // changes when a fix is improved.
+        for name in ([script] + files).filter({ !$0.isEmpty }).sorted() {
+            let url = directory.appendingPathComponent(name)
+            if let data = try? Data(contentsOf: url) {
+                hasher.update(data: Data("\(name):\(data.count):".utf8))
+                hasher.update(data: data)
+            } else {
+                hasher.update(data: Data("\(name):absent:".utf8))
+            }
+        }
+        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+
     /// Where the carrier DLL actually is.
     func carrierPath(inGameFolder folder: String) -> String {
         var url = URL(fileURLWithPath: folder)

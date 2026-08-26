@@ -91,13 +91,19 @@ final class PatchAll: ObservableObject {
             let coordinator = MGVFCoordinator()
             await coordinator.load(folder: target.folder)
 
-            guard coordinator.canInstall else {
+            // Two different jobs. A title with no fix gets one installed; a
+            // title whose fix the bundle has since changed gets the old one
+            // taken off and the new one put on, because every installer
+            // refuses to write over a fix that is already there.
+            if coordinator.canUpdate {
+                await coordinator.update()
+            } else if coordinator.canInstall {
+                await coordinator.install()
+            } else {
                 // Not a failure: nothing to do, or already done.
                 done += 1
                 continue
             }
-
-            await coordinator.install()
 
             if let blocked = coordinator.blocked {
                 failures.append(Failure(title: target.title, reason: blocked))

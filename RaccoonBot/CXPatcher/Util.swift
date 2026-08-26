@@ -336,11 +336,44 @@ private func markAsPatched(url: URL) {
     }
 }
 
+enum ReleaseLookupError: LocalizedError {
+    case http(Int)
+    case noTag
+
+    var errorDescription: String? {
+        switch self {
+        case .http(403), .http(429):
+            return "GitHub is rate limiting this machine. It allows sixty anonymous requests an hour; try again shortly."
+        case .http(let code):
+            return "GitHub answered HTTP \(code)"
+        case .noTag:
+            return "GitHub's answer carried no release tag"
+        }
+    }
+}
+
+/// The newest release tag of a GitHub repository.
+///
+/// Every value here used to be force-unwrapped, on a response from the
+/// network. The anonymous API allows sixty requests an hour and answers 403
+/// with a body that has a `message` and no `tag_name` -- so `as! String` on a
+/// missing key trapped, and a trap is not something the do/catch around the
+/// call site can catch. Being rate limited while patching CrossOver killed the
+/// application.
 func fetchLatestRelease(from path: String) async throws -> String {
-    let url = URL(string: "\(path)/releases/latest")!
-    let (data, _) = try await URLSession.shared.data(from: url)
-    let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
-    return json["tag_name"] as! String
+    guard let url = URL(string: "\(path)/releases/latest") else {
+        throw ReleaseLookupError.noTag
+    }
+    let (data, response) = try await URLSession.shared.data(from: url)
+    if let http = response as? HTTPURLResponse, http.statusCode != 200 {
+        throw ReleaseLookupError.http(http.statusCode)
+    }
+    let parsed = try? JSONSerialization.jsonObject(with: data)
+    guard let json = parsed as? [String: Any],
+          let tag = json["tag_name"] as? String, !tag.isEmpty else {
+        throw ReleaseLookupError.noTag
+    }
+    return tag
 }
 
 func installd3dMetal(at: URL, version: String) throws -> Void {

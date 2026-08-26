@@ -71,11 +71,18 @@ final class MGVFCoordinator: ObservableObject {
     /// up by "patch everything" -- not to take the action away. A first version
     /// of this treated `dismissed` as final, which left the only place that can
     /// act on a title showing "removed on purpose" and no button at all.
+    /// Deliberately not `state.isActionable`. Outdated is actionable -- there
+    /// is something to do about it -- but the thing to do is `update()`, and
+    /// a plain install over a fix that is already there is a no-op the
+    /// installer refuses by design.
     var canInstall: Bool {
         guard entry != nil, !busy else { return false }
-        return state.isActionable || state == .dismissed
+        return state == .needsPatch || state == .dismissed
     }
-    var canRemove: Bool { entry != nil && state == .patched && !busy }
+    var canRemove: Bool { entry != nil && state.isApplied && !busy }
+
+    /// A fix is on and the bundle carries a different one.
+    var canUpdate: Bool { entry != nil && state == .outdated && !busy }
 
     /// The options this title is known to need, for Auto configure to apply.
     ///
@@ -184,9 +191,58 @@ final class MGVFCoordinator: ObservableObject {
                 lastError = MGVFRunner.redacted(result.stderr).trimmingCharacters(in: .whitespacesAndNewlines)
             }
             catalog.undismiss(folder: folder)
+            // What was applied, so a later bundle can be compared against it.
+            // Only on success: recording a fix that failed to install would
+            // claim this folder is current when nothing was written.
+            if result.exitCode == 0 { catalog.recordApplied(folder: folder, game: entry) }
             await refresh()
         } catch {
             lastError = error.localizedDescription
+        }
+    }
+
+    /// Replace an applied fix with the one the bundle now carries.
+    ///
+    /// Restore, then install. Not install alone: every installer refuses to
+    /// write over a fix that is already there -- "already installed, nothing
+    /// to do", exit 0 -- and it is right to, because its first move is to
+    /// rename whatever is live aside as the original. Run twice, that would
+    /// bury somebody's irreplaceable DLL under a copy of our proxy. So the old
+    /// one comes off first, by the same script that put it on.
+    ///
+    /// Without dismissing. Removing a fix by hand is a decision to be
+    /// remembered; taking one off in order to put a better one on is not.
+    func update() async {
+        guard let folder, let catalog, let entry else { return }
+        if let reason = Self.reasonNotToWrite() { blocked = reason; return }
+        blocked = nil; lastError = nil; busy = true
+        defer { busy = false }
+        do {
+            let script = catalog.scriptPath(for: entry)
+            let restored = try await MGVFRunner.shared.run(script: script, gameFolder: folder, verb: .restore)
+            guard restored.exitCode == 0 else {
+                // Stop here. A failed restore leaves the old fix in place,
+                // which still works; carrying on would install over it.
+                lastError = MGVFRunner.redacted(restored.stderr).trimmingCharacters(in: .whitespacesAndNewlines)
+                catalog.forgetApplied(folder: folder)
+                await refresh()
+                return
+            }
+            // The old fix is off, so what was recorded is no longer true --
+            // said before the install, so an install that fails does not leave
+            // a fingerprint claiming a fix that is not there.
+            catalog.forgetApplied(folder: folder)
+
+            let installed = try await MGVFRunner.shared.run(script: script, gameFolder: folder, verb: .install)
+            if installed.exitCode != 0 {
+                lastError = MGVFRunner.redacted(installed.stderr).trimmingCharacters(in: .whitespacesAndNewlines)
+            } else {
+                catalog.recordApplied(folder: folder, game: entry)
+            }
+            await refresh()
+        } catch {
+            lastError = error.localizedDescription
+            await refresh()
         }
     }
 
@@ -208,6 +264,8 @@ final class MGVFCoordinator: ObservableObject {
                 lastError = MGVFRunner.redacted(result.stderr).trimmingCharacters(in: .whitespacesAndNewlines)
             }
             catalog.dismiss(folder: folder)
+            // The fix is off, so there is nothing to be current or stale.
+            if result.exitCode == 0 { catalog.forgetApplied(folder: folder) }
             await refresh()
         } catch {
             lastError = error.localizedDescription
@@ -267,6 +325,7 @@ final class MGVFCoordinator: ObservableObject {
         switch state {
         case .noFix:       return "No video fix for this title"
         case .patched:     return "Video fix installed"
+        case .outdated:    return "A newer version of this fix is available"
         case .needsPatch:  return "Needs the video fix"
         case .dismissed:   return "Video fix removed on purpose"
         case .unknown:     return "Could not check the video fix"
@@ -276,7 +335,7 @@ final class MGVFCoordinator: ObservableObject {
     var detail: String? {
         switch state {
         case .unknown(let why): return why
-        case .needsPatch, .patched: return entry?.why
+        case .needsPatch, .patched, .outdated: return entry?.why
         default: return nil
         }
     }

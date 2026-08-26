@@ -15,6 +15,13 @@ enum GameFixState: Equatable {
     case noFix
     /// A fix exists and is applied.
     case patched
+    /// A fix exists, is applied, and the bundle now carries a different one.
+    ///
+    /// Not `needsPatch`: nothing is broken and nothing is missing. It is the
+    /// case that used to be invisible -- a title fixed from an old bundle
+    /// stayed "patched" forever, and an improved fix only ever reached people
+    /// who had not applied the old one yet.
+    case outdated
     /// A fix exists and is not applied.
     case needsPatch
     /// A fix exists, was applied, and the user removed it on purpose.
@@ -30,7 +37,15 @@ enum GameFixState: Equatable {
 
     var isActionable: Bool {
         switch self {
-        case .needsPatch: return true
+        case .needsPatch, .outdated: return true
+        default: return false
+        }
+    }
+
+    /// True where there is a fix on disk, current or not.
+    var isApplied: Bool {
+        switch self {
+        case .patched, .outdated: return true
         default: return false
         }
     }
@@ -49,12 +64,17 @@ protocol MGVFDecisionStore: AnyObject {
     func setPairedTitle(_ title: String?, for folder: String)
     func isDismissed(_ folder: String) -> Bool
     func setDismissed(_ dismissed: Bool, for folder: String)
+    /// The fingerprint of the fix that was applied to this folder, if we wrote
+    /// it. Nil for a folder patched by a build that did not record one.
+    func appliedFingerprint(for folder: String) -> String?
+    func setAppliedFingerprint(_ fingerprint: String?, for folder: String)
 }
 
 final class MGVFUserDefaultsStore: MGVFDecisionStore {
     private let defaults: UserDefaults
     private let pairKey = "mgvf.pairedTitles"
     private let dismissKey = "mgvf.dismissedFolders"
+    private let appliedKey = "mgvf.appliedFingerprints"
 
     init(defaults: UserDefaults = .standard) { self.defaults = defaults }
 
@@ -73,6 +93,18 @@ final class MGVFUserDefaultsStore: MGVFDecisionStore {
         if let title { p[folder] = title } else { p.removeValue(forKey: folder) }
         pairs = p
     }
+    private var applied: [String: String] {
+        get { defaults.dictionary(forKey: appliedKey) as? [String: String] ?? [:] }
+        set { defaults.set(newValue, forKey: appliedKey) }
+    }
+
+    func appliedFingerprint(for folder: String) -> String? { applied[folder] }
+    func setAppliedFingerprint(_ fingerprint: String?, for folder: String) {
+        var a = applied
+        if let fingerprint { a[folder] = fingerprint } else { a.removeValue(forKey: folder) }
+        applied = a
+    }
+
     func isDismissed(_ folder: String) -> Bool { dismissed.contains(folder) }
     func setDismissed(_ value: Bool, for folder: String) {
         var d = dismissed
@@ -144,6 +176,40 @@ final class MGVFCatalog: @unchecked Sendable {
     /// Titles the user can be offered when the automatic match finds nothing.
     var pairableGames: [MGVFGame] { manifest.games }
 
+    /// The fingerprint of a title's fix as this bundle carries it.
+    ///
+    /// Memoised: it reads and hashes the script and every file the fix
+    /// installs, and the library asks the same question once per row.
+    private var fingerprints: [String: String] = [:]
+    private let fingerprintLock = NSLock()
+
+    func currentFingerprint(for game: MGVFGame) -> String {
+        fingerprintLock.lock()
+        defer { fingerprintLock.unlock() }
+        if let cached = fingerprints[game.name] { return cached }
+        let value = game.fingerprint(inDirectory: directory)
+        fingerprints[game.name] = value
+        return value
+    }
+
+    /// Record which fix a folder now has. Called after applying one.
+    func recordApplied(folder: String, game: MGVFGame) {
+        store.setAppliedFingerprint(currentFingerprint(for: game), for: folder)
+    }
+
+    /// Is the fix on this folder one the bundle no longer carries?
+    ///
+    /// False when nothing was recorded. A folder patched by a build that did
+    /// not write a fingerprint is a folder we cannot speak about, and "we did
+    /// not look" is not "it is stale" -- the same distinction `unknown` makes
+    /// against `needsPatch`.
+    func isOutdated(folder: String, game: MGVFGame) -> Bool {
+        guard let applied = store.appliedFingerprint(for: folder) else { return false }
+        return applied != currentFingerprint(for: game)
+    }
+
+    func forgetApplied(folder: String) { store.setAppliedFingerprint(nil, for: folder) }
+
     func pair(folder: String, to game: MGVFGame) { store.setPairedTitle(game.name, for: folder) }
     func unpair(folder: String) { store.setPairedTitle(nil, for: folder) }
 
@@ -171,7 +237,11 @@ final class MGVFCatalog: @unchecked Sendable {
             let result = try await MGVFRunner.shared.run(script: scriptPath(for: game),
                                                          gameFolder: folder,
                                                          verb: .status)
-            return Self.state(from: result)
+            let state = Self.state(from: result)
+            // The script answers whether a fix is on, which is not whether it
+            // is the one the bundle now carries.
+            if state == .patched, isOutdated(folder: folder, game: game) { return .outdated }
+            return state
         } catch {
             return .unknown(error.localizedDescription)
         }

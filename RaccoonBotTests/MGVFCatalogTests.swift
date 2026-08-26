@@ -10,6 +10,11 @@ import Foundation
 @testable import RaccoonBot
 
 private final class MemoryStore: MGVFDecisionStore {
+    var fingerprints: [String: String] = [:]
+    func appliedFingerprint(for folder: String) -> String? { fingerprints[folder] }
+    func setAppliedFingerprint(_ fingerprint: String?, for folder: String) {
+        if let fingerprint { fingerprints[folder] = fingerprint } else { fingerprints.removeValue(forKey: folder) }
+    }
     var pairs: [String: String] = [:]
     var dismissed: Set<String> = []
     func pairedTitle(for folder: String) -> String? { pairs[folder] }
@@ -338,6 +343,11 @@ struct MGVFSchemaThreeTests {
 }
 
 private final class SharedMemoryStore: MGVFDecisionStore {
+    var fingerprints: [String: String] = [:]
+    func appliedFingerprint(for folder: String) -> String? { fingerprints[folder] }
+    func setAppliedFingerprint(_ fingerprint: String?, for folder: String) {
+        if let fingerprint { fingerprints[folder] = fingerprint } else { fingerprints.removeValue(forKey: folder) }
+    }
     var pairs: [String: String] = [:]
     var dismissed: Set<String> = []
     func pairedTitle(for folder: String) -> String? { pairs[folder] }

@@ -31,7 +31,9 @@ struct OwnedGame: Identifiable, Sendable, Equatable {
     let platforms: Set<String>
     let lastPlayed: Date?
     let playtimeMinutes: Int?
-    let coverURL: URL?
+    /// Filled in later for the titles Steam never cached art for: the list is
+    /// drawn first, with placeholders, and these arrive one at a time.
+    var coverURL: URL?
 
     var id: String { appID }
     var displayName: String { name.isEmpty ? "App \(appID)" : name }

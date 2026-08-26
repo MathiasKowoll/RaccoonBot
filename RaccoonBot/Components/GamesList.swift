@@ -40,14 +40,40 @@ struct GamesList: View {
         // cache, and there is no reason to make somebody who never leaves the
         // installed tab pay for it -- off the main thread either way.
         .task(id: libraryPageGlobals.tab) {
-            guard libraryPageGlobals.tab == .notInstalled,
-                  !libraryPageGlobals.ownedLoaded else { return }
-            let installed = Set(libraryPageGlobals.gamesMeta.map(\.appid))
-            let owned = await Task.detached(priority: .userInitiated) {
-                OwnedLibrary.notInstalled(installed: installed)
-            }.value
-            libraryPageGlobals.ownedGames = owned
-            libraryPageGlobals.ownedLoaded = true
+            guard libraryPageGlobals.tab == .notInstalled else { return }
+
+            // The list is read once; the art is resumed every time. Leaving the
+            // tab cancels this, and guarding both halves on the same flag would
+            // mean anything not fetched before you wandered off stayed missing
+            // until the application was restarted.
+            if !libraryPageGlobals.ownedLoaded {
+                let installed = Set(libraryPageGlobals.gamesMeta.map(\.appid))
+                let owned = await Task.detached(priority: .userInitiated) {
+                    OwnedLibrary.notInstalled(installed: installed)
+                }.value
+                libraryPageGlobals.ownedGames = owned
+                libraryPageGlobals.ownedLoaded = true
+            }
+
+            // The list first, then the art. Nine of ten titles already have a
+            // cover on disk; the rest need their url from the store, because
+            // Steam's newer art sits behind a content hash that cannot be
+            // derived from the app id.
+            //
+            // One at a time, through fetchGameInfo, which already carries the
+            // cache, the permanent blacklist, the two-second pace and the gates
+            // that go quiet when Steam refuses or nobody answers. Cancelled
+            // when the tab is left: .task tears this down on the id change, so
+            // wandering between tabs cannot stack up loops.
+            for game in libraryPageGlobals.ownedGames where game.coverURL == nil {
+                if Task.isCancelled { return }
+                guard let info = try? await api.fetchGameInfo(appID: game.appID),
+                      !info.headerImage.isEmpty,
+                      let url = URL(string: info.headerImage) else { continue }
+                if let index = libraryPageGlobals.ownedGames.firstIndex(where: { $0.appID == game.appID }) {
+                    libraryPageGlobals.ownedGames[index].coverURL = url
+                }
+            }
         }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {

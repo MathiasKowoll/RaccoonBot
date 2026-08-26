@@ -94,77 +94,39 @@ struct GamesList: View {
             }
         }
         .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                HStack {
-                    if(!appGlobals.selectedBottle.isEmpty){
-                        ProfileWidget()
-                        Divider()
-                    }
-                    Button {
-                        libraryPageGlobals.showOptions = true
-                    } label: {
-                        Image(systemName: "gear")
-                    }
-                }
-            }
-            // One capsule, not three. macOS gives each ToolbarItem its own
-            // group, so refresh, stop and the view switch were rendering as
-            // separate floating pills for controls that belong together.
-            ToolbarItemGroup(placement: .secondaryAction) {
-                Button {
-                    api.deleteOwnedGamesIDsCache()
-                    libraryPageGlobals.gamesMeta.removeAll()
-                    Task { await load() }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                }
-                .help("Rescan the library")
-
-                Button {
-                    Task {
-                        try! await closeWineActivities()
-                        libraryPageGlobals.isLaunchingGame = false
-                    }
-                } label: {
-                    Image(systemName: "exclamationmark.octagon")
-                }
-                .help("Stop everything running under Wine")
-
-                IconSwitcher(selection: $libraryPageGlobals.viewMode,
-                             options: LibraryViewMode.allCases,
-                             symbol: { $0.symbol },
-                             help: { $0 == .grid ? "Grid" : "List" })
-            }
-            // The tabs alone in the centre. Everything else was in here with
-            // them and the search field ended up squeezed to nothing -- typing
-            // worked, there was simply nowhere for the text to appear.
-            ToolbarItem(placement: .principal) {
-                TabSwitcher(selection: $libraryPageGlobals.tab)
-            }
-            // Search, filter and sort in one capsule.
+            // Everything in one capsule, in one order.
             //
-            // They were three floating pills for one job -- deciding which
-            // titles are on screen -- while the left capsule holds the controls
-            // for how they are drawn. Two groups, two questions.
+            // It had grown into four floating pills -- view controls, tabs,
+            // search, account -- each with its own background, which is four
+            // shapes for one bar. The tabs stay centred on their own because
+            // they are navigation, not a control; the rest live here.
             ToolbarItemGroup(placement: .automatic) {
-                HStack(spacing: 6) {
-                    Image(systemName: libraryPageGlobals.filter.isEmpty ? "magnifyingglass" : "xmark.circle")
-                        .foregroundStyle(.secondary)
-                        .onTapGesture { libraryPageGlobals.filter = "" }
-                    TextField("", text: $libraryPageGlobals.filter)
-                        .textFieldStyle(.plain)
-                        .disableAutocorrection(true)
-                        .frame(minWidth: 110, idealWidth: 150)
+                HStack(spacing: 8) {
+                    Button {
+                        api.deleteOwnedGamesIDsCache()
+                        libraryPageGlobals.gamesMeta.removeAll()
+                        Task { await load() }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .buttonStyle(.plain)
+                    .help("Rescan the library")
 
-                    // The count answers the same question the field asks, and
-                    // stays readable while typing, which a placeholder would
-                    // not. Monospaced so it does not twitch as it counts down.
-                    Text(libraryPageGlobals.tab == .installed
-                         ? "\(libraryPageGlobals.filteredGames.count)/\(libraryPageGlobals.allGamesCount)"
-                         : "\(libraryPageGlobals.filteredOwnedGames.count)/\(libraryPageGlobals.ownedGames.count)")
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .help("Showing this many of the titles in this tab")
+                    Button {
+                        Task {
+                            try! await closeWineActivities()
+                            libraryPageGlobals.isLaunchingGame = false
+                        }
+                    } label: {
+                        Image(systemName: "exclamationmark.octagon")
+                    }
+                    .buttonStyle(.plain)
+                    .help("Stop everything running under Wine")
+
+                    IconSwitcher(selection: $libraryPageGlobals.viewMode,
+                                 options: LibraryViewMode.allCases,
+                                 symbol: { $0.symbol },
+                                 help: { $0 == .grid ? "Grid" : "List" })
 
                     Divider().frame(height: 14)
 
@@ -196,8 +158,12 @@ struct GamesList: View {
                             if !libraryPageGlobals.hiddenAppIDs.isEmpty {
                                 Image(systemName: "eye.slash").font(.caption2)
                             }
+                            // Glyphs, not names. "Windows" and "macOS" are
+                            // different widths, and a bar that resizes as you
+                            // filter is a bar that will not hold still.
                             ForEach(libraryPageGlobals.platformFilter.sorted(), id: \.self) { platform in
-                                Text(PlatformBadge.name(for: platform)).font(.caption2)
+                                Image(systemName: PlatformBadge.symbol(for: platform))
+                                    .font(.caption2)
                             }
                         }
                     }
@@ -211,6 +177,28 @@ struct GamesList: View {
 
                     Divider().frame(height: 14)
 
+                    Image(systemName: libraryPageGlobals.filter.isEmpty ? "magnifyingglass" : "xmark.circle")
+                        .foregroundStyle(.secondary)
+                        .onTapGesture { libraryPageGlobals.filter = "" }
+                    TextField("", text: $libraryPageGlobals.filter)
+                        .textFieldStyle(.plain)
+                        .disableAutocorrection(true)
+                        .frame(maxWidth: .infinity)
+
+                    // Answers the same question the field asks, and stays
+                    // readable while typing, which a placeholder would not.
+                    Text(libraryPageGlobals.tab == .installed
+                         ? "\(libraryPageGlobals.filteredGames.count)/\(libraryPageGlobals.allGamesCount)"
+                         : "\(libraryPageGlobals.filteredOwnedGames.count)/\(libraryPageGlobals.ownedGames.count)")
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        // Fixed, because 58/58 and 334/334 are not the same
+                        // width even in monospaced digits.
+                        .frame(width: 54, alignment: .trailing)
+                        .help("Showing this many of the titles in this tab")
+
+                    Divider().frame(height: 14)
+
                     Picker("", selection: $libraryPageGlobals.sortBy) {
                         Text("Name").tag(SortingOptions.name)
                         Text("Release Date").tag(SortingOptions.releaseDate)
@@ -221,8 +209,26 @@ struct GamesList: View {
                     .pickerStyle(.menu)
                     .controlSize(.small)
                     .fixedSize()
+
+                    Divider().frame(height: 14)
+
+                    if !appGlobals.selectedBottle.isEmpty {
+                        ProfileWidget()
+                    }
+                    Button {
+                        libraryPageGlobals.showOptions = true
+                    } label: {
+                        Image(systemName: "gear")
+                    }
+                    .buttonStyle(.plain)
+                    .help("Options")
                 }
-                .padding(.horizontal, 8).padding(.vertical, 3)
+                .padding(.horizontal, 10).padding(.vertical, 4)
+                // One width, always. Everything variable inside it is pinned --
+                // the count, the filter glyphs -- and the search field takes up
+                // whatever slack is left, so the bar stops shifting under the
+                // pointer as the library is filtered.
+                .frame(width: 640)
                 .background(.quaternary, in: Capsule())
                 .controlSize(.small)
             }

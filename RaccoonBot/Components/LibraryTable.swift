@@ -26,15 +26,19 @@ import Kingfisher
 enum LibraryMetrics {
     static var scale: CGFloat {
         let height = NSScreen.main?.frame.height ?? 900
-        // 900 is the old baseline; clamped so a very tall or very short display
-        // does not produce a row nobody can use.
-        return min(max(height / 900, 1.0), 1.6)
+        // 900 is the old baseline. Clamped at 1.35 rather than 1.6: on a
+        // 1329pt display the raw ratio is 1.48, which turned 13pt type into 19
+        // and made the table shout.
+        return min(max(height / 900, 1.0), 1.35)
     }
     static var rowHeight: CGFloat { (34 * scale).rounded() }
     static var coverWidth: CGFloat { (64 * scale).rounded() }
     static var coverHeight: CGFloat { (30 * scale).rounded() }
-    static var nameSize: CGFloat { (13 * scale).rounded() }
-    static var detailSize: CGFloat { (11 * scale).rounded() }
+    /// Weighted rather than large. The title is the thing being scanned for, so
+    /// it carries a little weight instead of extra points -- which keeps it
+    /// distinct without making the row shout.
+    static var nameSize: CGFloat { (12 * scale).rounded() }
+    static var detailSize: CGFloat { (10 * scale).rounded() }
     static var gutter: CGFloat { 24 }
 }
 
@@ -149,7 +153,7 @@ struct LibraryTable: View {
             .clipShape(RoundedRectangle(cornerRadius: 4))
 
             Text(row.name)
-                .font(.system(size: LibraryMetrics.nameSize))
+                .font(.system(size: LibraryMetrics.nameSize, weight: .medium))
                 .lineLimit(1).truncationMode(.tail)
                 .frame(width: width(.name), alignment: .leading)
 

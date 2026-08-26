@@ -103,6 +103,52 @@ func openSteam(cxAppPath: String?, selectedBottle: String?, SteamX86AppPath: Str
     }
 }
 
+/// What the Steam client inside the bottle can be asked to do.
+///
+/// Steam registers the `steam://` protocol on Windows and steam.exe accepts one
+/// of these as an argument, so the client can be driven from outside without
+/// steamcmd, without credentials, and without this application ever touching
+/// the user's account. Every one of them ends in Steam's own dialog: the
+/// confirmation belongs to Steam, which is where it should be.
+enum SteamAction {
+    case install(String)
+    case run(String)
+    /// Verifies the files and repairs what is wrong, which is also how a title
+    /// that failed to update gets fixed.
+    case validate(String)
+
+    var url: String {
+        switch self {
+        case .install(let id):  return "steam://install/\(id)"
+        case .run(let id):      return "steam://run/\(id)"
+        case .validate(let id): return "steam://validate/\(id)"
+        }
+    }
+}
+
+/// Hand a steam:// url to the Steam client in the bottle.
+///
+/// NOT `open steam://…` on the mac side: that would reach a native Steam if one
+/// is installed, which is a different client with a different library, and for
+/// a Windows title it is the wrong one.
+func runSteamAction(_ action: SteamAction,
+                    cxAppPath: String?,
+                    selectedBottle: String?,
+                    SteamX86AppPath: String) {
+    guard let cxAppPath, let selectedBottle,
+          let bottleName = URL(string: selectedBottle)?.lastPathComponent else { return }
+    // Same reason as launchWindowsGame: the name alone can resolve into
+    // another product's bottle root.
+    let bottleRoot = URL(string: selectedBottle)?.deletingLastPathComponent().path(percentEncoded: false) ?? ""
+    let command = "CX_BOTTLE_PATH=\"\(bottleRoot)\" \(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \"\(SteamX86AppPath)\" \"\(action.url)\""
+    do {
+        try safeShell(command)
+        console.log(command)
+    } catch {
+        console.error(String(reflecting: error))
+    }
+}
+
 func copyMoltenVK(cxAppPath: String, vulkanLibID: String) throws -> Void {
     let cxURL = URL(fileURLWithPath: cxAppPath)
     guard let layout = EngineLayout.of(cxURL) else {
@@ -243,8 +289,13 @@ func launchNativeGame(id: String, cxAppPath: String, selectedBottle: String, opt
     try safeShell(command)
 }
 
-func installGame(id: String) {
-//    https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip
-//    steamcmd +login YOUR_USERNAME +app_update 1489410 validate +quit
-//    steamcmd +login USER +force_install_dir "C:\Program Files (x86)\Steam\steamapps\common\MyGame" +app_update 1489410 validate +quit
+/// Ask the Steam client in the bottle to install a title.
+///
+/// This was an empty body with three commented-out steamcmd invocations and no
+/// callers, so the button on every not-installed card did nothing. steamcmd was
+/// the wrong tool anyway: it wants the user's credentials. The protocol handler
+/// wants nothing, and Steam asks the user itself.
+func installGame(id: String, cxAppPath: String?, selectedBottle: String?, SteamX86AppPath: String) {
+    runSteamAction(.install(id), cxAppPath: cxAppPath,
+                   selectedBottle: selectedBottle, SteamX86AppPath: SteamX86AppPath)
 }

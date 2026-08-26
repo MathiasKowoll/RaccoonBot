@@ -227,20 +227,34 @@ final class SteamAPI {
             // fork refuses. Go to Steam itself, through the adapter that turns
             // its answer into the shape these types expect.
             console.log("fetching \(appID) from the steam store")
-            guard let game = try await SteamStore.shared.fetch(appID: appID) else {
+            let fetched = try await SteamStore.shared.fetch(appID: appID)
+
+            // Paced BEFORE branching, because a request was made either way.
+            // This slept only on the success path, so a library holding many
+            // delisted titles -- and every unreleased or region-locked one
+            // answers success:false -- burst through them with no pacing at
+            // all, which is the opposite of what the pacing is for.
+            //
+            // Two seconds, not one. Valve publishes no limit for this endpoint;
+            // the figure independent scrapers converge on is about 200 requests
+            // per five minutes per address. One a second is 300 per five
+            // minutes -- over it -- and the 57-title run that measured clean
+            // never came near the threshold because 57 is not 200. A user with
+            // a large library is exactly the case that measurement does not
+            // cover. Two seconds is 150, with room underneath.
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+
+            guard let game = fetched else {
                 // A store record that says success:false is an answer, not a
                 // failure: delisted, unreleased, or not a store item. Same
                 // treatment the proxy's empty array got.
                 console.warn("Game with id: \(appID) has no store record, blacklisting")
                 self.cacheBlacklist.append(appID)
+                saveBlacklistCache()
                 return nil
             }
             cache[appID] = game
             saveGameCache()
-            // Paced at roughly one a second. Fifty-seven titles is under a
-            // minute once, and the endpoint publishes no limit to aim at, so
-            // the pace is set by what is polite rather than by what is fast.
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
             return game
         }
         console.log("fetching \(appID) from the api")
@@ -320,6 +334,15 @@ final class SteamAPI {
         }
     }
     func fetchOwnedGamesIDs(userID: String) async throws -> [String] {
+        // Guarded FIRST, ahead of the cache.
+        //
+        // This is the only path that grows the list beyond installed titles,
+        // and it returns a persisted file if one exists. A machine that had
+        // ever run a build with a working proxy under this filename would hand
+        // back the whole owned library here -- hundreds of ids -- and every one
+        // of them would then be walked against Steam. Without a host there is
+        // nothing legitimate to return, cached or not.
+        guard apiIsConfigured else { throw APIError.notConfigured }
         if(self.cacheOwnedGamesIDs.count > 0) {
             console.log("Using cached user data")
             return self.cacheOwnedGamesIDs

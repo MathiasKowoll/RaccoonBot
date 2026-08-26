@@ -137,12 +137,24 @@ struct GameThumbnail: View {
                             }).frame(height: 30)
                         } else {
                             Button {
-                                // TO DO: Install script
+                                // Hands the request to the Steam client in the
+                                // bottle, which then asks the user where to put
+                                // it and how much it weighs. The confirmation
+                                // for a multi-gigabyte download belongs to
+                                // Steam's own dialog, not to a button here.
+                                let steamX86AppPath = appGlobals.windowsSteamFolder?
+                                    .appendingPathComponent("Steam.exe").path(percentEncoded: false)
+                                    ?? "C:\\Program Files (x86)\\Steam\\Steam.exe"
+                                installGame(id: String(item.steamAppID),
+                                            cxAppPath: appGlobals.cxAppPath,
+                                            selectedBottle: appGlobals.selectedBottle,
+                                            SteamX86AppPath: steamX86AppPath)
                             }
                             label: {
                                 Label("Install", systemImage: "square.and.arrow.down").foregroundStyle(.black)
                             }
                             .cornerRadius(20)
+                            .help("Opens Steam's install dialog for this title")
                         }
                     }
                     .padding(.bottom, 8)

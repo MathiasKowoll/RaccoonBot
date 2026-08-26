@@ -96,15 +96,18 @@ actor SteamStore {
         ]
         var request = URLRequest(url: components.url!)
         request.timeoutInterval = 25
-        // Anonymous, and provably so rather than incidentally so.
+        // Carries no identity: no api key, no Authorization, and -- explicitly
+        // -- no cookies. URLSession attaches them by default, and while on
+        // macOS the store is the application's own rather than Safari's, "would
+        // not happen" is an argument where this is a guarantee.
         //
-        // Nothing in this request identifies a Steam account: no api key, no
-        // Authorization, and -- explicitly -- no cookies. URLSession attaches
-        // them by default. On macOS the store is the application's own and not
-        // Safari's, so no Steam session would be picked up anyway, but "would
-        // not happen" is an argument and this is a guarantee. It matters
-        // because an anonymous read of a public store page cannot be attributed
-        // to a person's library, and that is the whole safety property here.
+        // What that does and does not buy, stated honestly: it means the
+        // REQUEST names nobody. It does not make it unlinkable. It leaves from
+        // the same address the user's Steam client authenticates from, and
+        // Valve holds both sides of that log. So this removes the in-band
+        // channel; it does not make the traffic invisible. The reason to stay
+        // well inside a polite rate is that being anonymous is not the same as
+        // being unattributable.
         request.httpShouldHandleCookies = false
 
         let data: Data

@@ -96,6 +96,16 @@ actor SteamStore {
         ]
         var request = URLRequest(url: components.url!)
         request.timeoutInterval = 25
+        // Anonymous, and provably so rather than incidentally so.
+        //
+        // Nothing in this request identifies a Steam account: no api key, no
+        // Authorization, and -- explicitly -- no cookies. URLSession attaches
+        // them by default. On macOS the store is the application's own and not
+        // Safari's, so no Steam session would be picked up anyway, but "would
+        // not happen" is an argument and this is a guarantee. It matters
+        // because an anonymous read of a public store page cannot be attributed
+        // to a person's library, and that is the whole safety property here.
+        request.httpShouldHandleCookies = false
 
         let data: Data
         let response: URLResponse

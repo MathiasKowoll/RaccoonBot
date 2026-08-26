@@ -166,3 +166,43 @@ struct SteamStoreRestraintTests {
         #expect(await steam.isSilenced == false)
     }
 }
+
+struct SteamStoreAnonymityTests {
+
+    /// Captures the request the store actually builds.
+    final class CapturingProtocol: URLProtocol, @unchecked Sendable {
+        nonisolated(unsafe) static var captured: URLRequest?
+        override class func canInit(with request: URLRequest) -> Bool { true }
+        override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+        override func startLoading() {
+            Self.captured = request
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200,
+                                           httpVersion: nil, headerFields: nil)!
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: Data(#"{"1":{"success":false}}"#.utf8))
+            client?.urlProtocolDidFinishLoading(self)
+        }
+        override func stopLoading() {}
+    }
+
+    @Test func carriesNothingThatIdentifiesAnAccount() async throws {
+        // The safety property this rests on: an anonymous GET of a public store
+        // page cannot be attributed to anyone's Steam account, because nothing
+        // in it names one. A stray cookie would undo that quietly.
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [CapturingProtocol.self]
+        let steam = SteamStore(session: URLSession(configuration: configuration))
+        _ = try? await steam.fetch(appID: "1")
+
+        let request = try #require(CapturingProtocol.captured)
+        #expect(request.httpShouldHandleCookies == false)
+        let headers = request.allHTTPHeaderFields ?? [:]
+        #expect(headers["x-api-key"] == nil)
+        #expect(headers["Authorization"] == nil)
+        #expect(headers["Cookie"] == nil)
+        #expect(request.url?.query?.contains("key=") != true)
+        // And it is Valve's own host, never the fork's forbidden one.
+        #expect(request.url?.host == "store.steampowered.com")
+        #expect(FORBIDDEN_API_HOSTS.contains(request.url?.host ?? "") == false)
+    }
+}

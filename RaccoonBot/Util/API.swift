@@ -263,7 +263,15 @@ final class SteamAPI {
         return root.data[0]
         
     }
-    func fetchGamesInfo(meta: [GamesMeta], setProgress: @escaping (Double) -> Void = { _ in }) async throws -> [Game] {
+    /// `onGame` is called as each record lands, not at the end.
+    ///
+    /// Going to Steam directly means a title a second, so returning only the
+    /// finished array would leave the library sitting on placeholders for a
+    /// minute and then swap them all at once. Handing each one over as it
+    /// arrives is what makes the covers fill in a card at a time.
+    func fetchGamesInfo(meta: [GamesMeta],
+                        setProgress: @escaping (Double) -> Void = { _ in },
+                        onGame: @MainActor @escaping (Game) -> Void = { _ in }) async throws -> [Game] {
         var items: [Game] = []
         let total = meta.count
         // Reset progress at start
@@ -276,7 +284,11 @@ final class SteamAPI {
             let downloadProgress: Double = meta.isDownloaded() ? 100 : (bDownloaded / bToDownload) * 100            
             do {
                 if let gameInfo = try await self.fetchGameInfo(appID: meta.appid) {
-                    items.append(Game(from: gameInfo, id: meta.id, isNative: meta.isNative, downloadProgress: Double(downloadProgress), isInstalled: meta.installdir.isEmpty == false, appNames: []))
+                    let game = Game(from: gameInfo, id: meta.id, isNative: meta.isNative, downloadProgress: Double(downloadProgress), isInstalled: meta.installdir.isEmpty == false, appNames: [])
+                    items.append(game)
+                    if !BLACKLIST.contains(String(describing: game.steamAppID)) {
+                        await MainActor.run { onGame(game) }
+                    }
                 }
             } catch SteamStoreError.rateLimited {
                 // Stop, do not carry on through the remaining titles. Whatever

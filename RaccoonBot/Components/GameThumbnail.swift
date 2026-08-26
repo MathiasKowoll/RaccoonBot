@@ -57,13 +57,19 @@ struct GameThumbnail: View {
                             .zIndex(1)
                             .help("This title needs its video fix")
                     }
-                    KFImage(URL(string: item.headerImage))
-                        .placeholder {
-                            ProgressView()
-                        }
-                        .resizable()
-                        .aspectRatio(2.15, contentMode: .fit)
-                        .frame(maxWidth:.infinity, maxHeight: .infinity, alignment: .top)
+                    // No url means there is nothing to wait for, so do not ask
+                    // Kingfisher to wait for it. That distinction is the whole
+                    // difference between a card that is loading and a card that
+                    // never will.
+                    if let cover = URL(string: item.headerImage), !item.headerImage.isEmpty {
+                        KFImage(cover)
+                            .placeholder { CoverPlaceholder(title: item.name) }
+                            .resizable()
+                            .aspectRatio(2.15, contentMode: .fit)
+                            .frame(maxWidth:.infinity, maxHeight: .infinity, alignment: .top)
+                    } else {
+                        CoverPlaceholder(title: item.name)
+                    }
                         
                     HStack(alignment: .top) {
                         if (item.isNative == true) {

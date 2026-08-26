@@ -212,7 +212,19 @@ struct LibraryPage: View {
         // have. Merged rather than assigned: a remote answer for forty titles
         // must not delete the seventeen the disk knew about.
         do {
-            let enriched = try await api.fetchGamesInfo(meta: libraryPageGlobals.gamesMeta, setProgress: { self.progress = $0 })
+            let enriched = try await api.fetchGamesInfo(
+                meta: libraryPageGlobals.gamesMeta,
+                setProgress: { self.progress = $0 },
+                // Each record replaces its placeholder the moment it lands, so
+                // the grid fills in rather than sitting still and then changing
+                // all at once a minute later.
+                onGame: { game in
+                    if let index = libraryPageGlobals.games.firstIndex(where: { $0.id == game.id }) {
+                        libraryPageGlobals.games[index] = game
+                    } else {
+                        libraryPageGlobals.games.append(game)
+                    }
+                })
             if !enriched.isEmpty {
                 var byID = Dictionary(uniqueKeysWithValues: libraryPageGlobals.games.map { ($0.id, $0) })
                 for game in enriched { byID[game.id] = game }

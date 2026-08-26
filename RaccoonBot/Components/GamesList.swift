@@ -141,11 +141,12 @@ struct GamesList: View {
             ToolbarItem(placement: .principal) {
                 TabSwitcher(selection: $libraryPageGlobals.tab)
             }
+            // Search, filter and sort in one capsule.
+            //
+            // They were three floating pills for one job -- deciding which
+            // titles are on screen -- while the left capsule holds the controls
+            // for how they are drawn. Two groups, two questions.
             ToolbarItemGroup(placement: .automatic) {
-                // The count lives in the field rather than in a bubble beside
-                // it. It answers the same question the field asks -- how much
-                // of the library am I looking at -- so it belongs there, and it
-                // stays visible while typing, which a placeholder would not.
                 HStack(spacing: 6) {
                     Image(systemName: libraryPageGlobals.filter.isEmpty ? "magnifyingglass" : "xmark.circle")
                         .foregroundStyle(.secondary)
@@ -154,74 +155,76 @@ struct GamesList: View {
                         .textFieldStyle(.plain)
                         .disableAutocorrection(true)
                         .frame(minWidth: 110, idealWidth: 150)
+
+                    // The count answers the same question the field asks, and
+                    // stays readable while typing, which a placeholder would
+                    // not. Monospaced so it does not twitch as it counts down.
                     Text(libraryPageGlobals.tab == .installed
                          ? "\(libraryPageGlobals.filteredGames.count)/\(libraryPageGlobals.allGamesCount)"
                          : "\(libraryPageGlobals.filteredOwnedGames.count)/\(libraryPageGlobals.ownedGames.count)")
                         .font(.caption2.monospacedDigit())
                         .foregroundStyle(.secondary)
                         .help("Showing this many of the titles in this tab")
+
+                    Divider().frame(height: 14)
+
+                    Menu {
+                        ForEach(["windows", "macos", "linux"], id: \.self) { platform in
+                            Toggle(PlatformBadge.name(for: platform), isOn: Binding(
+                                get: { libraryPageGlobals.platformFilter.contains(platform) },
+                                set: { on in
+                                    if on { libraryPageGlobals.platformFilter.insert(platform) }
+                                    else { libraryPageGlobals.platformFilter.remove(platform) }
+                                }))
+                        }
+                        Divider()
+                        Button("All platforms") { libraryPageGlobals.platformFilter.removeAll() }
+                        // Hiding with no way back is a trap, and the card's
+                        // button is the only place hiding happens.
+                        if !libraryPageGlobals.hiddenAppIDs.isEmpty {
+                            Divider()
+                            Button("Show \(libraryPageGlobals.hiddenAppIDs.count) hidden \(libraryPageGlobals.hiddenAppIDs.count == 1 ? "title" : "titles")") {
+                                libraryPageGlobals.unhideAll()
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: (libraryPageGlobals.platformFilter.isEmpty
+                                               && libraryPageGlobals.hiddenAppIDs.isEmpty)
+                                  ? "line.3.horizontal.decrease.circle"
+                                  : "line.3.horizontal.decrease.circle.fill")
+                            if !libraryPageGlobals.hiddenAppIDs.isEmpty {
+                                Image(systemName: "eye.slash").font(.caption2)
+                            }
+                            ForEach(libraryPageGlobals.platformFilter.sorted(), id: \.self) { platform in
+                                Text(PlatformBadge.name(for: platform)).font(.caption2)
+                            }
+                        }
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .help(libraryPageGlobals.platformFilter.isEmpty
+                          ? "Filter by platform"
+                          : "Showing only " + libraryPageGlobals.platformFilter.sorted()
+                                .map(PlatformBadge.name(for:)).joined(separator: ", "))
+
+                    Divider().frame(height: 14)
+
+                    Picker("", selection: $libraryPageGlobals.sortBy) {
+                        Text("Name").tag(SortingOptions.name)
+                        Text("Release Date").tag(SortingOptions.releaseDate)
+                        Text("Publisher").tag(SortingOptions.publisher)
+                        Text("Developer").tag(SortingOptions.developer)
+                        Text("Installed").tag(SortingOptions.installed)
+                    }
+                    .pickerStyle(.menu)
+                    .controlSize(.small)
+                    .fixedSize()
                 }
                 .padding(.horizontal, 8).padding(.vertical, 3)
                 .background(.quaternary, in: Capsule())
                 .controlSize(.small)
-
-                Menu {
-                    ForEach(["windows", "macos", "linux"], id: \.self) { platform in
-                        Toggle(PlatformBadge.name(for: platform), isOn: Binding(
-                            get: { libraryPageGlobals.platformFilter.contains(platform) },
-                            set: { on in
-                                if on { libraryPageGlobals.platformFilter.insert(platform) }
-                                else { libraryPageGlobals.platformFilter.remove(platform) }
-                            }))
-                    }
-                    Divider()
-                    Button("All platforms") { libraryPageGlobals.platformFilter.removeAll() }
-                    // Hiding with no way back is a trap, and the card's button
-                    // is the only place hiding happens -- so the way back
-                    // belongs where the rest of "what is being left out" lives.
-                    if !libraryPageGlobals.hiddenAppIDs.isEmpty {
-                        Divider()
-                        Button("Show \(libraryPageGlobals.hiddenAppIDs.count) hidden \(libraryPageGlobals.hiddenAppIDs.count == 1 ? "title" : "titles")") {
-                            libraryPageGlobals.unhideAll()
-                        }
-                    }
-                } label: {
-                    // Shows what is on rather than only that something is. A
-                    // filter you cannot see the state of is a filter you forget
-                    // you left on, and then the library looks broken.
-                    HStack(spacing: 4) {
-                        Image(systemName: (libraryPageGlobals.platformFilter.isEmpty
-                                           && libraryPageGlobals.hiddenAppIDs.isEmpty)
-                              ? "line.3.horizontal.decrease.circle"
-                              : "line.3.horizontal.decrease.circle.fill")
-                        if !libraryPageGlobals.hiddenAppIDs.isEmpty {
-                            Image(systemName: "eye.slash").font(.caption2)
-                        }
-                        if !libraryPageGlobals.platformFilter.isEmpty {
-                            ForEach(libraryPageGlobals.platformFilter.sorted(), id: \.self) { platform in
-                                Text(PlatformBadge.name(for: platform))
-                                    .font(.caption2)
-                            }
-                        }
-                    }
-                }
-                .fixedSize()
-                .help(libraryPageGlobals.platformFilter.isEmpty
-                      ? "Filter by platform"
-                      : "Showing only " + libraryPageGlobals.platformFilter.sorted()
-                            .map(PlatformBadge.name(for:)).joined(separator: ", "))
-
-                Picker("", selection: $libraryPageGlobals.sortBy) {
-                    Text("Name").tag(SortingOptions.name)
-                    Text("Release Date").tag(SortingOptions.releaseDate)
-                    Text("Publisher").tag(SortingOptions.publisher)
-                    Text("Developer").tag(SortingOptions.developer)
-                    Text("Installed").tag(SortingOptions.installed)
-                }
-                .pickerStyle(.menu)
-                .controlSize(.small)
-                .fixedSize()
-
             }
         }
     }

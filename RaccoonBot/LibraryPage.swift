@@ -251,7 +251,12 @@ struct LibraryPage: View {
                     }
                 })
             if !enriched.isEmpty {
-                var byID = Dictionary(uniqueKeysWithValues: libraryPageGlobals.games.map { ($0.id, $0) })
+                // uniquingKeysWith, not uniqueKeysWithValues: the latter traps
+                // on a duplicate key. Ids carry the library folder so they
+                // cannot collide today, but a crash is a poor way to find out
+                // that stopped being true.
+                var byID = Dictionary(libraryPageGlobals.games.map { ($0.id, $0) },
+                                      uniquingKeysWith: { first, _ in first })
                 for game in enriched { byID[game.id] = game }
                 libraryPageGlobals.games = Array(byID.values)
             }

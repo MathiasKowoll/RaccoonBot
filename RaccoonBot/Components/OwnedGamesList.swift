@@ -24,11 +24,14 @@ enum InstallTarget: Identifiable {
 
 struct OwnedGamesList: View {
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
-    @EnvironmentObject var appGlobals: AppGlobals
-    @State private var asking: InstallTarget?
-    /// The app id currently being fetched, so its card can say so.
-    @State private var opening: String?
 
+    /// The grid, with the states that precede it.
+    ///
+    /// It used to carry its own copy of the install flow -- asking, opening,
+    /// open(), install(), send() and a dialog -- left behind when the cards
+    /// moved to OwnedGamesGrid. None of it could fire: the grid builds the
+    /// cards and handles their buttons. Seventy lines that looked like the
+    /// feature and were not it.
     var body: some View {
         Group {
             if !libraryPageGlobals.ownedLoaded {
@@ -52,63 +55,6 @@ struct OwnedGamesList: View {
                 }
             }
         }
-        .confirmationDialog("Which version?", isPresented: .constant(asking != nil), presenting: asking) { target in
-            if case .choose(let game) = target {
-                Button("Windows version") { send(game, toMac: false) }
-                Button("macOS version") { send(game, toMac: true) }
-                Button("Cancel", role: .cancel) { asking = nil }
-            }
-        } message: { target in
-            if case .choose(let game) = target {
-                Text("\(game.displayName) ships for both. The Windows version runs in the bottle, which is where the video fixes apply; the macOS version is handled by the Steam app on this Mac.")
-            }
-        }
-    }
-
-    /// Fetch this one title's store record and show it.
-    ///
-    /// One request, for the title actually being looked at, and cached after
-    /// that. The alternative was fetching all 334 up front, which is 334
-    /// requests for descriptions nobody had asked to read.
-    private func open(_ game: OwnedGame) async {
-        opening = game.appID
-        defer { opening = nil }
-        guard let info = try? await api.fetchGameInfo(appID: game.appID) else { return }
-        libraryPageGlobals.selectedGame = Game(from: info,
-                                               id: game.appID,
-                                               isNative: game.runsOnMac && !game.runsOnWindows,
-                                               downloadProgress: 0,
-                                               isInstalled: false,
-                                               appNames: [])
-        libraryPageGlobals.showDetailView = true
-    }
-
-    private func install(_ game: OwnedGame) {
-        // Only ask when there is genuinely a choice. A Windows-only title has
-        // one answer and a dialog for it is just a click.
-        if game.isCrossPlatform {
-            asking = .choose(game)
-        } else {
-            send(game, toMac: game.runsOnMac && !game.runsOnWindows)
-        }
-    }
-
-    private func send(_ game: OwnedGame, toMac: Bool) {
-        asking = nil
-        if toMac {
-            // The native client on this Mac, which has its own library folders.
-            if let url = URL(string: "steam://install/\(game.appID)") {
-                NSWorkspace.shared.open(url)
-            }
-            return
-        }
-        let steamX86AppPath = appGlobals.windowsSteamFolder?
-            .appendingPathComponent("Steam.exe").path(percentEncoded: false)
-            ?? "C:\\Program Files (x86)\\Steam\\Steam.exe"
-        installGame(id: game.appID,
-                    cxAppPath: appGlobals.cxAppPath,
-                    selectedBottle: appGlobals.selectedBottle,
-                    SteamX86AppPath: steamX86AppPath)
     }
 }
 
@@ -234,7 +180,13 @@ struct OwnedGamesGrid: View {
             }
         }
         .padding(.horizontal)
-        .confirmationDialog("Which version?", isPresented: .constant(asking != nil), presenting: asking) { target in
+        // A real binding, not .constant. SwiftUI writes false into this when the
+        // dialog dismisses, and a constant swallows that -- leaving `asking`
+        // set, so the dialog is free to come back.
+        .confirmationDialog("Which version?",
+                            isPresented: Binding(get: { asking != nil },
+                                                 set: { if !$0 { asking = nil } }),
+                            presenting: asking) { target in
             if case .choose(let game) = target {
                 Button("Windows version") { send(game, toMac: false) }
                 Button("macOS version") { send(game, toMac: true) }

@@ -38,25 +38,28 @@ enum PlatformBadge {
 /// The four panes of the Windows mark.
 ///
 /// Drawn rather than named: SF Symbols carries Apple's logo and nobody else's,
-/// and "pc" is a beige desktop from 1995 that reads as "computer", not as
-/// "Windows".
+/// and Microsoft does not licence theirs for this. Plain geometry, written
+/// here.
+///
+/// Built from fixed frames rather than a GeometryReader. That reader expands to
+/// fill whatever it is given and lays its content out from the top left, so the
+/// mark sat off-centre in its circle. Stacks of a known size centre themselves.
 struct WindowsGlyph: View {
+    var side: CGFloat
+
     var body: some View {
-        GeometryReader { geometry in
-            let side = min(geometry.size.width, geometry.size.height)
-            let gap = side * 0.14
-            let pane = (side - gap) / 2
-            ZStack(alignment: .topLeading) {
-                ForEach(0..<4, id: \.self) { index in
-                    Rectangle()
-                        .frame(width: pane, height: pane)
-                        .offset(x: CGFloat(index % 2) * (pane + gap),
-                                y: CGFloat(index / 2) * (pane + gap))
+        let gap = (side * 0.16).rounded()
+        let pane = ((side - gap) / 2).rounded()
+        VStack(spacing: gap) {
+            ForEach(0..<2, id: \.self) { _ in
+                HStack(spacing: gap) {
+                    ForEach(0..<2, id: \.self) { _ in
+                        Rectangle().frame(width: pane, height: pane)
+                    }
                 }
             }
-            .frame(width: side, height: side)
         }
-        .aspectRatio(1, contentMode: .fit)
+        .frame(width: pane * 2 + gap, height: pane * 2 + gap)
     }
 }
 
@@ -68,7 +71,7 @@ struct PlatformGlyph: View {
         Group {
             switch platform.lowercased() {
             case "windows", "win":
-                WindowsGlyph().frame(width: 9, height: 9)
+                WindowsGlyph(side: 12)
             case "linux", "steamos":
                 // The real Tux, shipped as a vector asset. Larry Ewing's terms
                 // are attribution, not copyleft -- see CREDITS.md, which is the
@@ -77,13 +80,13 @@ struct PlatformGlyph: View {
                 Image("Tux")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: 11, height: 11)
+                    .frame(width: 14, height: 14)
             default:
                 Image(systemName: PlatformBadge.symbol(for: platform))
-                    .font(.system(size: 10))
+                    .font(.system(size: 13))
             }
         }
-        .frame(width: 18, height: 18)
+        .frame(width: 24, height: 24)
         .background(.quaternary, in: Circle())
         .help(PlatformBadge.name(for: platform))
         .accessibilityLabel(PlatformBadge.name(for: platform))

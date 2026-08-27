@@ -55,6 +55,21 @@ struct GameOptionsView: View {
                             VStack(alignment: .trailing){
                                 if !current.isNative {
                                     DropDown(options: cxGraphicsBackend, label: "Graphics Backend", value: $gameOptions.cxGraphicsBackend)
+                                        .onChange(of: gameOptions.cxGraphicsBackend) { _, backend in
+                                            // The variable follows the choice. Picking a
+                                            // backend called Metal 4 and then running with
+                                            // Metal 4 off is not what anybody meant, and
+                                            // loading a saved value is not enough -- the
+                                            // change has to reach it too, which is the bug
+                                            // this fixes.
+                                            //
+                                            // Off below macOS 27, where the toggle is
+                                            // disabled: turning it on there would write
+                                            // D3DM_MTL4=1 for a system that cannot use it
+                                            // and nobody could turn it back off.
+                                            gameOptions.d3dMtl4Enabled =
+                                                backend == "d3dmetal4" && OSVersion >= 27
+                                        }
                                 }
                                 Divider()
                                 TextField("Game arguments", text: $gameOptions.gameArguments)

@@ -339,9 +339,18 @@ func getInlineEnvs(from: GameOptions, cxAppPath: String? = nil) -> String {
     value += from.mvkArgBuff ? "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1 " : "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=0 "
     value += "ROSETTA_ADVERTISE_AVX=\(onOff(from.advertiseAVX)) "
     value += "CX_GRAPHICS_BACKEND=\"\(cxGraphicsBackend)\" "
-    value += "D3DM_MTL4=\(from.d3dMtl4Enabled ? "1" : "0") "
-    if from.d3dMaxFPS > 20 {
-        value += "D3DM_MAX_FPS=\(DoubleToFormattedStr(from.d3dMaxFPS)) "
+    // Only D3DMetal 4 reads these two, so they are only written when 4 is
+    // what will be loaded. Measured on the two toolkits this application
+    // carries: the 3.0 binary contains neither string, the 4 one contains
+    // both. The backend name is what decides which gets installed --
+    // Launcher.swift copies apple_gptk 3 or 4 in on every launch -- so
+    // writing them for a 3 engine sets variables nothing reads and puts a
+    // frame cap in a launch line that will not honour it.
+    if from.cxGraphicsBackend == "d3dmetal4" {
+        value += "D3DM_MTL4=\(from.d3dMtl4Enabled ? "1" : "0") "
+        if from.d3dMaxFPS > 20 {
+            value += "D3DM_MAX_FPS=\(DoubleToFormattedStr(from.d3dMaxFPS)) "
+        }
     }
 //    switch (from.vulkanLib) {
 //        case "latest":

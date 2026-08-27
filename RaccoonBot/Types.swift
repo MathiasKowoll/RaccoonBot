@@ -162,7 +162,12 @@ class GameOptions: ObservableObject { // this is used as form state
         self.wineEsync = data.wineEsync ?? ""
         self.d3dMEnableMetalFX = data.d3dMEnableMetalFX ?? ""
         self.d3dSupportDXR = data.d3dSupportDXR ?? ""
-        self.d3dMtl4Enabled = data.d3dMtl4Enabled ?? false
+        // Unset means on when the backend is the Metal 4 one. Choosing a
+        // backend called Metal 4 and running it with Metal 4 turned off is
+        // not a default anybody would ask for, and it was the default: the
+        // picker falls back to d3dmetal4 for a game with no valid saved
+        // backend, so most games were getting D3DM_MTL4=0.
+        self.d3dMtl4Enabled = data.d3dMtl4Enabled ?? (data.cxGraphicsBackend == "d3dmetal4" && OSVersion >= 27)
         self.d3dMaxFPS = data.d3dMaxFPS ?? 0
     }
     func importAutoConfig(data: GameOptionsData) {

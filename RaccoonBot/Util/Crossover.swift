@@ -319,13 +319,19 @@ func getInlineEnvs(from: GameOptions, cxAppPath: String? = nil) -> String {
 //        "D3DM_MTL4=0",
 //        "D3DM_MAX_FPS=60",
     ]
-    if let cxpath = cxAppPath  {
-        defaults += [
-            "GST_PLUGIN_SYSTEM_PATH=\(cxpath)/Contents/SharedSupport/CrossOver/lib64/GStreamer.framework/Versions/Current/lib/gstreamer-1.0",
-            "GST_PLUGIN_PATH=\(cxpath)/Contents/SharedSupport/CrossOver/lib64/GStreamer.framework/Versions/Current/lib/gstreamer-1.0",
-            "GST_PLUGIN_SCANNER=\(cxpath)/Contents/SharedSupport/CrossOver/lib64/GStreamer.framework/Versions/Current/bin/gst-plugin-scanner",
-        ]
-    }
+    // No GStreamer variables are set here any more.
+    //
+    // These three named lib64/GStreamer.framework/Versions/Current, which is
+    // where the patcher used to install a framework of its own. It stopped
+    // doing that, and the path has pointed at nothing since -- set on the
+    // command line of every launch, for a directory that does not exist.
+    // GST_PLUGIN_SYSTEM_PATH was harmless because the engine's own `wine`
+    // overwrites it after reading the bottle; GST_PLUGIN_PATH is not
+    // overwritten and simply named nowhere.
+    //
+    // The engine now carries its decoders in lib64/gstreamer-1.0, or
+    // lib/<arch>/gstreamer-1.0 on a 27, which is exactly where its own `wine`
+    // points GST_PLUGIN_SYSTEM_PATH. Saying nothing is the right instruction.
     let cxGraphicsBackend = from.cxGraphicsBackend.contains("d3dmetal") ? "d3dmetal" : from.cxGraphicsBackend
     value += defaults.joined(separator: " ") + " "
     value += from.mtlHudEnabled ? "MTL_HUD_ENABLED=1 " : ""

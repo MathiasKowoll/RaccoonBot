@@ -148,3 +148,50 @@ struct EngineCodecsInstallTests {
         #expect(EngineCodecs.Failure.frameworkMissing.errorDescription?.contains("GStreamer.framework") == true)
     }
 }
+
+/// GStreamer stays a requirement, and the version is part of it.
+///
+/// winevideo names it exactly -- 1.24.13 for Nioh, Nioh 2, Persona 5 Strikers,
+/// Returnal, Ghostwire Tokyo and the WMV/VC-1 titles -- so "some 1.24" is not
+/// the requirement and must not be reported as if it were.
+struct GStreamerRequirementTests {
+
+    private func status(framework: GStreamerStatus.Framework, decoders: [String]) -> GStreamerStatus {
+        GStreamerStatus(framework: framework, engineDecoders: decoders, engineVersion: "26.3.0.39832")
+    }
+
+    @Test func theExpectedVersionIsTheOneWinevideoNames() {
+        #expect(GStreamerStatus.expectedVersion == "1.24.13")
+    }
+
+    @Test func anotherVersionIsNamedRatherThanAccepted() {
+        let s = status(framework: .present(version: "1.28.4"), decoders: [])
+        #expect(s.frameworkMismatch == "1.28.4")
+        #expect(s.summary.contains("1.28.4"))
+        #expect(s.summary.contains("1.24.13"), "the summary has to say which one is wanted")
+    }
+
+    @Test func theRightVersionIsNotFlagged() {
+        #expect(status(framework: .present(version: "1.24.13"), decoders: []).frameworkMismatch == nil)
+    }
+
+    /// What makes a video play is the decoder being inside the engine. The
+    /// framework matters when the engine is patched, and by the time a game
+    /// runs it has already been copied in -- so a mismatched framework beside
+    /// a working engine is a note, not a failure.
+    @Test func decodersInTheEngineAreWhatCounts() {
+        let mismatched = status(framework: .present(version: "1.28.4"), decoders: ["libgstlibav"])
+        #expect(mismatched.isOK)
+        #expect(mismatched.summary.contains("carries libav"))
+
+        let none = status(framework: .present(version: "1.24.13"), decoders: [])
+        #expect(!none.isOK)
+    }
+
+    @Test func withNoFrameworkAtAllItSaysWhatIsMissing() {
+        let s = status(framework: .missing, decoders: [])
+        #expect(!s.isOK)
+        #expect(s.summary.contains("1.24.13"))
+        #expect(s.summary.contains("silent"))
+    }
+}

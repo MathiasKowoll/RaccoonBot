@@ -43,6 +43,20 @@ nonisolated struct GStreamerStatus: Sendable {
 
     static let frameworkPath = "/Library/Frameworks/GStreamer.framework/Versions/1.0"
 
+    /// The version the decoders are meant to come from.
+    ///
+    /// Not "any 1.24". winevideo's own requirements name it exactly:
+    ///
+    ///   Official GStreamer 1.24.13 is required for Nioh, Nioh 2, Persona 5
+    ///   Strikers, Returnal, Ghostwire Tokyo, and WMV/VC-1 titles such as RE
+    ///   Engine games. It is optional for supported UE5 ElectraPlayer titles
+    ///   and is not required for Ninja Gaiden 4's bundled VP9 path.
+    ///
+    /// It is needed when an engine is patched, which is when the decoders are
+    /// copied out of it -- not while a game runs, by which time they are
+    /// inside the engine.
+    static let expectedVersion = "1.24.13"
+
     /// The plugins whose absence is a silent video rather than a preference.
     ///
     /// libgstlibav is the one CrossOver genuinely does not ship: VC-1, WMV,
@@ -154,14 +168,31 @@ nonisolated struct GStreamerStatus: Sendable {
         return nil
     }
 
-    var summary: String {
-        if isUsable {
-            return "This CrossOver carries libav — the decoders for VC-1, WMV, WMA and software VP9"
-        }
-        return "This CrossOver does not carry libav — titles whose video needs it will be silent"
+    /// The installed framework, when it is not the version the decoders are
+    /// meant to come from. Nil when it is, or when there is none.
+    var frameworkMismatch: String? {
+        guard case .present(let version) = framework, version != Self.expectedVersion else { return nil }
+        return version
     }
 
-    /// The framework is where a payload is built from, not what runs the
-    /// games, so it does not decide this.
+    var summary: String {
+        if isUsable {
+            if let other = frameworkMismatch {
+                return "This CrossOver carries libav. GStreamer \(other) is installed; \(Self.expectedVersion) is the version these decoders are taken from, so patching again would import that one."
+            }
+            return "This CrossOver carries libav — the decoders for VC-1, WMV, WMA and software VP9"
+        }
+        switch framework {
+        case .missing:
+            return "This CrossOver has no libav, and GStreamer \(Self.expectedVersion) is not installed to take it from — titles needing VC-1, WMV or WMA will be silent"
+        case .present(let version) where version != Self.expectedVersion:
+            return "This CrossOver has no libav. GStreamer \(version) is installed, but \(Self.expectedVersion) is the version these decoders are taken from"
+        case .present:
+            return "This CrossOver has no libav yet — patch it again and GStreamer \(Self.expectedVersion) will be imported into it"
+        }
+    }
+
+    /// The decoders being in the engine is what makes a video play. The
+    /// framework matters when the engine is patched, not while a game runs.
     var isOK: Bool { isUsable }
 }

@@ -96,16 +96,25 @@ let DEFAULT_BOTTLE_PATH = "Library/Application Support/CrossOver/Bottles/"
 let BLACKLIST = [
     "228980", // Steamworks
 ]
+/// Whether the run keeps a log.
+///
+/// Three names answer. `RaccoonBotDebug` is ours and is the one to use;
+/// `RACCOONBOT_DEBUG` because that is how an environment variable is usually
+/// spelled and somebody will try it; `PROCYON_DEBUG` because it is what this
+/// was called upstream and anyone arriving from there already knows it.
+///
+/// Accepting the three costs nothing. Accepting only one and saying nothing
+/// costs an evening of "I set it and it did not work".
 let DEBUG_ENABLED: Bool = {
-    let env = ProcessInfo.processInfo.environment["PROCYON_DEBUG"]?.lowercased()
-    switch env {
-    case "1", "true", "yes":
-        return true
-    case "0", "false", "no":
-        return false
-    default:
-        return false
+    let env = ProcessInfo.processInfo.environment
+    for name in ["RaccoonBotDebug", "RACCOONBOT_DEBUG", "PROCYON_DEBUG"] {
+        switch env[name]?.lowercased() {
+        case "1", "true", "yes": return true
+        case "0", "false", "no": return false
+        default: continue
+        }
     }
+    return false
 }()
 let useLogger: Bool = false
 

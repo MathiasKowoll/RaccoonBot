@@ -490,8 +490,27 @@ func makeCrossoverPatchedCopy(sourceCXPath: URL, setProgress: @escaping (Double,
                 disableAutoUpdate(url: destUrl)
             }
             markAsPatched(url: destUrl)
-            // MARK: Step 5 sign
-            // MARK: Step 6 fix app after patching
+            // MARK: Step 5 put the decoders CrossOver does not ship inside it
+            //
+            // Before signing, because the files have to be inside the bundle
+            // when its signature is made. Copied out of the user's own
+            // GStreamer, moving anything already there aside as .orig -- the
+            // same treatment every other resource here gets, so the engine can
+            // always be put back.
+            //
+            // A failure here is reported and not fatal: an engine with no
+            // libav still runs every title whose video it can already decode,
+            // and refusing to finish the patch would take those away too.
+            setProgress(1, "Installing video decoders")
+            do {
+                let installed = try EngineCodecs.install(intoEngineAt: destUrl.path(percentEncoded: false))
+                console.log("decoders in \(installed.pluginDirectory)")
+            } catch {
+                console.warn("No decoders installed: \(error.localizedDescription)")
+            }
+
+            // MARK: Step 6 sign
+            // MARK: Step 7 fix app after patching
             if !isX87 {
                 try signAndFixup(destPath: destUrl.path())
             } else {

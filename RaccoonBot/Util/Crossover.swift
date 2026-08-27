@@ -196,8 +196,23 @@ func applyStagedCodecs(to bottleURL: URL, cxAppPath: String?) -> CodecPointing {
         return .nothingStaged(arch: arch)
     }
     setBottleEnv(bottleURL, key: "GST_PLUGIN_PATH", value: path)
-    // And a cache of its own, so this engine's view of what exists is not
-    // overwritten by the next engine to run.
+    // A cache of its own -- but only where the engine leaves the choice to us.
+    //
+    // CrossOver's own `wine` applies the bottle's environment first and then,
+    // if the engine ships lib/<arch>/gstreamer-1.0, overwrites both
+    // GST_PLUGIN_SYSTEM_PATH and GST_REGISTRY with its own:
+    //
+    //     $ENV{GST_REGISTRY} = CXBottle::get_user_dir() . "/gstreamer-1.0-registry.$host.bin"
+    //
+    // Every engine on this machine ships that directory, so for all of them
+    // this line has no effect and the cache stays one shared file per
+    // architecture for the whole CrossOver install. Two engines with different
+    // plugin sets do take turns writing it, and that is not fixable from here.
+    // Left in place for an engine that ships no plugins of its own, where the
+    // assignment does not run and ours is what GStreamer sees.
+    //
+    // GST_PLUGIN_PATH is a different variable and survives: the engine sets
+    // GST_PLUGIN_SYSTEM_PATH, and GStreamer reads both.
     setBottleEnv(bottleURL, key: "GST_REGISTRY",
                  value: CodecStaging.registryPath(engineAppPath: cxAppPath, arch: arch))
 

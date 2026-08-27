@@ -497,26 +497,6 @@ func makeCrossoverPatchedCopy(sourceCXPath: URL, setProgress: @escaping (Double,
             } else {
                 try removeSignature(destURL: destUrl)
             }
-            // MARK: Step 7 stage the codecs this engine does not ship
-            //
-            // The comment at Step 2 has described this since the GStreamer
-            // install was taken out of the patcher. Nothing did it: the
-            // staging on a developer's machine had been left behind by a
-            // different application, and on anyone else's it was never built
-            // at all -- so stagedCodecPath returned nil, GST_PLUGIN_PATH was
-            // never written, and the one thing this fork exists to fix did
-            // not work.
-            //
-            // After signing, because the symlinks point into the engine and
-            // the engine has to be finished first.
-            setProgress(1, "Staging video codecs")
-            let staging = CodecStaging.stageAll(engineAppPath: destUrl.path(percentEncoded: false))
-            if staging.staged.isEmpty {
-                console.warn("No codecs staged for \(destUrl.lastPathComponent): videos needing VC-1, WMV, WMA or WebM will not play")
-            }
-            for failure in staging.failures {
-                console.error("staging \(failure.arch): \(failure.reason)")
-            }
         } else {
             console.error("Couldn't find Crossover app in \(destUrl.path())")
         }

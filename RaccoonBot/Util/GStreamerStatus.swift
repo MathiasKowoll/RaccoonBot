@@ -30,38 +30,45 @@ nonisolated struct GStreamerStatus: Sendable {
     }
 
     let framework: Framework
-    /// Architectures staged for the engine in use, e.g. ["x86_64", "aarch64"].
-    let staged: [String]
-    /// What each staged architecture was built against, keyed by architecture.
+    /// The decoder plugins this engine carries itself, by file name.
     ///
-    /// Per architecture, not one value for the pair. It used to keep only the
-    /// first it found, so a machine with a fresh x86_64 staging and a stale
-    /// aarch64 one reported "current" -- and the ARM bottle, the one that
-    /// actually needed saying, was the half nobody was told about.
-    let builtAgainst: [String: String]
-    /// The version that engine actually runs, to notice drift.
+    /// Read from the engine rather than from a directory of our own. The
+    /// codecs used to be staged beside the engine and pointed at through
+    /// GST_PLUGIN_PATH; they now live inside it, which is what winevideo does
+    /// and what removes the one thing that arrangement could never fix -- a
+    /// plugin built against one GStreamer core loading beside another.
+    let engineDecoders: [String]
+    /// The version that engine reports.
     let engineVersion: String?
 
     static let frameworkPath = "/Library/Frameworks/GStreamer.framework/Versions/1.0"
-    /// Where the fixes application keeps them, named after the engine bundle.
-    static let stagingRoot = "Library/Application Support/MacGameVideoFix/gst-codecs"
 
-    var isUsable: Bool { !staged.isEmpty }
+    /// The plugins whose absence is a silent video rather than a preference.
+    ///
+    /// libgstlibav is the one CrossOver genuinely does not ship: VC-1, WMV,
+    /// WMA and software VP9 all come from it. Matroska it does ship.
+    static let wanted = ["libgstlibav"]
+
+    var isUsable: Bool { !engineDecoders.isEmpty }
 
     /// The staging was built for a different build of this engine.
+/// Where an engine keeps its own GStreamer plugins.
     ///
-    /// Not fatal on its own -- GStreamer keeps its ABI across 1.x -- but it is
-    /// how a working setup quietly stops working after a CrossOver update, so
-    /// it is worth saying.
-    var isStale: Bool { !staleArchitectures.isEmpty }
-
-    /// The staged architectures built against something the engine no longer is.
-    var staleArchitectures: [String] {
-        guard let engineVersion else { return [] }
-        return staged.filter { arch in
-            guard let built = builtAgainst[arch] else { return false }
-            return built != engineVersion
+    /// 26 keeps one lib64 and does not name the architecture; 27 keeps one
+    /// per architecture under lib. Do not invent a lib64 on a 27 engine: its
+    /// own `wine` sets GST_PLUGIN_SYSTEM_PATH to whichever of these exists and
+    /// REPLACES the value, so a half-filled lib64 would hide the twenty
+    /// plugins it ships.
+    static func pluginDirectory(ofEngineAt path: String) -> URL? {
+        let app = URL(fileURLWithPath: path)
+        guard let layout = EngineLayout.of(app) else { return nil }
+        for arch in ["x86_64", "aarch64"] {
+            let dir = app.appendingPathComponent(SHARED_SUPPORT_COMPONENT)
+                .appendingPathComponent(layout.moltenVKRoot(arch: arch))
+                .appendingPathComponent("gstreamer-1.0")
+            if FileManager.default.fileExists(atPath: dir.path(percentEncoded: false)) { return dir }
         }
+        return nil
     }
 
     static func read(engineAppPath: String?) -> GStreamerStatus {
@@ -72,33 +79,18 @@ nonisolated struct GStreamerStatus: Sendable {
         }
 
         guard let engineAppPath else {
-            return GStreamerStatus(framework: framework, staged: [],
-                                   builtAgainst: [:], engineVersion: nil)
-        }
-        let bundle = URL(fileURLWithPath: engineAppPath).deletingPathExtension().lastPathComponent
-        let slug = String(bundle.map { c in
-            c.isLetter || c.isNumber || c == "." || c == "_" || c == "-" ? c : "-"
-        })
-        let root = f.homeDirectoryForCurrentUser
-            .appendingPathComponent(stagingRoot)
-            .appendingPathComponent(slug)
-
-        var staged: [String] = []
-        var builtAgainst: [String: String] = [:]
-        for arch in ["x86_64", "aarch64"] {
-            let dir = root.appendingPathComponent(arch)
-            // .complete is written last, precisely so a half-built directory
-            // never reads as ready.
-            guard f.fileExists(atPath: dir.appendingPathComponent(".complete").path(percentEncoded: false)) else { continue }
-            staged.append(arch)
-            builtAgainst[arch] = (try? String(contentsOf: dir.appendingPathComponent(".built-against"), encoding: .utf8))?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return GStreamerStatus(framework: framework, engineDecoders: [], engineVersion: nil)
         }
 
+        var found: [String] = []
+        if let dir = pluginDirectory(ofEngineAt: engineAppPath) {
+            for name in wanted
+            where f.fileExists(atPath: dir.appendingPathComponent("\(name).dylib").path(percentEncoded: false)) {
+                found.append(name)
+            }
+        }
         let engineVersion = (NSDictionary(contentsOfFile: engineAppPath + "/Contents/Info.plist")?["CFBundleVersion"] as? String)
-
-        return GStreamerStatus(framework: framework, staged: staged,
-                               builtAgainst: builtAgainst, engineVersion: engineVersion)
+        return GStreamerStatus(framework: framework, engineDecoders: found, engineVersion: engineVersion)
     }
 
     /// The series, read from the library's compatibility version.
@@ -163,25 +155,13 @@ nonisolated struct GStreamerStatus: Sendable {
     }
 
     var summary: String {
-        switch framework {
-        case .missing:
-            return "GStreamer.framework is not installed — video fixes that need a decoder will not work"
-        case .present(let version):
-            if staged.isEmpty {
-                return "GStreamer \(version) is installed, but no codecs are staged for this engine"
-            }
-            if isStale {
-                let stale = staleArchitectures
-                let built = stale.compactMap { builtAgainst[$0] }.first ?? "another build"
-                let which = stale.count == staged.count ? "Codecs" : "\(stale.joined(separator: " and ")) codecs"
-                return "\(which) staged for \(built) — this engine now runs \(engineVersion ?? "a different one")"
-            }
-            return "GStreamer \(version), codecs staged for \(staged.joined(separator: " and "))"
+        if isUsable {
+            return "This CrossOver carries libav — the decoders for VC-1, WMV, WMA and software VP9"
         }
+        return "This CrossOver does not carry libav — titles whose video needs it will be silent"
     }
 
-    var isOK: Bool {
-        if case .present = framework { return isUsable && !isStale }
-        return false
-    }
+    /// The framework is where a payload is built from, not what runs the
+    /// games, so it does not decide this.
+    var isOK: Bool { isUsable }
 }

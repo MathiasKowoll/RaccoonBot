@@ -97,25 +97,6 @@ func bottleInfo(_ bottleURL: URL) -> BottleInfo? {
                       version: value("Version") ?? "")
 }
 
-/// Where the codecs CrossOver does not ship are staged, for one engine and one
-/// architecture.
-///
-/// Built by CodecStaging, in this application. The directory still carries
-/// MacGameVideoFix's name because moving it would orphan every staging already
-/// on a user's disk; see CodecStaging.root.
-///
-/// The directory is named after the engine's bundle, not its version: a patched
-/// copy declares the same CFBundleVersion as the original it was copied from,
-/// so the version cannot tell them apart. Returns nil unless the staging is
-/// finished -- `.complete` is written last, precisely so a half-built directory
-/// never reads as ready.
-func stagedCodecPath(cxAppPath: String, arch: String) -> String? {
-    let root = CodecStaging.directory(engineAppPath: cxAppPath, arch: arch)
-    guard FileManager.default.fileExists(atPath: root.appendingPathComponent(".complete").path(percentEncoded: false))
-    else { return nil }
-    return CodecStaging.pluginPath(engineAppPath: cxAppPath, arch: arch)
-}
-
 /// Set one key in a bottle's [EnvironmentVariables], leaving every other key
 /// alone, and creating the section if it is missing.
 ///
@@ -156,94 +137,6 @@ func setBottleEnv(_ bottleURL: URL, key: String, value: String) {
         console.log("\(key) set in \(bottleURL.lastPathComponent)")
     } catch {
         console.error(String(reflecting: error))
-    }
-}
-
-/// Point a bottle at the staged codecs for the engine that will run it.
-///
-/// Called when a bottle is chosen, so the user never has to know this exists.
-/// The architecture comes from the bottle itself: an ARM bottle needs the
-/// aarch64 staging, and handing it the x86_64 one would load libraries of the
-/// wrong architecture into the process.
-/// What became of pointing one bottle at the staged codecs.
-nonisolated enum CodecPointing: Equatable, Sendable {
-    case pointed(arch: String)
-    /// Nothing is staged for that architecture, so nothing was written. The
-    /// bottle looks exactly like a working one and its cutscenes are silent.
-    case nothingStaged(arch: String)
-    /// Pointed, but this bottle was last updated by a different engine than
-    /// the one the staging was built against.
-    ///
-    /// The staging symlinks its GStreamer core into the engine it was built
-    /// for. A bottle carried to an older engine then loads that core beside
-    /// the engine's own -- two cores in one process, which is the crash this
-    /// whole arrangement exists to avoid. Seen on this machine: a 26.3 bottle
-    /// pointing at a staging built for 27.
-    case pointedAtAnotherEngine(arch: String, bottle: String, engine: String)
-    case unreadableBottle
-    case noEngine
-}
-
-@discardableResult
-func applyStagedCodecs(to bottleURL: URL, cxAppPath: String?) -> CodecPointing {
-    guard let cxAppPath else { return .noEngine }
-    guard let info = bottleInfo(bottleURL) else { return .unreadableBottle }
-    // From the bottle itself. Handing an ARM bottle the x86_64 staging loads
-    // libraries of the wrong architecture into the process.
-    let arch = info.isARM ? "aarch64" : "x86_64"
-    guard let path = stagedCodecPath(cxAppPath: cxAppPath, arch: arch) else {
-        console.warn("No staged codecs for \(arch); videos needing VC-1, WMV or WMA will not play in \(info.name)")
-        return .nothingStaged(arch: arch)
-    }
-    setBottleEnv(bottleURL, key: "GST_PLUGIN_PATH", value: path)
-    // A cache of its own -- but only where the engine leaves the choice to us.
-    //
-    // CrossOver's own `wine` applies the bottle's environment first and then,
-    // if the engine ships lib/<arch>/gstreamer-1.0, overwrites both
-    // GST_PLUGIN_SYSTEM_PATH and GST_REGISTRY with its own:
-    //
-    //     $ENV{GST_REGISTRY} = CXBottle::get_user_dir() . "/gstreamer-1.0-registry.$host.bin"
-    //
-    // Every engine on this machine ships that directory, so for all of them
-    // this line has no effect and the cache stays one shared file per
-    // architecture for the whole CrossOver install. Two engines with different
-    // plugin sets do take turns writing it, and that is not fixable from here.
-    // Left in place for an engine that ships no plugins of its own, where the
-    // assignment does not run and ours is what GStreamer sees.
-    //
-    // GST_PLUGIN_PATH is a different variable and survives: the engine sets
-    // GST_PLUGIN_SYSTEM_PATH, and GStreamer reads both.
-    setBottleEnv(bottleURL, key: "GST_REGISTRY",
-                 value: CodecStaging.registryPath(engineAppPath: cxAppPath, arch: arch))
-
-    // Written for the engine that is selected, which is the engine we will
-    // launch with -- so this is right whenever we do the launching. It stops
-    // being right when something else opens the bottle, and the bottle says
-    // so: its Version is whichever engine last updated it.
-    let engineVersion = (NSDictionary(contentsOfFile: cxAppPath + "/Contents/Info.plist")?["CFBundleVersion"] as? String)
-    if let engineVersion, !info.version.isEmpty, info.version != engineVersion {
-        console.warn("\(info.name) was last updated by \(info.version) but now points at a staging built for \(engineVersion)")
-        return .pointedAtAnotherEngine(arch: arch, bottle: info.version, engine: engineVersion)
-    }
-    return .pointed(arch: arch)
-}
-
-/// Point every bottle the application has selected at the staged codecs.
-///
-/// One place on purpose. There are already two -- the ordinary bottle and the
-/// ARM one -- and each store will bring its own. A bottle nobody pointed is a
-/// bottle whose cutscenes are silent, and there is nothing about it that looks
-/// wrong.
-///
-/// Only bottles this application manages, which are the ones under the patched
-/// engine's own CX_BOTTLE_PATH. A CrossOver install of its own has its own
-/// bottles elsewhere and they are not ours to write into.
-func applyStagedCodecs(toAll bottles: [String], cxAppPath: String?) -> [(bottle: String, result: CodecPointing)] {
-    var seen = Set<String>()
-    return bottles.compactMap { raw -> (bottle: String, result: CodecPointing)? in
-        guard !raw.isEmpty, seen.insert(raw).inserted, let url = URL(string: raw) else { return nil }
-        return (bottle: url.lastPathComponent.removingPercentEncoding ?? url.lastPathComponent,
-                result: applyStagedCodecs(to: url, cxAppPath: cxAppPath))
     }
 }
 

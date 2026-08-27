@@ -61,21 +61,23 @@ struct GameOptionsView: View {
                                 TextField("Env variables", text: $gameOptions.envVariables)
                                 if !current.isNative {
                                     Divider()
-                                    Toggle("Run in the ARM bottle", isOn: $gameOptions.useArmBottle)
-                                        .onChange(of: gameOptions.useArmBottle) { _, newValue in
-                                            // An ARM bottle has no D3DMetal: Direct3D goes
-                                            // through DXMT, which reaches D3D11. Forcing the
-                                            // backend here is the same idiom the DX9 toggle
-                                            // already uses below.
-                                            if newValue { gameOptions.cxGraphicsBackend = "dxmt" }
+                                    if showArmSupport {
+                                        Toggle("Run in the ARM bottle", isOn: $gameOptions.useArmBottle)
+                                            .onChange(of: gameOptions.useArmBottle) { _, newValue in
+                                                // An ARM bottle has no D3DMetal: Direct3D goes
+                                                // through DXMT, which reaches D3D11. Forcing the
+                                                // backend here is the same idiom the DX9 toggle
+                                                // already uses below.
+                                                if newValue { gameOptions.cxGraphicsBackend = "dxmt" }
+                                            }
+                                        if gameOptions.useArmBottle {
+                                            if appGlobals.selectedArmBottle.isEmpty {
+                                                Text("No ARM bottle chosen. Pick one in Options, or create one in CrossOver with the ARM architecture.")
+                                                    .font(.footnote).foregroundStyle(.orange)
+                                            }
+                                            Text("Draws through DXMT, so Direct3D 11 at most: a Direct3D 12 title will not run here.")
+                                                .font(.footnote).foregroundStyle(.secondary)
                                         }
-                                    if gameOptions.useArmBottle {
-                                        if appGlobals.selectedArmBottle.isEmpty {
-                                            Text("No ARM bottle chosen. Pick one in Options, or create one in CrossOver with the ARM architecture.")
-                                                .font(.footnote).foregroundStyle(.orange)
-                                        }
-                                        Text("Draws through DXMT, so Direct3D 11 at most: a Direct3D 12 title will not run here.")
-                                            .font(.footnote).foregroundStyle(.secondary)
                                     }
                                     Divider()
                                     Text("32Bits options")

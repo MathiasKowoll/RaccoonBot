@@ -38,6 +38,14 @@ let AUTOFILL_CUSTOM_GAME_ENABLED: Bool = {
 ///                   apple_gptk          libMoltenVK.dylib     dxmt
 ///     26.x          lib64/apple_gptk    lib64/                lib/dxmt
 ///     27 (Preview)  lib/apple_gptk      lib/<arch>/           lib/dxmt
+/// Whether the interface offers the ARM bottle at all.
+///
+/// Off for now: the engine in use is a 26.3 base, which has no aarch64
+/// libraries, and nothing here runs on ARM. The machinery is untouched --
+/// the per-game flag, the second bottle, the launch path -- so this is one
+/// line to put back when an ARM engine is in play again.
+let showArmSupport = false
+
 enum EngineLayout {
     case cx26
     case cx27

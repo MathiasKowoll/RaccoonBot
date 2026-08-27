@@ -20,8 +20,6 @@ struct OptionsView: View {
     @State private var configuringStore: Store = .steam
     @State private var storeBottle: String = ""
     @State private var gstBusy = false
-    @State private var stagingBusy = false
-    @State private var stagingMessage: String?
     @State private var gstMessage: String?
 
     /// Bottles that can actually serve a game marked to run on ARM: ARM
@@ -53,86 +51,7 @@ struct OptionsView: View {
         }
     }
 
-    /// Build the codec directory this engine's bottles are pointed at.
-    ///
-    /// The patcher does this too, on the way past. It is here as well because
-    /// the staging outlives the patching and stops being right without anyone
-    /// touching it: CrossOver updates, GStreamer updates, the directory gets
-    /// cleared out. Re-patching a whole engine to rebuild 35MB of symlinks is
-    /// not a reasonable thing to ask.
-    private func stageCodecs() async {
-        guard let path = appGlobals.cxAppPath else { return }
-        stagingMessage = nil
-        // Refused rather than attempted. Staging deletes the directory the
-        // running bottle has these dylibs mapped from, and pulling them out
-        // from under a live wineserver is worse than not restaging at all.
-        if let reason = MGVFCoordinator.reasonNotToWrite(
-            because: "restaging replaces libraries it has open") {
-            stagingMessage = reason
-            return
-        }
-        stagingBusy = true
-        defer { stagingBusy = false }
-
-        // CodecStaging is nonisolated, so this genuinely leaves the main
-        // actor. A main-actor-isolated function handed to Task.detached hops
-        // straight back, and the copying would freeze the window.
-        let result = await Task.detached { CodecStaging.stageAll(engineAppPath: path) }.value
-
-        if !result.staged.isEmpty {
-            let where_ = result.staged.map(\.arch).joined(separator: " and ")
-            let count = result.staged.map(\.total).max() ?? 0
-            stagingMessage = "Staged \(count) libraries for \(where_)."
-            // The bottles were pointed at a directory that may not have
-            // existed until a moment ago, so say it again now that it does.
-            pointBottlesAtCodecs()
-        }
-        // Named per architecture: an engine can have two and lose only one,
-        // and "it failed" hides which half still works.
-        for failure in result.failures {
-            stagingMessage = [stagingMessage, "\(failure.arch): \(failure.reason)"]
-                .compactMap { $0 }.joined(separator: "\n")
-        }
-        if result.staged.isEmpty && result.failures.isEmpty {
-            stagingMessage = "This CrossOver has no architecture that can be staged."
-        }
-        gstStatus = await Task.detached { GStreamerStatus.read(engineAppPath: path) }.value
-    }
-
-    /// Write GST_PLUGIN_PATH into every bottle the application has selected.
-    ///
-    /// Called whenever a bottle is chosen and whenever the codecs are staged,
-    /// because either one can be the thing that was missing. Silent when it
-    /// works; it says something only when a bottle was left unpointed, which
-    /// is the case nothing else would have shown.
-    private func pointBottlesAtCodecs() {
-        let results = applyStagedCodecs(toAll: [appGlobals.selectedBottle,
-                                                appGlobals.selectedArmBottle],
-                                        cxAppPath: appGlobals.cxAppPath)
-        let unpointed = results.compactMap { r -> String? in
-            if case .nothingStaged(let arch) = r.result { return "\(r.bottle) (\(arch))" }
-            return nil
-        }
-        // Said louder than the others: this one ends in a crash rather than a
-        // silent video.
-        let mismatched = results.compactMap { r -> String? in
-            if case .pointedAtAnotherEngine(_, let bottle, let engine) = r.result {
-                return "\(r.bottle) was made by CrossOver \(bottle) and this is \(engine)"
-            }
-            return nil
-        }
-        var lines: [String] = []
-        if !unpointed.isEmpty {
-            lines.append("Nothing staged for \(unpointed.joined(separator: ", ")) — its videos will be silent until you stage the codecs.")
-        }
-        if !mismatched.isEmpty {
-            lines.append("\(mismatched.joined(separator: "; ")). Let CrossOver update the bottle before playing.")
-        }
-        guard !lines.isEmpty else { return }
-        stagingMessage = lines.joined(separator: "\n")
-    }
-
-    /// The GStreamer series each installed CrossOver runs, read from its own
+/// The GStreamer series each installed CrossOver runs, read from its own
     /// core rather than assumed from its version number.
     private func installedEngineSeries() -> [Int] {
         var series: Set<Int> = []
@@ -269,29 +188,10 @@ struct OptionsView: View {
                                         Button(gstBusy ? "Downloading…" : "Install GStreamer…") {
                                             Task { await installGStreamer() }
                                         }.disabled(gstBusy)
-                                    } else if appGlobals.cxAppPath != nil {
-                                        // Offered whether or not anything is
-                                        // staged. "Stage" when there is
-                                        // nothing, "Restage" when there is --
-                                        // and always available, because the
-                                        // most common reason to want it is a
-                                        // staging that looks fine and is not.
-                                        Button(stagingBusy
-                                               ? "Staging…"
-                                               : (gst.isUsable ? "Restage codecs" : "Stage codecs")) {
-                                            Task { await stageCodecs() }
-                                        }
-                                        .disabled(stagingBusy)
-                                        .help(gst.isUsable
-                                              ? "Rebuild the decoders this CrossOver's bottles are pointed at"
-                                              : "Build the decoders CrossOver does not ship")
                                     }
                                 }
                                 if let gstMessage {
                                     Text(gstMessage).font(.footnote).foregroundStyle(.secondary)
-                                }
-                                if let stagingMessage {
-                                    Text(stagingMessage).font(.footnote).foregroundStyle(.secondary)
                                 }
                             }
                         } else {
@@ -305,9 +205,11 @@ struct OptionsView: View {
                         let path = appGlobals.cxAppPath
                         gstStatus = await Task.detached { GStreamerStatus.read(engineAppPath: path) }.value
                     }
-                    Text("ARM bottles draw through DXMT, which reaches Direct3D 11. Direct3D 12 titles will not run in one.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    if showArmSupport {
+                        Text("ARM bottles draw through DXMT, which reaches Direct3D 11. Direct3D 12 titles will not run in one.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
 
                 // One section per store: the bottle its client lives in, the
                 // ARM bottle where that applies, and where its games are
@@ -349,32 +251,32 @@ struct OptionsView: View {
                                     }
                                     Task { await load() }
                                     persistUsrDefOptionString(key: "selectedBottle", value: newValue)
-                                    pointBottlesAtCodecs()
                                 }
                             }
                         }
-                        // Second slot, not another entry in the same picker: a
-                        // bottle's architecture is fixed when it is created, so
-                        // there is no promoting the normal one. Either an ARM
-                        // bottle exists or the game cannot run on ARM.
-                        HStack {
-                            Text("ARM bottle").frame(width: 110, alignment: .leading)
-                            Picker("", selection: $appGlobals.selectedArmBottle) {
-                                Text("None").tag("")
-                                ForEach(armBottles, id: \.url.absoluteString) { info in
-                                    Text(info.name).tag(info.url.absoluteString)
+                        if showArmSupport {
+                            // Second slot, not another entry in the same picker: a
+                            // bottle's architecture is fixed when it is created, so
+                            // there is no promoting the normal one. Either an ARM
+                            // bottle exists or the game cannot run on ARM.
+                            HStack {
+                                Text("ARM bottle").frame(width: 110, alignment: .leading)
+                                Picker("", selection: $appGlobals.selectedArmBottle) {
+                                    Text("None").tag("")
+                                    ForEach(armBottles, id: \.url.absoluteString) { info in
+                                        Text(info.name).tag(info.url.absoluteString)
+                                    }
+                                }
+                            .labelsHidden()
+                            .onChange(of: appGlobals.selectedArmBottle) { _, newValue in
+                                    persistUsrDefOptionString(key: "selectedArmBottle", value: newValue)
                                 }
                             }
-                        .labelsHidden()
-                        .onChange(of: appGlobals.selectedArmBottle) { _, newValue in
-                                persistUsrDefOptionString(key: "selectedArmBottle", value: newValue)
-                                pointBottlesAtCodecs()
+                            if armBottles.isEmpty {
+                                Text("No ARM bottle found. Create one in CrossOver, choosing the ARM architecture, on CrossOver 27 — it is the engine that ships FEX to emulate x86.")
+                                    .font(.footnote)
+                                    .foregroundStyle(.orange)
                             }
-                        }
-                        if armBottles.isEmpty {
-                            Text("No ARM bottle found. Create one in CrossOver, choosing the ARM architecture, on CrossOver 27 — it is the engine that ships FEX to emulate x86.")
-                                .font(.footnote)
-                                .foregroundStyle(.orange)
                         }
                     } else if(bottles.isEmpty) {
                         if appGlobals.cxAppPath != nil {

@@ -77,9 +77,17 @@ enum BottleProcesses {
     /// from a log, and a log can be read wrongly or be a minute out of date --
     /// which is how a relaunched MGS4 got killed by a decision taken about the
     /// attempt before it. This asks the machine instead of the record.
+    ///
+    /// A game is a Windows executable. That qualifier matters: `lsof` reports a
+    /// command name, not a path, and during a shutdown this bottle produces one
+    /// simply called "Program" -- three times, in the traces taken today.
+    /// Treated as a game it would have refused every teardown that overlapped
+    /// it, forever. A list of furniture can always be missing a piece, so the
+    /// rule cannot rest on the list alone.
     static func gamesRunning(inBottleAt bottle: URL) -> [String] {
         running(inBottleAt: bottle)
             .map(\.name)
+            .filter { $0.lowercased().hasSuffix(".exe") }
             .filter { !infrastructure.contains($0.lowercased()) }
     }
 

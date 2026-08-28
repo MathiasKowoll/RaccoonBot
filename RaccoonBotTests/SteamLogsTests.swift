@@ -372,4 +372,13 @@ struct BottleFurnitureTests {
     func anythingElseCountsAsSomebodyPlaying(_ name: String) {
         #expect(BottleProcesses.infrastructure.contains(name.lowercased()) == false)
     }
+
+    /// Seen three times in today's traces: lsof reports a command name, not a
+    /// path, and this bottle produces one plainly called "Program" while
+    /// shutting down. Counted as a game it would refuse every teardown that
+    /// overlapped it -- a hang, not a kill, but a hang with no way out.
+    @Test(arguments: ["Program", "wineserver", "bash", "sh", "python3"])
+    func somethingThatIsNotAWindowsExecutableIsNotAGame(_ name: String) {
+        #expect(name.lowercased().hasSuffix(".exe") == false)
+    }
 }

@@ -98,6 +98,8 @@ final class SteamGameProcessLog {
     private(set) var emptySince: Date?
     /// When this application's first process appeared.
     private(set) var startedAt: Date?
+    /// How the last process of this application ended.
+    private(set) var lastExitCode: Int?
 
     init(steamPath: String, steamID: String) {
         self.appID = steamID
@@ -129,12 +131,14 @@ final class SteamGameProcessLog {
                     if !everStarted { startedAt = now }
                     everStarted = true
                     emptySince = nil
+                    lastExitCode = nil
                     events.append(.started(pid: pid, path: Self.quotedPath(in: line) ?? "unknown"))
                 }
             } else if let pid = Self.integer(after: "no longer tracking PID ", in: line) {
                 trackedByApp[app, default: []].remove(pid)
                 if ours {
                     let code = Self.integer(after: "exit code ", in: line) ?? 0
+                    lastExitCode = code
                     events.append(.stopped(pid: pid, exitCode: code))
                 }
             }
@@ -145,6 +149,20 @@ final class SteamGameProcessLog {
             emptySince = nil
         }
         return events
+    }
+
+    /// Did the last thing to stop crash, rather than exit?
+    ///
+    /// Windows reports an unhandled exception as the process's exit status, and
+    /// those codes are unmistakable: 0xC0000005 for an access violation,
+    /// 0xC0000374 for a corrupted heap, 0xC0000409 for a smashed stack. Every
+    /// launcher handing off in this machine's history exited 0, 1 or 3 -- never
+    /// one of these. So a game that ended this way is not a launcher chain
+    /// about to come back; it is a game that fell over, and there is nothing to
+    /// wait for.
+    var lastExitWasACrash: Bool {
+        guard let lastExitCode else { return false }
+        return lastExitCode <= -1_000_000
     }
 
     /// How long this application ran before everything stopped.

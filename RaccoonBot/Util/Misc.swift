@@ -655,8 +655,13 @@ final class LoadedGame: @unchecked Sendable {
 /// somebody watch two minutes of Steam processes to prove it is a cost with
 /// nothing bought. A game that stopped seconds after starting is the ambiguous
 /// one, and that is where the patience belongs.
-func steamIdleGrace(forSessionLasting duration: TimeInterval) -> TimeInterval {
-    duration > 5 * 60 ? 15 : 120
+func steamIdleGrace(forSessionLasting duration: TimeInterval,
+                    crashed: Bool = false) -> TimeInterval {
+    // A game that fell over is not a launcher chain about to come back, however
+    // briefly it ran. Waiting two minutes to accept that helps nobody, and it
+    // is the case somebody testing a patch hits over and over.
+    if crashed { return 15 }
+    return duration > 5 * 60 ? 15 : 120
 }
 
 /// Which of `names` is running right now, if any.
@@ -828,7 +833,8 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
                         onTerminate()
                         reportedIdle = true
                     }
-                    let grace = steamIdleGrace(forSessionLasting: processLog.sessionLength)
+                    let grace = steamIdleGrace(forSessionLasting: processLog.sessionLength,
+                                                       crashed: processLog.lastExitWasACrash)
                     if processLog.hasBeenIdle(for: grace) {
                         // The bottle is shared. Tearing it down for a game that
                         // finished would take down a game that has not.

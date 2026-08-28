@@ -285,4 +285,43 @@ struct SteamGameProcessLogTests {
     func theMiddleOfASyncIsNotTheEnd(_ line: String) {
         #expect(SteamCloudSyncWatcher.isTerminalForTesting(line) == false)
     }
+
+    /// The exit codes that actually appear in this machine's log. Every
+    /// launcher handoff ended 0, 1 or 3; every crash is a Windows exception.
+    @Test(arguments: [
+        (-1073741819, true),   // 0xC0000005 access violation
+        (-1073740972, true),   // 0xC0000374 heap corruption
+        (-1073740791, true),   // 0xC0000409 stack buffer overrun
+        (-2147483392, true),
+        (0, false), (1, false), (3, false),
+    ])
+    func aCrashIsToldApartFromAnOrdinaryExit(_ c: (code: Int, isCrash: Bool)) throws {
+        let (w, log) = try watcher()
+        try append("[..] AppID 1340990 adding PID 100 as a tracked process \"\"Z:\\game.exe\"\n", to: log)
+        w.poll()
+        try append("[..] AppID 1340990 no longer tracking PID 100, exit code \(c.code)\n", to: log)
+        w.poll()
+        #expect(w.lastExitWasACrash == c.isCrash)
+    }
+
+    /// The case Mathias asked about: a game that falls over two minutes in
+    /// still closes promptly, because a crash is not a handoff.
+    @Test func aGameThatCrashesEarlyDoesNotWaitLikeALauncher() {
+        #expect(steamIdleGrace(forSessionLasting: 120, crashed: false) == 120)
+        #expect(steamIdleGrace(forSessionLasting: 120, crashed: true) == 15)
+        #expect(steamIdleGrace(forSessionLasting: 5, crashed: true) == 15)
+    }
+
+    /// A new process starting clears the last verdict: what matters is how the
+    /// current session ended, not the one before it.
+    @Test func startingAgainForgetsHowTheLastOneEnded() throws {
+        let (w, log) = try watcher()
+        try append("[..] AppID 1340990 adding PID 100 as a tracked process \"\"Z:\\game.exe\"\n", to: log)
+        try append("[..] AppID 1340990 no longer tracking PID 100, exit code -1073741819\n", to: log)
+        w.poll()
+        #expect(w.lastExitWasACrash)
+        try append("[..] AppID 1340990 adding PID 200 as a tracked process \"\"Z:\\game.exe\"\n", to: log)
+        w.poll()
+        #expect(w.lastExitWasACrash == false)
+    }
 }

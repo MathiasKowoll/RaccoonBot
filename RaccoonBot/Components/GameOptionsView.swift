@@ -107,6 +107,20 @@ struct GameOptionsView: View {
                             Spacer()
                             VStack(alignment: .trailing) {
                                 Toggle("Metal HUD", isOn: $gameOptions.mtlHudEnabled)
+                                if gameOptions.mtlHudEnabled {
+                                    Picker("", selection: $gameOptions.mtlHudDetail) {
+                                        ForEach(MetalHudDetail.allCases, id: \.rawValue) { detail in
+                                            Text(detail.label).tag(detail.rawValue)
+                                        }
+                                    }
+                                    .labelsHidden()
+                                    .frame(maxWidth: 180)
+                                    Text((MetalHudDetail(rawValue: gameOptions.mtlHudDetail) ?? .fpsOnly).explanation)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .multilineTextAlignment(.trailing)
+                                        .frame(maxWidth: 180, alignment: .trailing)
+                                }
                                 Toggle("Advertise AVX", isOn: $gameOptions.advertiseAVX)
                                 if !current.isNative {
                                     Toggle("MSync", isOn: $gameOptions.wineMSync)

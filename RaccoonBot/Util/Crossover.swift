@@ -349,7 +349,25 @@ func getInlineEnvs(from: GameOptions, cxAppPath: String? = nil) -> String {
     // points GST_PLUGIN_SYSTEM_PATH. Saying nothing is the right instruction.
     let cxGraphicsBackend = from.cxGraphicsBackend.contains("d3dmetal") ? "d3dmetal" : from.cxGraphicsBackend
     value += defaults.joined(separator: " ") + " "
-    value += from.mtlHudEnabled ? "MTL_HUD_ENABLED=1 " : ""
+    // The HUD, and how much of it.
+    //
+    // Apple's own HUD has no detail setting -- the whole system knows only
+    // MTL_HUD_ENABLED and MTL_HUD_PATH, and it draws a fixed set of rows. What
+    // the levels above the first switch on are the toolkits' own additions,
+    // each verified in the binaries this engine carries rather than assumed:
+    // D3DM_SHOW_HUD_STATS registers twenty-two D3DMetal counters into
+    // com.apple.hud-graph.default and is present in both GPTK 3 and 4, while
+    // MoltenVK's performance tracking is what the Vulkan path has to offer.
+    if from.mtlHudEnabled {
+        value += "MTL_HUD_ENABLED=1 "
+        let detail = MetalHudDetail(rawValue: from.mtlHudDetail) ?? .fpsOnly
+        if detail != .fpsOnly, backend.hasPrefix("d3dmetal") || unknownBackend {
+            value += "D3DM_SHOW_HUD_STATS=1 "
+        }
+        if detail == .extended {
+            value += "MVK_CONFIG_PERFORMANCE_TRACKING=1 MVK_CONFIG_PERFORMANCE_LOGGING_INLINE=1 "
+        }
+    }
     value += from.ue4Hack ? "MVK_CONFIG_UE4_HACK_ENABLED=1 NAS_DISABLE_UE4_HACK=0 " : "MVK_CONFIG_UE4_HACK_ENABLED=0 NAS_DISABLE_UE4_HACK=1 "
     value += from.mvkArgBuff ? "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1 " : "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=0 "
     value += "ROSETTA_ADVERTISE_AVX=\(onOff(from.advertiseAVX)) "

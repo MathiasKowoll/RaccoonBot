@@ -96,6 +96,8 @@ final class SteamGameProcessLog {
     private(set) var everStarted = false
     /// When the set last became empty, or nil while it holds anything.
     private(set) var emptySince: Date?
+    /// When this application's first process appeared.
+    private(set) var startedAt: Date?
 
     init(steamPath: String, steamID: String) {
         self.appID = steamID
@@ -111,6 +113,7 @@ final class SteamGameProcessLog {
                 trackedByApp.removeAll()
                 everStarted = false
                 emptySince = nil
+                startedAt = nil
                 continue
             }
             if line.contains("Remove \(appID) from running list") {
@@ -123,6 +126,7 @@ final class SteamGameProcessLog {
             if let pid = Self.integer(after: "adding PID ", in: line) {
                 trackedByApp[app, default: []].insert(pid)
                 if ours {
+                    if !everStarted { startedAt = now }
                     everStarted = true
                     emptySince = nil
                     events.append(.started(pid: pid, path: Self.quotedPath(in: line) ?? "unknown"))
@@ -141,6 +145,12 @@ final class SteamGameProcessLog {
             emptySince = nil
         }
         return events
+    }
+
+    /// How long this application ran before everything stopped.
+    var sessionLength: TimeInterval {
+        guard let startedAt, let emptySince else { return 0 }
+        return emptySince.timeIntervalSince(startedAt)
     }
 
     /// Has this application had nothing running for long enough to be over?

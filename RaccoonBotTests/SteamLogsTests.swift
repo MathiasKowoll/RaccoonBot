@@ -226,4 +226,38 @@ struct SteamGameProcessLogTests {
         #expect(w.hasBeenIdle(for: 120, now: t0.addingTimeInterval(200)) == true)
         #expect(w.otherAppRunning == "485510")
     }
+
+    /// Starting and closing are different problems. A launcher chain cycling
+    /// belongs to starting, and every one on this machine happened inside the
+    /// first sixty-three seconds. A game that ran and then stopped has stopped.
+    @Test func aLongSessionIsNotWaitedOnLikeAShortOne() {
+        #expect(steamIdleGrace(forSessionLasting: 62) == 120)      // the worst dip seen
+        #expect(steamIdleGrace(forSessionLasting: 5 * 60) == 120)  // still cautious
+        #expect(steamIdleGrace(forSessionLasting: 20 * 60) == 15)  // plainly a session
+        #expect(steamIdleGrace(forSessionLasting: 3 * 3600) == 15)
+    }
+
+    @Test func theSessionIsMeasuredFromTheFirstProcessToTheLast() throws {
+        let (w, log) = try watcher()
+        let t0 = Date()
+        try append("[..] AppID 1340990 adding PID 100 as a tracked process \"\"Z:\\game.exe\"\n", to: log)
+        w.poll(now: t0)
+        #expect(w.sessionLength == 0)          // nothing has stopped yet
+
+        try append("[..] AppID 1340990 no longer tracking PID 100, exit code 0\n", to: log)
+        w.poll(now: t0.addingTimeInterval(3600))
+        #expect(w.sessionLength == 3600)
+        #expect(steamIdleGrace(forSessionLasting: w.sessionLength) == 15)
+    }
+
+    /// A game that dies seconds after starting gets the careful treatment.
+    @Test func aGameThatDiesOnStartupIsStillWaitedOn() throws {
+        let (w, log) = try watcher()
+        let t0 = Date()
+        try append("[..] AppID 1340990 adding PID 100 as a tracked process \"\"Z:\\launcher.exe\"\n", to: log)
+        w.poll(now: t0)
+        try append("[..] AppID 1340990 no longer tracking PID 100, exit code 0\n", to: log)
+        w.poll(now: t0.addingTimeInterval(25))
+        #expect(steamIdleGrace(forSessionLasting: w.sessionLength) == 120)
+    }
 }

@@ -623,14 +623,21 @@ final class LoadedGame: @unchecked Sendable {
 }
 
 /// How long everything belonging to a game must stay stopped before the bottle
-/// comes down.
+/// comes down -- given how long it had been running.
 ///
-/// It is long on purpose. A launcher chain that restarts itself empties Steam's
-/// tracked set completely, and the widest such gap in this machine's history is
-/// forty-four seconds -- Red Dead Redemption 2, between Steam declaring the app
-/// gone and `RDR2.exe` appearing. Waiting costs a lingering window; not waiting
-/// costs the game.
-let steamIdleGrace: TimeInterval = 120
+/// The wait exists for one thing: a launcher chain that restarts itself,
+/// emptying Steam's tracked set for a moment in the middle of starting up. Every
+/// such gap in this machine's history -- nine of them -- happened while the
+/// session was less than sixty-three seconds old, and most inside the first
+/// twenty. None has ever happened to a game that had been running for minutes.
+///
+/// So a game that ran for a while and then stopped has stopped, and making
+/// somebody watch two minutes of Steam processes to prove it is a cost with
+/// nothing bought. A game that stopped seconds after starting is the ambiguous
+/// one, and that is where the patience belongs.
+func steamIdleGrace(forSessionLasting duration: TimeInterval) -> TimeInterval {
+    duration > 5 * 60 ? 15 : 120
+}
 
 /// Which of `names` is running right now, if any.
 func runningExecutable(among names: [String]) -> String? {
@@ -801,14 +808,15 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
                         onTerminate()
                         reportedIdle = true
                     }
-                    if processLog.hasBeenIdle(for: steamIdleGrace) {
+                    let grace = steamIdleGrace(forSessionLasting: processLog.sessionLength)
+                    if processLog.hasBeenIdle(for: grace) {
                         // The bottle is shared. Tearing it down for a game that
                         // finished would take down a game that has not.
                         if let other = processLog.otherAppRunning {
                             console.log("app \(other) is using the bottle; leaving it up")
                             return
                         }
-                        await shutDown(because: "nothing has run for this game in \(Int(steamIdleGrace))s, closing down...")
+                        await shutDown(because: "nothing has run for this game in \(Int(grace))s, closing down...")
                         return
                     }
                 } else if reportedIdle {

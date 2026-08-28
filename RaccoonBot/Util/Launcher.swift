@@ -23,24 +23,40 @@ import AppKit
 /// Save data is already safe by the time this runs: the caller waits for
 /// Steam's exit sync to finish before asking Steam to quit at all.
 func closeBottle(cxAppPath: String, bottle: String,
-                 waitingUpTo settleTimeout: TimeInterval = 20) async throws {
+                 waitingUpTo settleTimeout: TimeInterval = 30) async throws {
     guard let directory = BottleReference(bottle)?.directory else {
         console.error("cannot close \(bottle): it does not name a bottle")
         return
     }
 
+    // Wait for Steam, and only for Steam.
+    //
+    // The first version of this waited for the whole bottle to fall silent,
+    // which cannot happen: services.exe, plugplay.exe, rpcss.exe, explorer.exe
+    // and winedevice.exe live as long as the wineserver does, by design. So the
+    // wait always ran its full length and then killed -- twenty seconds thrown
+    // away on every close, and Steam getting wineserver -k on top of it while
+    // it was still shutting down, which is what put steamerrorreporter64.exe on
+    // screen.
     let deadline = Date().addingTimeInterval(settleTimeout)
     while Date() < deadline {
-        if BottleProcesses.running(inBottleAt: directory).isEmpty {
+        let here = BottleProcesses.running(inBottleAt: directory)
+        if here.isEmpty {
             console.log("the bottle closed on its own")
             return
+        }
+        if !here.contains(where: { $0.name.lowercased().hasPrefix("steam") }) {
+            console.log("steam has gone; ending what wine keeps running")
+            break
         }
         try await Task.sleep(nanoseconds: 500_000_000)
     }
 
     let left = BottleProcesses.running(inBottleAt: directory)
-    console.warn("still running after \(Int(settleTimeout))s: "
-                 + left.map(\.name).sorted().joined(separator: ", "))
+    if left.contains(where: { $0.name.lowercased().hasPrefix("steam") }) {
+        console.warn("steam did not go in \(Int(settleTimeout))s: "
+                     + left.map(\.name).sorted().joined(separator: ", "))
+    }
 
     // wineserver -k ends the prefix through wine's own mechanism.
     try await quitWine(cxAppPath: cxAppPath, bottle: bottle)

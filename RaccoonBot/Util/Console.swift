@@ -13,7 +13,9 @@ let logger = Logger(subsystem: "CXPatcher", category: "util")
 class Console {
     var logMessages: [String] = []
     var items: [String: [String]] = [:]
-    var enableLogFile: Bool = DEBUG_ENABLED == true
+    /// Set from the switch and from the environment. Starts wherever the
+    /// application starts, and follows the switch after that.
+    var enableLogFile: Bool = debugLoggingEnabled
     let f = FileManager.default
     
     func cache(_ item: String, key: String) {

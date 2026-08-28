@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ToolsView: View {
     @State private var savedLogResult: String?
+    @State private var debugLogging: Bool = debugLoggingEnabled
     @State var bottles: [URL] = []
     @State var progress: Double = 0
     @State var progressLabel = "Processing..."
@@ -55,7 +56,10 @@ struct ToolsView: View {
                 ProminentButton("Show D3dmetal Cache Folder", systemImage: "folder") {
                     NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: darwinUserCacheDir()!.appendingPathComponent(D3DM_CACHE_FOLDER, isDirectory: true).path)
                 }
-                if(DEBUG_ENABLED == true) {
+                // Always here, not only when a variable was set before
+                // launch. Somebody being asked "can you send me the log" has
+                // to be able to find this without a terminal.
+                Group {
                     Divider().padding(.top, 10)
                     Text("Debug")
                         .padding(.vertical, 5)
@@ -65,7 +69,19 @@ struct ToolsView: View {
                         // is visible -- the section and the flag are both
                         // decided by DEBUG_ENABLED. A button that can only
                         // ever be a no-op reads as something not working.
-                        Text("Logging is on. Messages are kept in memory until you save them, and are lost if the application is quit first.")
+                        Toggle("Keep a log", isOn: Binding(
+                            get: { debugLogging },
+                            set: { on in
+                                setDebugLogging(on)
+                                debugLogging = on
+                            }))
+                        .disabled(debugLoggingFromEnvironment)
+
+                        Text(debugLoggingFromEnvironment
+                             ? "On, because the environment asked for it. It cannot be turned off here."
+                             : debugLogging
+                               ? "Messages are kept in memory until you save them, and are lost if the application is quit first."
+                               : "Nothing is being recorded. Turn this on, reproduce the problem, then save.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)

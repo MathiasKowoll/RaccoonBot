@@ -105,7 +105,31 @@ let BLACKLIST = [
 ///
 /// Accepting the three costs nothing. Accepting only one and saying nothing
 /// costs an evening of "I set it and it did not work".
-let DEBUG_ENABLED: Bool = {
+/// Whether this run keeps a log.
+///
+/// Two ways in, and the switch in the window is the one that matters. Asking
+/// somebody to open a terminal and set a variable before they can tell you
+/// what went wrong is asking too much -- of them, and of anyone giving
+/// support. The environment variable stays because it is the only way to have
+/// logging on from the very first line, before any window exists.
+///
+/// Read each time rather than decided once, so the switch takes effect without
+/// a restart.
+nonisolated var debugLoggingEnabled: Bool {
+    if debugLoggingFromEnvironment { return true }
+    return UserDefaults(suiteName: suiteName)?.bool(forKey: namespacedKey("debugLogging", "app")) ?? false
+}
+
+func setDebugLogging(_ on: Bool) {
+    UserDefaults(suiteName: suiteName)?.set(on, forKey: namespacedKey("debugLogging", "app"))
+    console.enableLogFile = on
+    console.warn(on ? "logging on" : "logging off")
+}
+
+/// `RaccoonBotDebug=1` in the environment. Also answers to
+/// `RACCOONBOT_DEBUG`, because that is how a variable is usually spelled, and
+/// to `PROCYON_DEBUG`, because that is what it was called upstream.
+nonisolated let debugLoggingFromEnvironment: Bool = {
     let env = ProcessInfo.processInfo.environment
     for name in ["RaccoonBotDebug", "RACCOONBOT_DEBUG", "PROCYON_DEBUG"] {
         switch env[name]?.lowercased() {
@@ -116,6 +140,9 @@ let DEBUG_ENABLED: Bool = {
     }
     return false
 }()
+
+/// Kept for the places that still say it.
+nonisolated var DEBUG_ENABLED: Bool { debugLoggingEnabled }
 let useLogger: Bool = false
 
 func prettyPrinted(dict: Dictionary<String, Any>) -> String {

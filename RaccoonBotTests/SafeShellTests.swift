@@ -45,3 +45,42 @@ struct SafeShellTests {
     /// so claiming otherwise would be a test of a promise the function does
     /// not make.
 }
+
+/// The debug switch, which now lives in the window rather than only in the
+/// environment.
+///
+/// Asking somebody to open a terminal and set a variable before they can tell
+/// you what went wrong is asking too much -- of them, and of anyone giving
+/// support.
+struct DebugSwitchTests {
+
+    private var key: String { namespacedKey("debugLogging", "app") }
+
+    @Test func theSwitchTakesEffectWithoutARestart() {
+        let before = debugLoggingEnabled
+        defer { setDebugLogging(before); deleteUsrDefOption(key: key) }
+
+        setDebugLogging(true)
+        #expect(debugLoggingEnabled, "it was read once and cached")
+        #expect(console.enableLogFile)
+
+        // Only meaningful where the environment is not forcing it on.
+        if !debugLoggingFromEnvironment {
+            setDebugLogging(false)
+            #expect(!debugLoggingEnabled)
+        }
+    }
+
+    /// The environment still wins, because it is the only way to have logging
+    /// from the first line, before any window exists.
+    @Test func theEnvironmentCannotBeTurnedOffFromTheWindow() {
+        guard debugLoggingFromEnvironment else { return }
+        setDebugLogging(false)
+        #expect(debugLoggingEnabled, "the switch overrode the environment")
+    }
+
+    @Test func theOldNameStillAnswers() {
+        // DEBUG_ENABLED is used in a handful of places and must track the flag.
+        #expect(DEBUG_ENABLED == debugLoggingEnabled)
+    }
+}

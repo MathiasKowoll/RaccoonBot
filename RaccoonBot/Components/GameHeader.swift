@@ -136,8 +136,26 @@ struct GameHeader: View {
                      steamID: game!.isCustom == true ? nil : game!.steamAppID,
                      steamPath: appGlobals.windowsSteamFolder?.path(percentEncoded: false) ?? "")
                 }
+                // The saved settings, read here rather than trusted from the
+                // environment.
+                //
+                // The object injected by GameDetailView is created with defaults and
+                // nothing ever loads into it, so Play from a game's page ran with
+                // every per-game setting at its default -- backend, environment
+                // variables, arguments, all of it. The options sheet keeps its own
+                // object, which is why the panel showed one thing and the process got
+                // another. Play from the grid and the list were always right: they go
+                // through GameLauncher, which reads the same key this now reads.
+                let launchOptions = GameOptions()
+                if let saved: GameOptionsData = readUsrDefData(
+                        key: namespacedKey("GameOptions",
+                                           game!.steamAppID != 0 ? String(game!.steamAppID) : String(game!.id))) {
+                    launchOptions.set(data: saved)
+                } else {
+                    console.warn("no saved options for this title; launching with defaults")
+                }
                 if(game!.isNative) {
-                    try await launchNativeGame(id: String(game!.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: gameOptions, appExeURL: game!.appExeURL)
+                    try await launchNativeGame(id: String(game!.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: launchOptions, appExeURL: game!.appExeURL)
                 } else {
                     if(game!.isCustom == true && game!.appExeURL == nil) {
                         console.error("custom game doesn't have an executable associated")
@@ -145,7 +163,7 @@ struct GameHeader: View {
                         return
                     }
                     let steamExePath = appGlobals.windowsSteamFolder?.appendingPathComponent("Steam.exe").path(percentEncoded: false) ?? "C:\\Program Files (x86)\\Steam\\Steam.exe"
-                    try await launchWindowsGame(id: String(game!.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: gameOptions.useArmBottle ? appGlobals.selectedArmBottle : appGlobals.selectedBottle, steamExePath: steamExePath, options: gameOptions, appExeURL: game!.appExeURL)
+                    try await launchWindowsGame(id: String(game!.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: launchOptions.useArmBottle ? appGlobals.selectedArmBottle : appGlobals.selectedBottle, steamExePath: steamExePath, options: launchOptions, appExeURL: game!.appExeURL)
                 }
             } catch {
                 libraryPageGlobals.setLoader(state: false)

@@ -69,3 +69,64 @@ struct D3DMetalOptionTests {
         #expect(!env.contains("CX_GRAPHICS_BACKEND=\"d3dmetal4\""))
     }
 }
+
+/// The settings a launch actually uses.
+///
+/// A game's page kept a GameOptions created with defaults that nothing ever
+/// loaded into, and Play handed that to the launcher. The options sheet keeps
+/// its own object, so the panel showed one thing and the process received
+/// another -- a peer session measured a Metal 4 toggle reading ON while the
+/// process got D3DM_MTL4=0, and environment variables that stayed after being
+/// cleared.
+@MainActor
+struct SavedOptionsReachTheLaunchTests {
+
+    private func key(_ id: String) -> String { namespacedKey("GameOptions", id) }
+
+    @Test func whatWasSavedIsWhatIsRead() throws {
+        let id = "test-\(UUID().uuidString)"
+        defer { deleteUsrDefOption(key: key(id)) }
+
+        let saved = GameOptions(cxGraphicsBackend: "d3dmetal4", gameArguments: "-windowed")
+        saved.d3dMtl4Enabled = true
+        saved.envVariables = "FOO=bar"
+        persistUsrDefData(key: key(id), data: GameOptionsData(data: saved))
+
+        // What a launch does: start from defaults, then load the saved data.
+        let launch = GameOptions()
+        let data: GameOptionsData? = readUsrDefData(key: key(id))
+        #expect(data != nil, "nothing was saved under the key a launch reads")
+        if let data { launch.set(data: data) }
+
+        #expect(launch.cxGraphicsBackend == "d3dmetal4")
+        #expect(launch.d3dMtl4Enabled)
+        #expect(launch.gameArguments == "-windowed")
+        #expect(launch.envVariables == "FOO=bar")
+    }
+
+    /// Defaults are not the saved settings, and a launch that used them would
+    /// look like it was ignoring the panel -- which is what it was doing.
+    @Test func defaultsAreNotWhatWasSaved() {
+        let fresh = GameOptions()
+        #expect(!fresh.d3dMtl4Enabled)
+        #expect(fresh.envVariables.isEmpty)
+        #expect(fresh.gameArguments.isEmpty)
+    }
+
+    /// Clearing a field has to survive the round trip too: an empty string is
+    /// a value, not an absence.
+    @Test func clearingAFieldIsSaved() throws {
+        let id = "test-\(UUID().uuidString)"
+        defer { deleteUsrDefOption(key: key(id)) }
+
+        let o = GameOptions()
+        o.envVariables = "BEAST_FORCE_NV12=1"
+        persistUsrDefData(key: key(id), data: GameOptionsData(data: o))
+        o.envVariables = ""
+        persistUsrDefData(key: key(id), data: GameOptionsData(data: o))
+
+        let launch = GameOptions()
+        if let data: GameOptionsData = readUsrDefData(key: key(id)) { launch.set(data: data) }
+        #expect(launch.envVariables.isEmpty, "a cleared field came back with its old value")
+    }
+}

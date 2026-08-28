@@ -622,6 +622,16 @@ final class LoadedGame: @unchecked Sendable {
     }
 }
 
+/// How long everything belonging to a game must stay stopped before the bottle
+/// comes down.
+///
+/// It is long on purpose. A launcher chain that restarts itself empties Steam's
+/// tracked set completely, and the widest such gap in this machine's history is
+/// forty-four seconds -- Red Dead Redemption 2, between Steam declaring the app
+/// gone and `RDR2.exe` appearing. Waiting costs a lingering window; not waiting
+/// costs the game.
+let steamIdleGrace: TimeInterval = 120
+
 /// Which of `names` is running right now, if any.
 func runningExecutable(among names: [String]) -> String? {
     let running = Set(NSWorkspace.shared.runningApplications.flatMap {
@@ -756,20 +766,41 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
     if let processLog {
         Task(priority: .background) {
             // Steam names every executable it starts for this app and the code
-            // each exits with, and says separately when the app itself is done.
-            // "Remove <id> from running list" mentions no executable at all,
-            // which is exactly why a launcher handing off cannot fake it.
+            // each one exits with. What it does not reliably say is when the
+            // app is over: "Remove <id> from running list" fires whenever the
+            // tracked set momentarily empties, which for Red Dead Redemption 2
+            // is one second into every launch -- the Rockstar chain exits
+            // completely and restarts, and the game itself arrives
+            // forty-four seconds later.
+            //
+            // So the set emptying only asks the question. Staying empty
+            // answers it.
+            var reportedIdle = false
             while !Task.isCancelled {
-                for event in processLog.newEvents() {
+                for event in processLog.poll() {
                     switch event {
                     case .started(let pid, let path):
                         console.log("steam started \(URL(fileURLWithPath: path).lastPathComponent) as pid \(pid)")
                     case .stopped(let pid, let code):
                         console.log("steam says pid \(pid) ended \(describeExit(code: code))")
                     case .sessionEnded:
-                        await shutDown(because: "steam removed the game from its running list, closing down...")
+                        // Informative only. It is right more often than not,
+                        // and acting on it is what broke RDR2.
+                        console.log("steam removed the game from its running list")
+                    }
+                }
+                if processLog.emptySince != nil {
+                    if !reportedIdle {
+                        console.log("nothing of the game is running; waiting \(Int(steamIdleGrace))s in case it is still starting")
+                        reportedIdle = true
+                    }
+                    if processLog.hasBeenIdle(for: steamIdleGrace) {
+                        await shutDown(because: "nothing has run for this game in \(Int(steamIdleGrace))s, closing down...")
                         return
                     }
+                } else if reportedIdle {
+                    console.log("the game is running again; it was still starting")
+                    reportedIdle = false
                 }
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
             }
@@ -783,7 +814,12 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
                 console.log("found game \(appName), loading...")
                 loaded.name = appName
                 onLoad(appName)
-                if let steamState {
+                // The registry flag is deliberately not a trigger. Steam
+                // clears it in the same instant it logs the removal, so it
+                // dips mid-launch exactly as that line does. It is kept for
+                // games where Steam writes no process log at all, and even
+                // then only after the same idle wait.
+                if let steamState, processLog == nil {
                     Task(priority: .background) {
                         await watchSteamSession(steamState, appID: steamID, then: shutDown)
                     }

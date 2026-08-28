@@ -90,7 +90,7 @@ struct SteamGameProcessLogTests {
     @Test func aStartedProcessIsReportedWithItsPath() throws {
         let (w, log) = try watcher()
         try append(#"[2026-08-28 11:15:11] AppID 1340990 adding PID 1304 as a tracked process ""Z:\Volumes\X8\common\Ronin\game.exe""#  + "\n", to: log)
-        let events = w.newEvents()
+        let events = w.poll()
         #expect(events.count == 1)
         guard case .started(let pid, let path) = events[0] else { Issue.record("not a start"); return }
         #expect(pid == 1304)
@@ -100,26 +100,25 @@ struct SteamGameProcessLogTests {
     @Test func anExitCodeSurvivesBeingNegative() throws {
         let (w, log) = try watcher()
         try append("[2026-08-28 11:10:25] AppID 1340990 no longer tracking PID 1308, exit code -1073741819\n", to: log)
-        let events = w.newEvents()
+        let events = w.poll()
         guard case .stopped(let pid, let code) = events.first else { Issue.record("not a stop"); return }
         #expect(pid == 1308)
         #expect(code == -1073741819)
         #expect(describeExit(code: code).contains("access violation"))
     }
 
-    /// The line that means the session is over, and the reason this works for a
-    /// game with a launcher: it names no executable.
-    @Test func removalFromTheRunningListEndsTheSession() throws {
+    /// Reported, but never acted on.
+    @Test func removalFromTheRunningListIsReported() throws {
         let (w, log) = try watcher()
         try append("[2026-08-28 11:17:20] Remove 1340990 from running list\n", to: log)
-        guard case .sessionEnded = w.newEvents().first else { Issue.record("not a session end"); return }
+        guard case .sessionEnded = w.poll().first else { Issue.record("not a session end"); return }
     }
 
     @Test func anotherGameIsNotOurs() throws {
         let (w, log) = try watcher()
         try append("[2026-08-28 11:17:20] AppID 485510 adding PID 99 as a tracked process \"\"C:\\nioh.exe\"\n", to: log)
         try append("[2026-08-28 11:17:20] Remove 485510 from running list\n", to: log)
-        #expect(w.newEvents().isEmpty)
+        #expect(w.poll().isEmpty)
     }
 
     /// A launcher exiting is a stop, never a session end -- the distinction the
@@ -129,8 +128,66 @@ struct SteamGameProcessLogTests {
         try append("[2026-08-28 11:15:11] AppID 1340990 adding PID 100 as a tracked process \"\"Z:\\launcher.exe\"\n", to: log)
         try append("[2026-08-28 11:15:12] AppID 1340990 no longer tracking PID 100, exit code 0\n", to: log)
         try append("[2026-08-28 11:15:13] AppID 1340990 adding PID 200 as a tracked process \"\"Z:\\game.exe\"\n", to: log)
-        let events = w.newEvents()
+        let events = w.poll()
         #expect(events.count == 3)
         #expect(!events.contains { if case .sessionEnded = $0 { return true } else { return false } })
+    }
+
+    /// Red Dead Redemption 2, replayed from this machine's own log. The whole
+    /// Rockstar chain exits, Steam declares the app gone, and one second later
+    /// it starts again -- with the game itself forty-four seconds further on.
+    /// A teardown anywhere in that window kills a launching game.
+    @Test func aLauncherChainThatRestartsIsNotASessionEnding() throws {
+        let (w, log) = try watcher()
+        let t0 = Date()
+        try append("""
+        [2026-06-22 16:25:40] AppID 1340990 adding PID 2136 as a tracked process ""Z:\\PlayRDR2.exe"
+        [2026-06-22 16:25:42] AppID 1340990 adding PID 2148 as a tracked process ""C:\\Launcher.exe"
+        [2026-06-22 16:26:05] AppID 1340990 no longer tracking PID 2148, exit code 0
+        [2026-06-22 16:26:05] AppID 1340990 no longer tracking PID 2136, exit code 0
+        [2026-06-22 16:26:05] Remove 1340990 from running list
+
+        """, to: log)
+        w.poll(now: t0)
+        #expect(w.tracked.isEmpty)
+        #expect(w.emptySince != nil)                        // the question is asked
+        #expect(w.hasBeenIdle(for: 120, now: t0.addingTimeInterval(44)) == false)  // and not yet answered
+
+        // One second later the chain restarts, as it really does.
+        try append("[2026-06-22 16:26:06] AppID 1340990 adding PID 2384 as a tracked process \"\"C:\\Launcher.exe\"\n", to: log)
+        w.poll(now: t0.addingTimeInterval(1))
+        #expect(w.emptySince == nil)                        // cancelled
+        #expect(w.hasBeenIdle(for: 120, now: t0.addingTimeInterval(600)) == false)
+    }
+
+    @Test func aRealEndingSurvivesTheWait() throws {
+        let (w, log) = try watcher()
+        let t0 = Date()
+        try append("[..] AppID 1340990 adding PID 100 as a tracked process \"\"Z:\\game.exe\"\n", to: log)
+        w.poll(now: t0)
+        try append("[..] AppID 1340990 no longer tracking PID 100, exit code 0\n", to: log)
+        w.poll(now: t0.addingTimeInterval(60))
+        #expect(w.hasBeenIdle(for: 120, now: t0.addingTimeInterval(100)) == false)
+        #expect(w.hasBeenIdle(for: 120, now: t0.addingTimeInterval(181)) == true)
+    }
+
+    /// Before anything has started, an empty set means "not yet", not "over".
+    @Test func nothingHavingStartedIsNotIdleness() throws {
+        let (w, _) = try watcher()
+        w.poll()
+        #expect(w.emptySince == nil)
+        #expect(w.hasBeenIdle(for: 0) == false)
+    }
+
+    /// Steam restarting voids everything it knew.
+    @Test func aSteamRestartClearsWhatItKnew() throws {
+        let (w, log) = try watcher()
+        try append("[..] AppID 1340990 adding PID 100 as a tracked process \"\"Z:\\game.exe\"\n", to: log)
+        w.poll()
+        #expect(w.tracked == [100])
+        try append("[..] Client version: 1234567890\n", to: log)
+        w.poll()
+        #expect(w.tracked.isEmpty)
+        #expect(w.emptySince == nil)
     }
 }

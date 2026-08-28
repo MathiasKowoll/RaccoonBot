@@ -61,24 +61,47 @@ enum SteamProcessEvent {
     case sessionEnded
 }
 
-/// A live reading of `gameprocess_log.txt`, which is where Steam records every
-/// executable it starts for an app and the code each one exits with.
+/// Which processes Steam currently has tracked for one application, kept from
+/// `gameprocess_log.txt` as the lines arrive.
 ///
-/// This is the account the launcher should have been using all along. It says
-/// which process belongs to which AppID, and it says when the AppID itself is
-/// finished -- separately from any individual process ending.
+/// Steam's own "Remove <id> from running list" looks like the answer and is
+/// not. It fires whenever the tracked set momentarily empties, and for a game
+/// whose launcher chain restarts itself that happens mid-launch. Red Dead
+/// Redemption 2 produces it one second into every launch -- the Rockstar
+/// launcher, its service and PlayRDR2 all exit, Steam declares the app gone,
+/// and one second later the chain begins again. `RDR2.exe` appears
+/// forty-four seconds after Steam said the application was over.
+///
+/// So the set emptying is a question, not an answer. The answer is the set
+/// staying empty.
 final class SteamGameProcessLog {
     private let tail: SteamLogTail
     private let appID: String
+
+    /// The PIDs Steam has tracked for this app and not yet released.
+    private(set) var tracked: Set<Int> = []
+    /// Set once the app has been seen running at all; before that, an empty set
+    /// means "not started yet", which is not the same as finished.
+    private(set) var everStarted = false
+    /// When the set last became empty, or nil while it holds anything.
+    private(set) var emptySince: Date?
 
     init(steamPath: String, steamID: String) {
         self.appID = steamID
         self.tail = SteamLogTail(url: URL(fileURLWithPath: "\(steamPath)/logs/gameprocess_log.txt"))
     }
 
-    func newEvents() -> [SteamProcessEvent] {
+    @discardableResult
+    func poll(now: Date = Date()) -> [SteamProcessEvent] {
         var events: [SteamProcessEvent] = []
         for line in tail.newLines() {
+            // Steam restarted: everything it knew is void.
+            if line.contains("Client version:") {
+                tracked.removeAll()
+                everStarted = false
+                emptySince = nil
+                continue
+            }
             if line.contains("Remove \(appID) from running list") {
                 events.append(.sessionEnded)
                 continue
@@ -86,13 +109,32 @@ final class SteamGameProcessLog {
             guard line.contains("AppID \(appID) ") else { continue }
 
             if let pid = Self.integer(after: "adding PID ", in: line) {
+                tracked.insert(pid)
+                everStarted = true
+                emptySince = nil
                 events.append(.started(pid: pid, path: Self.quotedPath(in: line) ?? "unknown"))
             } else if let pid = Self.integer(after: "no longer tracking PID ", in: line) {
+                tracked.remove(pid)
                 let code = Self.integer(after: "exit code ", in: line) ?? 0
                 events.append(.stopped(pid: pid, exitCode: code))
             }
         }
+        if everStarted && tracked.isEmpty {
+            if emptySince == nil { emptySince = now }
+        } else {
+            emptySince = nil
+        }
         return events
+    }
+
+    /// Has this application had nothing running for long enough to be over?
+    ///
+    /// The wait is what separates a launcher chain restarting from a session
+    /// ending. It is long because the evidence says it has to be: the widest
+    /// mid-launch gap seen in this machine's history is forty-four seconds.
+    func hasBeenIdle(for seconds: TimeInterval, now: Date = Date()) -> Bool {
+        guard let emptySince else { return false }
+        return now.timeIntervalSince(emptySince) >= seconds
     }
 
     private static func integer(after marker: String, in line: String) -> Int? {

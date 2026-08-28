@@ -107,38 +107,6 @@ struct GameOptionsView: View {
                             Spacer()
                             VStack(alignment: .trailing) {
                                 Toggle("Metal HUD", isOn: $gameOptions.mtlHudEnabled)
-                                if gameOptions.mtlHudEnabled {
-                                    Picker("", selection: $gameOptions.mtlHudDetail) {
-                                        ForEach(MetalHudDetail.allCases, id: \.rawValue) { detail in
-                                            Text(detail.label).tag(detail.rawValue)
-                                        }
-                                    }
-                                    .labelsHidden()
-                                    .frame(maxWidth: 180)
-                                    Text((MetalHudDetail(rawValue: gameOptions.mtlHudDetail) ?? .fpsOnly).explanation)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .multilineTextAlignment(.trailing)
-                                        .frame(maxWidth: 180, alignment: .trailing)
-                                    HStack {
-                                        Text("Opacity")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                        Slider(value: $gameOptions.mtlHudOpacity, in: 0.1...1.0)
-                                        Text("\(Int(gameOptions.mtlHudOpacity * 100))%")
-                                            .font(.caption.monospacedDigit())
-                                            .foregroundStyle(.secondary)
-                                            .frame(width: 34, alignment: .trailing)
-                                    }
-                                    .frame(maxWidth: 180)
-                                    Picker("", selection: $gameOptions.mtlHudAlignment) {
-                                        ForEach(MetalHudAlignment.allCases, id: \.rawValue) { where_ in
-                                            Text(where_.label).tag(where_.rawValue)
-                                        }
-                                    }
-                                    .labelsHidden()
-                                    .frame(maxWidth: 180)
-                                }
                                 Toggle("Advertise AVX", isOn: $gameOptions.advertiseAVX)
                                 if !current.isNative {
                                     Toggle("MSync", isOn: $gameOptions.wineMSync)
@@ -190,6 +158,34 @@ struct GameOptionsView: View {
                     }
                     if(gameOptions.cxGraphicsBackend == "d3dmetal4") {
                         Divider()
+                        // Its own section rather than three controls squeezed
+                        // into the column of toggles: a picker, a slider and a
+                        // second picker need the width, and they are only worth
+                        // any room at all while the HUD is on.
+                        if gameOptions.mtlHudEnabled {
+                            Section("Metal HUD") {
+                                Picker("Show", selection: $gameOptions.mtlHudDetail) {
+                                    ForEach(MetalHudDetail.allCases, id: \.rawValue) { detail in
+                                        Text(detail.label).tag(detail.rawValue)
+                                    }
+                                }
+                                .pickerStyle(.segmented)
+                                Text((MetalHudDetail(rawValue: gameOptions.mtlHudDetail) ?? .fpsOnly).explanation)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                Picker("Position", selection: $gameOptions.mtlHudAlignment) {
+                                    ForEach(MetalHudAlignment.allCases, id: \.rawValue) { corner in
+                                        Text(corner.label).tag(corner.rawValue)
+                                    }
+                                }
+                                VStack {
+                                    Text("Opacity \(Int(gameOptions.mtlHudOpacity * 100))%")
+                                    Slider(value: $gameOptions.mtlHudOpacity, in: 0.1...1.0)
+                                }
+                            }
+                        }
+
                         Section("D3DMetal Options") {
                             Toggle("Metal 4 Backend", isOn: $gameOptions.d3dMtl4Enabled)
                                 .help(localizedString(forKey: "metal4Backend"))

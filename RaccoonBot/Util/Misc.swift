@@ -465,30 +465,75 @@ class SteamLogWatcher {
 }
 
 class SteamCloudSyncWatcher: SteamLogWatcher {
+    private let tail: SteamLogTail
+
+    /// Create this when the game starts, not when it ends.
+    ///
+    /// Steam writes the exit sync within the same second the game stops, so a
+    /// watcher built at teardown time would begin reading after the lines it
+    /// needs have already gone by.
     init (steamID: String, steamPath: String) {
+        tail = SteamLogTail(url: URL(fileURLWithPath: "\(steamPath)/logs/cloud_log.txt"))
         super.init(steamID: steamID, steamPath: steamPath, fileName: "cloud_log.txt")
     }
-    
+
+    private static func isTerminal(_ line: String) -> Bool {
+        line.contains("Successfully synced")
+            || line.contains("Upload complete in build list")
+            || line.contains("Failed sync for")
+    }
+
+    /// Wait for Steam to finish the save-data upload it runs when a game exits.
+    ///
+    /// This used to scan the whole of `cloud_log.txt` for "Successfully synced"
+    /// belonging to this AppID. That log is cumulative, so it matched a line
+    /// from an earlier session and returned after one tenth of a second,
+    /// having waited for nothing at all -- and then the launcher killed Steam.
+    ///
+    /// It cost real uploads. In this bottle's log, an exit sync announced
+    /// "Need to upload file ..." three times and then stopped mid-sentence;
+    /// those files were still listed as needing upload twenty-five minutes
+    /// later, at the next launch.
+    ///
+    /// So: only lines written since the game started count, and finished means
+    /// Steam said so -- uploaded, synced, or failed -- not merely that the
+    /// words appear somewhere in the file.
     func waitForSteamCloudSync() async throws {
         let appIDMarker = "[AppID \(self.steamID)]"
-        let successMSG = "Successfully synced"
-        let deadline = Date().addingTimeInterval(60)
-        var polling = true
-        while polling {
-            try await Task.sleep(nanoseconds: 100_000_000)
-            let content = try String(contentsOfFile: logPath, encoding: .utf8)
-            if(Date() > deadline) {
-                console.log("\(self.steamID): Cloud sync timed out")
-                polling = false
-            }
-            for fileContentLine in content.split(separator: "\n") {
-                if(fileContentLine.contains(appIDMarker) && fileContentLine.contains(successMSG)) {
-                    console.log("\(self.steamID): Cloud sync complete")
-                    polling = false
+        let deadline = Date().addingTimeInterval(180)
+        // If no exit sync has even begun after this long, there is not going to
+        // be one -- cloud saves are off for this title, or Steam is not logged
+        // in. Waiting the full deadline for it would just delay the teardown.
+        let patienceForItToBegin = Date().addingTimeInterval(15)
+
+        var sawExitSync = false
+        var pendingUploads = 0
+
+        while Date() < deadline {
+            for line in tail.newLines() where line.contains(appIDMarker) {
+                if line.contains("Starting sync (") && line.contains("AC Exit") {
+                    sawExitSync = true
+                    console.log("\(self.steamID): steam is syncing save data on exit")
+                } else if line.contains("Need to upload file") {
+                    pendingUploads += 1
+                } else if sawExitSync && Self.isTerminal(line) {
+                    if line.contains("Failed sync") {
+                        console.warn("\(self.steamID): steam could not sync save data: \(line)")
+                    } else if pendingUploads > 0 {
+                        console.log("\(self.steamID): save data uploaded (\(pendingUploads) file(s))")
+                    } else {
+                        console.log("\(self.steamID): save data already up to date")
+                    }
+                    return
                 }
             }
+            if !sawExitSync && Date() > patienceForItToBegin {
+                console.log("\(self.steamID): steam started no exit sync; nothing to wait for")
+                return
+            }
+            try await Task.sleep(nanoseconds: 200_000_000)
         }
-        return
+        console.warn("\(self.steamID): steam did not finish syncing save data in time; closing anyway")
     }
 }
 
@@ -647,13 +692,25 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
         steamState = SteamAppState(bottleDirectory: dir)
     }
 
+    // Both of these must exist before the game can exit: they read their logs
+    // forward from wherever the file is now, and Steam writes the whole exit
+    // sequence within the same second the game stops.
+    var cloudSync: SteamCloudSyncWatcher? = nil
+    var processLog: SteamGameProcessLog? = nil
+    if !isNative, let steamID {
+        cloudSync = SteamCloudSyncWatcher(steamID: String(steamID), steamPath: steamPath)
+        processLog = SteamGameProcessLog(steamPath: steamPath, steamID: String(steamID))
+    }
+
     func shutDown(because reason: String) async {
         guard loaded.claimShutdown() else { return }
         console.log(reason)
         do {
-            if(!isNative && steamID != nil){ // SteamCloudSyncWatcher isn't for native steam games
-                let cloudSyncWatcher = SteamCloudSyncWatcher(steamID: String(steamID!), steamPath: steamPath)
-                try await cloudSyncWatcher.waitForSteamCloudSync()
+            // Steam uploads save data when a game exits. Killing it mid-upload
+            // leaves the cloud copy behind whatever was actually played, and it
+            // has already happened here.
+            if let cloudSync { // not for native steam games
+                try await cloudSync.waitForSteamCloudSync()
             }
             try await quitSteam(cxAppPath: cxAppPath, bottle: bottle, isNative: isNative)
             try await closeWineActivities()
@@ -696,6 +753,29 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
         }
         Task { await shutDown(because: "\(game) has been terminated, closing steam...") }
     })
+    if let processLog {
+        Task(priority: .background) {
+            // Steam names every executable it starts for this app and the code
+            // each exits with, and says separately when the app itself is done.
+            // "Remove <id> from running list" mentions no executable at all,
+            // which is exactly why a launcher handing off cannot fake it.
+            while !Task.isCancelled {
+                for event in processLog.newEvents() {
+                    switch event {
+                    case .started(let pid, let path):
+                        console.log("steam started \(URL(fileURLWithPath: path).lastPathComponent) as pid \(pid)")
+                    case .stopped(let pid, let code):
+                        console.log("steam says pid \(pid) ended \(describeExit(code: code))")
+                    case .sessionEnded:
+                        await shutDown(because: "steam removed the game from its running list, closing down...")
+                        return
+                    }
+                }
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
+        }
+    }
+
     if let steamID = steamID {
         do {
             let appName = try await SteamLaunchWatcher(steamID: String(steamID), steamPath: steamPath).trackLaunch()

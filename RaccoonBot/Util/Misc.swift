@@ -204,19 +204,50 @@ func getIsNative(fromURL: URL) -> Bool {
     return false
 }
 
+/// Run a command and do not wait for it.
+///
+/// Debug mode used to route this through safeShellWithOutput, which calls
+/// readDataToEndOfFile -- it blocks until the child closes its output. The
+/// command here is a game launch, so the application sat waiting for the game
+/// to exit: the window froze, and the Download logs button could not be
+/// reached. Turning on logging made the thing you wanted to look at
+/// unreachable.
+///
+/// So debug no longer changes WHETHER we wait. It changes what is written
+/// down. The command itself is logged before it runs -- that is the line
+/// worth having -- and its output is streamed as it arrives.
 func safeShell(_ command: String) throws {
-    if(DEBUG_ENABLED) {
-        let log = try safeShellWithOutput(command)
-        console.log(log)
-        return
-    }
     let task = Process()
-    
     task.standardInput = FileHandle.nullDevice
-    task.standardOutput = FileHandle.nullDevice
-    task.standardError = FileHandle.nullDevice
     task.arguments = ["-c", command]
     task.executableURL = URL(fileURLWithPath: "/bin/zsh")
+
+    if DEBUG_ENABLED {
+        console.log("running: \(command)")
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        task.standardError = pipe
+        // Streamed, never drained in one go. A game writes for as long as it
+        // runs, and something has to read the pipe or the child stalls once
+        // the buffer fills.
+        pipe.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            guard !data.isEmpty else {
+                handle.readabilityHandler = nil
+                return
+            }
+            if let text = String(data: data, encoding: .utf8),
+               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                console.log(text.trimmingCharacters(in: .newlines))
+            }
+        }
+        task.terminationHandler = { _ in
+            pipe.fileHandleForReading.readabilityHandler = nil
+        }
+    } else {
+        task.standardOutput = FileHandle.nullDevice
+        task.standardError = FileHandle.nullDevice
+    }
 
     try task.run()
 }
@@ -232,10 +263,13 @@ func safeShellWithOutput(_ command: String) throws -> String {
     task.executableURL = URL(fileURLWithPath: "/bin/zsh")
 
     try task.run()
-    
+
     let data = pipe.fileHandleForReading.readDataToEndOfFile()
-    let output = String(data: data, encoding: .utf8)!
-    return output
+    // Not force-unwrapped. A command that writes anything not valid UTF-8 --
+    // a path in another encoding, a binary byte in an error -- would have
+    // killed the process rather than returned nothing.
+    return String(data: data, encoding: .utf8)
+        ?? String(decoding: data, as: UTF8.self)
 }
 
 let DEFAULT_STEAM_MAC_PATH = "/Library/Application Support/Steam/"

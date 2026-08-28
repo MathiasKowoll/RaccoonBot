@@ -7,63 +7,54 @@
 
 import AppKit
 
-/// Every Windows process running right now, by name, anywhere on this machine.
-///
-/// Used to decide when to stop waiting -- never to decide what to kill.
-func runningWindowsApps() -> [String] {
-    NSWorkspace.shared.runningApplications.compactMap { app in
-        guard let name = (app.executableURL ?? app.bundleURL)?.lastPathComponent else { return nil }
-        let lower = name.lowercased()
-        return (lower.hasSuffix(".exe") || lower.contains("wine")) ? name : nil
-    }
-}
-
-/// Close a bottle down: ask, wait for it to happen, then end what is left.
+/// Close a bottle down: ask, wait for it to happen, then end what is left of
+/// this bottle -- and only this bottle.
 ///
 /// This replaces `closeWineActivities`, which sent terminate to every running
 /// application whose name ended in `.exe` or contained "wine" -- machine-wide,
-/// every bottle, stock CrossOver included -- and escalated to `forceTerminate`
-/// two seconds later. Two things were wrong with it.
-///
-/// It reached far past the game it was closing. That is what turned every
-/// mistake about whether a game had ended into a mistake about every Windows
-/// program on the machine, and it is why those mistakes were catastrophic
-/// rather than annoying.
+/// every bottle, stock CrossOver included. Nothing about it was scoped to what
+/// was being closed, so every mistake about whether a game had ended became a
+/// mistake about every Windows program on the machine.
 ///
 /// And it began the moment `Steam.exe -shutdown` had been *sent*, which is not
 /// when Steam has finished. Steam writes its own state on the way down; it was
 /// being killed in the middle of doing so.
 ///
-/// So: wait for the bottle to go quiet by itself, bounded -- a bottle that will
-/// not settle must not hold the application forever -- and only then end what
-/// remains, through wine's own mechanism for exactly that, scoped to this one
-/// bottle by `--bottle` and `CX_BOTTLE_PATH`.
+/// Save data is already safe by the time this runs: the caller waits for
+/// Steam's exit sync to finish before asking Steam to quit at all.
 func closeBottle(cxAppPath: String, bottle: String,
                  waitingUpTo settleTimeout: TimeInterval = 20) async throws {
-    let pollInterval: UInt64 = 500_000_000
-    let deadline = Date().addingTimeInterval(settleTimeout)
+    guard let directory = BottleReference(bottle)?.directory else {
+        console.error("cannot close \(bottle): it does not name a bottle")
+        return
+    }
 
+    let deadline = Date().addingTimeInterval(settleTimeout)
     while Date() < deadline {
-        if runningWindowsApps().isEmpty {
+        if BottleProcesses.running(inBottleAt: directory).isEmpty {
             console.log("the bottle closed on its own")
             return
         }
-        try await Task.sleep(nanoseconds: pollInterval)
+        try await Task.sleep(nanoseconds: 500_000_000)
     }
 
-    let left = runningWindowsApps()
-    console.warn("still running after \(Int(settleTimeout))s: \(left.sorted().joined(separator: ", "))")
-    // wineserver -k ends every process of this prefix and nothing outside it.
-    try await quitWine(cxAppPath: cxAppPath, bottle: bottle)
+    let left = BottleProcesses.running(inBottleAt: directory)
+    console.warn("still running after \(Int(settleTimeout))s: "
+                 + left.map(\.name).sorted().joined(separator: ", "))
 
+    // wineserver -k ends the prefix through wine's own mechanism.
+    try await quitWine(cxAppPath: cxAppPath, bottle: bottle)
     try await Task.sleep(nanoseconds: 2_000_000_000)
-    let survivors = runningWindowsApps()
+
+    // Whatever outlived its own server is an orphan, and orphans are the
+    // reason the next launch fails: they keep the bottle's devices and its
+    // registry claimed. Ending them is the whole point of knowing which bottle
+    // they belong to.
+    let survivors = await BottleProcesses.end(inBottleAt: directory)
     if survivors.isEmpty {
         console.log("the bottle is closed")
     } else {
-        // Deliberately not escalating to a machine-wide sweep: whatever these
-        // are, they are not this bottle's to kill.
-        console.warn("still standing, and not ours to end: \(survivors.sorted().joined(separator: ", "))")
+        console.error("would not end: " + survivors.map(\.name).joined(separator: ", "))
     }
 }
 
@@ -199,6 +190,12 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
         console.error("Invalid bottle URL: \(selectedBottle)")
         return
     }
+
+    // Wine services that outlived the server that owned them keep this bottle's
+    // devices and registry claimed, and the next launch fails because of them.
+    // They are cleared here rather than hoped away -- but only when no server
+    // is alive in this bottle, because a live server means somebody is playing.
+    await BottleProcesses.clearOrphans(inBottleAt: bottleURL)
     if(options == nil) {
         console.error("Missing game options for game with id \(id) - cannot launch (options = nil)")
         return

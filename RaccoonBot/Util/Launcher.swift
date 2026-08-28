@@ -257,13 +257,27 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
     if bottleInfo(bottleURL)?.isARM == true {
         console.log("ARM bottle: skipping the D3DMetal install, DXMT draws here")
     } else {
+        // Only where D3DMetal is what draws.
+        //
+        // The reasoning above about ARM applies to every backend that is not
+        // D3DMetal, and was only applied to ARM. A DXMT title landed in
+        // `default` and had sixty megabytes of toolkit copied into the engine
+        // on every launch to be left unread -- and copied OVER whatever was
+        // there. A machine set to D3DMetal 4 for one game had its engine put
+        // back to 3 by the next game that used DXMT, and only half back: four
+        // of those files exist in 4 and not in 3, so the copy fails partway
+        // and leaves the two generations mixed. Those four "Couldn't find
+        // source" errors in the log are that.
+        //
+        // `auto` still installs, because there the engine chooses and it may
+        // choose D3DMetal.
         switch (options!.cxGraphicsBackend) {
-            case "d3dmetal4":
-                try installd3dMetal(at: cxAppURL, version: "4")
-            case "d3dmetal3":
-                try installd3dMetal(at: cxAppURL, version: "3")
-            default:
-                try  installd3dMetal(at: cxAppURL, version: "3")
+        case "d3dmetal4":
+            try installd3dMetal(at: cxAppURL, version: "4")
+        case "d3dmetal3", "d3dmetal", "auto", "":
+            try installd3dMetal(at: cxAppURL, version: "3")
+        default:
+            console.log("\(options!.cxGraphicsBackend) does not draw through D3DMetal; leaving the toolkit alone")
         }
     }
     

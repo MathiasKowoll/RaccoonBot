@@ -559,10 +559,21 @@ class SteamLaunchWatcher: SteamLogWatcher {
 final class LoadedGame: @unchecked Sendable {
     private let lock = NSLock()
     private var value: String?
+    private var closing = false
 
     var name: String? {
         get { lock.lock(); defer { lock.unlock() }; return value }
         set { lock.lock(); defer { lock.unlock() }; value = newValue }
+    }
+
+    /// True exactly once. Two signals now watch the same session -- Steam's own
+    /// record and the executable exiting -- and either may arrive first. They
+    /// must not both tear the bottle down.
+    func claimShutdown() -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        if closing { return false }
+        closing = true
+        return true
     }
 }
 
@@ -572,6 +583,39 @@ func runningExecutable(among names: [String]) -> String? {
         [$0.executableURL?.lastPathComponent, $0.bundleURL?.lastPathComponent]
     }.compactMap { $0 })
     return names.first { running.contains($0) }
+}
+
+/// Wait until Steam says the session is over.
+///
+/// It insists on seeing the game running first. The registry trails what Steam
+/// has actually done by a few seconds, so a game that has just been asked to
+/// start still reads as not running -- and acting on that would tear the bottle
+/// down at the worst possible moment, during startup. A 1 that becomes a 0 is
+/// a session; a 0 on its own is only ignorance.
+///
+/// If Steam never records the game at all, this waits and nothing happens: the
+/// executable-name path is still armed, and lingering is the failure worth
+/// having.
+func watchSteamSession(_ state: SteamAppState,
+                       appID: Int,
+                       every interval: UInt64 = 2_000_000_000,
+                       then shutDown: @escaping (String) async -> Void) async {
+    var seenRunning = false
+    while !Task.isCancelled {
+        try? await Task.sleep(nanoseconds: interval)
+        switch state.liveness(ofAppID: appID) {
+        case .running:
+            if !seenRunning {
+                console.log("steam reports \(appID) running; watching for it to finish")
+                seenRunning = true
+            }
+        case .notRunning where seenRunning:
+            await shutDown("steam reports \(appID) is no longer running, closing steam...")
+            return
+        case .notRunning, .unknown:
+            continue
+        }
+    }
 }
 
 func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoad: @escaping (_ appName: String) -> Void, onTerminate: @escaping () -> Void, isNative: Bool, steamID: Int?, steamPath: String) async throws -> TerminationObserver {
@@ -585,11 +629,26 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
     // `nioh.exe` finished starting seconds later into a bottle with nothing
     // left in it.
     //
-    // So the game is the one executable Steam reports as started, and nothing
-    // is torn down before we know which one that is.
+    // Two things now say when the session is over, and the bottle comes down
+    // only when one of them is sure.
+    //
+    // The better one is Steam's own record. Steam keeps a `Running` flag per
+    // AppID in the bottle registry; it is about the app we launched, not about
+    // processes, so a launcher handing off does not disturb it and no per-game
+    // knowledge is needed for it to work.
+    //
+    // The other is the executable Steam named as the game, kept as a fallback
+    // for when there is no AppID to ask about -- a custom game -- or when Steam
+    // never records one.
     let loaded = LoadedGame()
 
+    var steamState: SteamAppState? = nil
+    if let ref = BottleReference(bottle), let dir = ref.directory {
+        steamState = SteamAppState(bottleDirectory: dir)
+    }
+
     func shutDown(because reason: String) async {
+        guard loaded.claimShutdown() else { return }
         console.log(reason)
         do {
             if(!isNative && steamID != nil){ // SteamCloudSyncWatcher isn't for native steam games
@@ -644,6 +703,11 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
                 console.log("found game \(appName), loading...")
                 loaded.name = appName
                 onLoad(appName)
+                if let steamState {
+                    Task(priority: .background) {
+                        await watchSteamSession(steamState, appID: steamID, then: shutDown)
+                    }
+                }
             } else {
                 // Nothing ever came up. The observer is now waiting for a game
                 // that does not exist, so say so here instead of leaving the

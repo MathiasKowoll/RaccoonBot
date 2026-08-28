@@ -22,6 +22,10 @@ struct BottleReference: Equatable {
     /// caller gave a bare name and there was nothing to derive it from.
     let root: String
 
+    /// The bottle's own directory, for reading what is inside it. Nil when the
+    /// caller gave a bare name, because a name alone does not say where.
+    let directory: URL?
+
     init?(_ bottle: String) {
         let trimmed = bottle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
@@ -30,6 +34,7 @@ struct BottleReference: Equatable {
             // Already a name.
             self.name = trimmed
             self.root = ""
+            self.directory = nil
             return
         }
 
@@ -42,6 +47,7 @@ struct BottleReference: Equatable {
         guard !name.isEmpty, name != "/" else { return nil }
 
         self.name = name
+        self.directory = url
         // Joined as text rather than through the URL: `path` reports a
         // trailing slash or not depending on whether the directory exists on
         // disk, and a root that changes shape when the bottle is missing is a

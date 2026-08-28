@@ -477,9 +477,20 @@ class SteamCloudSyncWatcher: SteamLogWatcher {
         super.init(steamID: steamID, steamPath: steamPath, fileName: "cloud_log.txt")
     }
 
+    /// The lines Steam ends an exit sync with.
+    ///
+    /// Counted in this machine's two cloud logs rather than guessed at, which
+    /// is how the first version of this went wrong: it knew "Upload complete in
+    /// build list" and not "Upload complete, result OK", so a real upload that
+    /// finished in six seconds went unrecognised and the teardown sat waiting
+    /// for three minutes. Hence the prefix, and hence the quiet fallback below:
+    /// a phrase list is only ever as complete as the logs you have read.
+    /// Exposed so the vocabulary can be checked against real log lines.
+    static func isTerminalForTesting(_ line: String) -> Bool { isTerminal(line) }
+
     private static func isTerminal(_ line: String) -> Bool {
         line.contains("Successfully synced")
-            || line.contains("Upload complete in build list")
+            || line.contains("Upload complete")
             || line.contains("Failed sync for")
     }
 
@@ -500,7 +511,7 @@ class SteamCloudSyncWatcher: SteamLogWatcher {
     /// words appear somewhere in the file.
     func waitForSteamCloudSync() async throws {
         let appIDMarker = "[AppID \(self.steamID)]"
-        let deadline = Date().addingTimeInterval(180)
+        let deadline = Date().addingTimeInterval(60)
         // If no exit sync has even begun after this long, there is not going to
         // be one -- cloud saves are off for this title, or Steam is not logged
         // in. Waiting the full deadline for it would just delay the teardown.
@@ -508,9 +519,14 @@ class SteamCloudSyncWatcher: SteamLogWatcher {
 
         var sawExitSync = false
         var pendingUploads = 0
+        // When this app last said anything. Steam writes an exit sync in one
+        // burst; once it has been quiet for a few seconds it is done, whatever
+        // words it finished with.
+        var lastHeardFrom = Date()
 
         while Date() < deadline {
             for line in tail.newLines() where line.contains(appIDMarker) {
+                lastHeardFrom = Date()
                 if line.contains("Starting sync (") && line.contains("AC Exit") {
                     sawExitSync = true
                     console.log("\(self.steamID): steam is syncing save data on exit")
@@ -529,6 +545,10 @@ class SteamCloudSyncWatcher: SteamLogWatcher {
             }
             if !sawExitSync && Date() > patienceForItToBegin {
                 console.log("\(self.steamID): steam started no exit sync; nothing to wait for")
+                return
+            }
+            if sawExitSync && Date().timeIntervalSince(lastHeardFrom) > 6 {
+                console.log("\(self.steamID): steam has gone quiet; the sync is done")
                 return
             }
             try await Task.sleep(nanoseconds: 200_000_000)

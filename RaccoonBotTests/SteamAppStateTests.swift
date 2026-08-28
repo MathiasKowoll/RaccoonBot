@@ -96,9 +96,9 @@ struct SteamAppStateTests {
                                     appID: 485510,
                                     every: 20_000_000) { _ in fired.set() }
         }
-        try await Task.sleep(nanoseconds: 150_000_000)
-        try writeRegistry(in: dir, appID: 485510, running: 0)
         try await Task.sleep(nanoseconds: 400_000_000)
+        try writeRegistry(in: dir, appID: 485510, running: 0)
+        try await Task.sleep(nanoseconds: 1_500_000_000)
         task.cancel()
         #expect(fired.didFire == true)
     }

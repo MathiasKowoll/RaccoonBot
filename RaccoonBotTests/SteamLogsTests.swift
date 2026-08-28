@@ -260,4 +260,29 @@ struct SteamGameProcessLogTests {
         w.poll(now: t0.addingTimeInterval(25))
         #expect(steamIdleGrace(forSessionLasting: w.sessionLength) == 120)
     }
+
+    /// Counted from this machine's cloud logs. The one that was missed --
+    /// "Upload complete, result OK" -- cost three minutes of waiting after a
+    /// six-second upload had already finished.
+    @Test(arguments: [
+        "[2026-08-28 16:34:14] [AppID 1340990] Upload complete, result OK",
+        "[2026-08-28 14:43:48] [AppID 1340990] Upload complete in build list",
+        "[2026-08-28 11:15:09] [AppID 1340990] Successfully synced to ChangeNumber 0",
+        "[2026-08-28 11:17:20] [AppID 1340990] Failed sync for 'AC Exit,Sync Disabled,' [login=false]",
+    ])
+    func everyEndingSteamActuallyWritesIsRecognised(_ line: String) {
+        #expect(SteamCloudSyncWatcher.isTerminalForTesting(line))
+    }
+
+    /// These sit in the middle of a sync. Treating them as the end would let
+    /// the teardown start while files were still going up.
+    @Test(arguments: [
+        "[..] [AppID 1340990] AutoCloud complete",
+        "[..] [AppID 1340990] Need to upload file KoeiTecmo/Ronin/Savedata/x/SAVEDATA.BIN",
+        "[..] [AppID 1340990] Starting sync (up,AC Exit,)",
+        "[..] [AppID 1340990] Running AutoCloud on exit. Looking for new and updated files",
+    ])
+    func theMiddleOfASyncIsNotTheEnd(_ line: String) {
+        #expect(SteamCloudSyncWatcher.isTerminalForTesting(line) == false)
+    }
 }

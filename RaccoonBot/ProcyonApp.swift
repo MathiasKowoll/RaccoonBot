@@ -55,6 +55,19 @@ struct RaccoonBotApp: App {
         // this stopped sharing one with the application it came from, and
         // UserDefaults.standard follows the identifier.
         Migration.run()
+
+        // Anything wine left running belongs to a session that is over: this
+        // application closed before a bottle came down, or a game was force
+        // quit. Those services keep the bottle's devices and registry claimed
+        // and the next launch fails because of them -- one survived exactly
+        // that way tonight and was still there half an hour later.
+        //
+        // Off the main thread because it asks lsof about every prefix on the
+        // machine, which is a second and a half, and nobody should wait for it
+        // to see a window.
+        Task(priority: .background) {
+            await BottleProcesses.clearResidualAtStartup()
+        }
     }
 
     var body: some Scene {

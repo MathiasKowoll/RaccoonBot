@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 /// The processes belonging to one bottle, and how to end them without touching
 /// anything else.
@@ -36,7 +37,11 @@ enum BottleProcesses {
         guard let server = serverDirectory(ofBottleAt: bottle),
               FileManager.default.fileExists(atPath: server.path(percentEncoded: false))
         else { return [] }
+        return processes(holding: server)
+    }
 
+    /// Everything holding one wineserver directory open.
+    static func processes(holding server: URL) -> [Running] {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
         task.arguments = ["-Fpc", "+D", server.path(percentEncoded: false)]
@@ -125,6 +130,73 @@ enum BottleProcesses {
         }
         try? await Task.sleep(nanoseconds: 500_000_000)
         return running(inBottleAt: bottle)
+    }
+
+    /// Applications that run wine themselves.
+    ///
+    /// While one of these is open, a wine process is not a leftover -- somebody
+    /// is using it. Every CrossOver on this machine reports the same identifier,
+    /// patched copies included, so one name covers all of them.
+    static let wineHosts: Set<String> = [
+        "com.codeweavers.CrossOver",
+        "itmandar.Procyon",
+    ]
+
+    static var aWineHostIsOpen: Bool {
+        NSWorkspace.shared.runningApplications.contains {
+            guard let id = $0.bundleIdentifier else { return false }
+            return wineHosts.contains(id)
+        }
+    }
+
+    /// Every wine process on this machine whose server is gone.
+    ///
+    /// Wine keeps one directory per prefix, named after that prefix's device
+    /// and inode, and every process of the prefix holds files open inside it.
+    /// A directory with processes but no `wineserver` is a prefix nobody is
+    /// running any more: what is left there outlived whatever owned it.
+    static func residualEverywhere() -> [Running] {
+        let root = URL(fileURLWithPath: "/private/tmp/.wine-\(getuid())")
+        guard let servers = try? FileManager.default.contentsOfDirectory(
+            at: root, includingPropertiesForKeys: nil) else { return [] }
+
+        var found: [Running] = []
+        for server in servers where server.lastPathComponent.hasPrefix("server-") {
+            let here = processes(holding: server)
+            guard !here.isEmpty else { continue }
+            guard !here.contains(where: { $0.name.contains("wineserver") }) else { continue }
+            found.append(contentsOf: here)
+        }
+        return found
+    }
+
+    /// What somebody left behind, cleared at startup.
+    ///
+    /// A game that was force-quit, or this application closed before a bottle
+    /// finished coming down, leaves wine services holding that bottle's devices
+    /// and registry -- and the next launch fails because of them. One survived
+    /// exactly that way tonight: a winedevice.exe with no parent, still there
+    /// half an hour later.
+    ///
+    /// Nothing is touched while a CrossOver or Procyon window is open. Those
+    /// run wine on purpose, and what looks like debris from here is somebody
+    /// else's game.
+    static func clearResidualAtStartup() async {
+        guard !aWineHostIsOpen else {
+            console.log("crossover is open; leaving its processes alone")
+            return
+        }
+        let residual = residualEverywhere()
+        guard !residual.isEmpty else { return }
+
+        console.warn("clearing \(residual.count) wine process(es) left from before: "
+                     + residual.map(\.name).sorted().joined(separator: ", "))
+        for process in residual { kill(process.pid, SIGTERM) }
+        try? await Task.sleep(nanoseconds: 3_000_000_000)
+        for process in residualEverywhere() {
+            console.warn("\(process.name) ignored the request; ending it")
+            kill(process.pid, SIGKILL)
+        }
     }
 
     /// Clear orphans left by a previous session, before starting a new one.

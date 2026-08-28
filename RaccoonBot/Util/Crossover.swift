@@ -349,23 +349,25 @@ func getInlineEnvs(from: GameOptions, cxAppPath: String? = nil) -> String {
     // points GST_PLUGIN_SYSTEM_PATH. Saying nothing is the right instruction.
     let cxGraphicsBackend = from.cxGraphicsBackend.contains("d3dmetal") ? "d3dmetal" : from.cxGraphicsBackend
     value += defaults.joined(separator: " ") + " "
-    // The HUD, and how much of it.
+    // The HUD, how much of it, and how solid.
     //
-    // Apple's own HUD has no detail setting -- the whole system knows only
-    // MTL_HUD_ENABLED and MTL_HUD_PATH, and it draws a fixed set of rows. What
-    // the levels above the first switch on are the toolkits' own additions,
-    // each verified in the binaries this engine carries rather than assumed:
-    // D3DM_SHOW_HUD_STATS registers twenty-two D3DMetal counters into
-    // com.apple.hud-graph.default and is present in both GPTK 3 and 4, while
-    // MoltenVK's performance tracking is what the Vulkan path has to offer.
+    // MTL_HUD_ELEMENTS takes the rows to draw, MTL_HUD_OPACITY how solidly.
+    // Neither appears in anything macOS advertises -- the system names only
+    // MTL_HUD_ENABLED and MTL_HUD_PATH, and the HUD itself is a separate
+    // library loaded through the second. The element names come from
+    // Jfishin's MetalHUDmenu, which is where they are written down.
     if from.mtlHudEnabled {
-        value += "MTL_HUD_ENABLED=1 "
         let detail = MetalHudDetail(rawValue: from.mtlHudDetail) ?? .fpsOnly
-        if detail != .fpsOnly, backend.hasPrefix("d3dmetal") || unknownBackend {
-            value += "D3DM_SHOW_HUD_STATS=1 "
+        value += "MTL_HUD_ENABLED=1 "
+        value += "MTL_HUD_ELEMENTS=\(detail.elements.joined(separator: ",")) "
+        if from.mtlHudOpacity < 1.0 {
+            value += "MTL_HUD_OPACITY=\(String(format: "%.3f", max(0, from.mtlHudOpacity))) "
         }
-        if detail == .extended {
-            value += "MVK_CONFIG_PERFORMANCE_TRACKING=1 MVK_CONFIG_PERFORMANCE_LOGGING_INLINE=1 "
+        // D3DMetal's own twenty-two counters, for the level that asked for
+        // everything. Only where D3DMetal is what draws: a game running through
+        // DXMT would otherwise carry a variable nothing reads.
+        if detail == .extended, backend.hasPrefix("d3dmetal") || unknownBackend {
+            value += "D3DM_SHOW_HUD_STATS=1 "
         }
     }
     value += from.ue4Hack ? "MVK_CONFIG_UE4_HACK_ENABLED=1 NAS_DISABLE_UE4_HACK=0 " : "MVK_CONFIG_UE4_HACK_ENABLED=0 NAS_DISABLE_UE4_HACK=1 "

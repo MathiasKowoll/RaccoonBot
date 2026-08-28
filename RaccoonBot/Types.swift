@@ -34,25 +34,39 @@ enum OnOff: String {
 
 typealias CXDrives = [String: URL]
 
-/// How much the Metal HUD should show.
+/// How much of the Metal HUD to show.
 ///
-/// Apple's HUD itself has no such setting -- the whole system knows only
-/// MTL_HUD_ENABLED and MTL_HUD_PATH, and it draws what it draws. What the
-/// levels above the first turn on are the graphics toolkits' own additions to
-/// it, each measured in the binaries this application ships against:
-///
-///   D3DM_SHOW_HUD_STATS   twenty-two D3DMetal counters -- draws, encoders,
-///                         barriers, tessellation, ray queries, tile updates
-///                         (present in both GPTK 3 and 4)
-///   MVK_CONFIG_PERFORMANCE_TRACKING / _LOGGING_INLINE
-///                         MoltenVK's per-frame timings, for the Vulkan path
-///
-/// So "fps" is not a HUD with one row: it is the HUD on its own, which is as
-/// little as the platform will show.
+/// The HUD takes a comma-separated list of the rows it should draw, in
+/// MTL_HUD_ELEMENTS. Twenty-one are known; these three groupings come from
+/// Jfishin's MetalHUDmenu, which is where the variable and the element names
+/// are documented -- macOS itself advertises only MTL_HUD_ENABLED and
+/// MTL_HUD_PATH, and the HUD is a separate library loaded through the latter.
 enum MetalHudDetail: String, CaseIterable {
     case fpsOnly = "fps"
     case normal = "normal"
     case extended = "extended"
+
+    /// Every row the HUD knows about.
+    static let allElements = [
+        "device", "rosetta", "layersize", "memory", "fps", "frameinterval",
+        "frameintervalhistogram", "metalcpu", "gputimeline", "shaders",
+        "framenumber", "disk", "frameintervalgraph", "presentdelay", "gputime",
+        "thermal", "fpsgraph", "layerscale", "refreshrate", "gamemode", "client",
+    ]
+
+    /// The rows this level draws.
+    var elements: [String] {
+        switch self {
+        case .fpsOnly:
+            return ["fps"]
+        case .normal:
+            // What the HUD shows when nobody has chosen.
+            return ["device", "rosetta", "layersize", "memory", "gamemode",
+                    "fps", "gputime", "frameinterval", "frameintervalgraph"]
+        case .extended:
+            return Self.allElements
+        }
+    }
 
     var label: String {
         switch self {
@@ -64,9 +78,9 @@ enum MetalHudDetail: String, CaseIterable {
 
     var explanation: String {
         switch self {
-        case .fpsOnly: return "Apple's HUD on its own -- the least the system will draw."
-        case .normal: return "Adds the graphics toolkit's own counters."
-        case .extended: return "Adds per-frame timings as well. Costs a little speed."
+        case .fpsOnly: return "One line, and nothing in the way of the game."
+        case .normal: return "Memory, GPU time and frame intervals as well."
+        case .extended: return "Every row the HUD has, plus the toolkit's own counters."
         }
     }
 }
@@ -77,6 +91,8 @@ struct GameOptionsData: Codable { // this is used for reading saved properties
     var mtlHudEnabled: Bool?
     /// How much the Metal HUD should show: "fps", "normal" or "extended".
     var mtlHudDetail: String?
+    /// How solid the Metal HUD is drawn, from 0 to 1.
+    var mtlHudOpacity: Double?
     var d3dMtl4Enabled: Bool?
     var x87PatchEnabled: Bool?
     /// Run this title in the ARM bottle instead of the default one.
@@ -137,6 +153,8 @@ class GameOptions: ObservableObject { // this is used as form state
     /// least -- which is what somebody who turns a HUD on while playing
     /// usually wants.
     @Published var mtlHudDetail: String = MetalHudDetail.fpsOnly.rawValue
+    /// How solid the HUD is drawn. Fully opaque unless somebody says otherwise.
+    @Published var mtlHudOpacity: Double = 1.0
     @Published var x87PatchEnabled: Bool
     /// Defaults to false and is not in the initialiser on purpose: every
     /// existing call site keeps working, and a title only moves bottles when
@@ -191,6 +209,7 @@ class GameOptions: ObservableObject { // this is used as form state
         self.wineMSync = data.wineMSync ?? true
         self.mtlHudEnabled = data.mtlHudEnabled ?? false
         self.mtlHudDetail = data.mtlHudDetail ?? MetalHudDetail.fpsOnly.rawValue
+        self.mtlHudOpacity = data.mtlHudOpacity ?? 1.0
         self.x87PatchEnabled = data.x87PatchEnabled ?? false
         self.useArmBottle = data.useArmBottle ?? false
         self.dx9PatchEnabled = data.dx9PatchEnabled ?? false
@@ -222,6 +241,7 @@ class GameOptions: ObservableObject { // this is used as form state
         if let v = data.wineMSync { self.wineMSync = v }
         if let v = data.mtlHudEnabled { self.mtlHudEnabled = v }
         if let v = data.mtlHudDetail { self.mtlHudDetail = v }
+        if let v = data.mtlHudOpacity { self.mtlHudOpacity = v }
         if let v = data.x87PatchEnabled { self.x87PatchEnabled = v }
         if let v = data.useArmBottle { self.useArmBottle = v }
         if let v = data.dx9PatchEnabled { self.dx9PatchEnabled = v }

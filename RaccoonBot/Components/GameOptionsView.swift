@@ -120,6 +120,17 @@ struct GameOptionsView: View {
                                         .foregroundStyle(.secondary)
                                         .multilineTextAlignment(.trailing)
                                         .frame(maxWidth: 180, alignment: .trailing)
+                                    HStack {
+                                        Text("Opacity")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                        Slider(value: $gameOptions.mtlHudOpacity, in: 0.1...1.0)
+                                        Text("\(Int(gameOptions.mtlHudOpacity * 100))%")
+                                            .font(.caption.monospacedDigit())
+                                            .foregroundStyle(.secondary)
+                                            .frame(width: 34, alignment: .trailing)
+                                    }
+                                    .frame(maxWidth: 180)
                                 }
                                 Toggle("Advertise AVX", isOn: $gameOptions.advertiseAVX)
                                 if !current.isNative {

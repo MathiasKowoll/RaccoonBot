@@ -7,64 +7,63 @@
 
 import AppKit
 
-func closeWineActivities() async throws {
-    // Wait for graceful termination, then escalate to forceTerminate, then give a final wait
-    let gracePeriod: UInt64 = 2_000_000_000 // 2 seconds in nanoseconds
-    let pollInterval: UInt64 = 200_000_000  // 0.2 seconds in nanoseconds
-//    let forceTimeout: UInt64 = 6_000_000_000 // ~6 seconds total before force
-    let absoluteTimeout: UInt64 = 12_000_000_000 // ~12 seconds absolute timeout
-
-    
-    // Capture the target apps first to avoid the list changing while iterating
-    let targets = NSWorkspace.shared.runningApplications.filter { app in
-        if let bundleURL = app.bundleURL {
-            return bundleURL.lastPathComponent.lowercased().hasSuffix(".exe") || bundleURL.lastPathComponent.lowercased().contains("wine")
-        }
-        if let executableURL = app.executableURL {
-            return (
-                executableURL.lastPathComponent.lowercased().hasSuffix(".exe") || executableURL.lastPathComponent.lowercased().contains("wine")
-            )
-        }
-        return false
+/// Every Windows process running right now, by name, anywhere on this machine.
+///
+/// Used to decide when to stop waiting -- never to decide what to kill.
+func runningWindowsApps() -> [String] {
+    NSWorkspace.shared.runningApplications.compactMap { app in
+        guard let name = (app.executableURL ?? app.bundleURL)?.lastPathComponent else { return nil }
+        let lower = name.lowercased()
+        return (lower.hasSuffix(".exe") || lower.contains("wine")) ? name : nil
     }
-    print(
-        NSWorkspace.shared.runningApplications.flatMap({
-            [$0.localizedName ?? "-" , $0.bundleURL?.lastPathComponent ?? "-", $0.executableURL?.lastPathComponent ?? "-"]
-        })
-    )
-    print(targets.debugDescription)
-    // Send terminate to all matching apps
-    for app in targets {
-        if let name = (app.executableURL != nil ? app.executableURL : app.bundleURL)?.lastPathComponent {
-            console.warn("terminating \(name)")
+}
+
+/// Close a bottle down: ask, wait for it to happen, then end what is left.
+///
+/// This replaces `closeWineActivities`, which sent terminate to every running
+/// application whose name ended in `.exe` or contained "wine" -- machine-wide,
+/// every bottle, stock CrossOver included -- and escalated to `forceTerminate`
+/// two seconds later. Two things were wrong with it.
+///
+/// It reached far past the game it was closing. That is what turned every
+/// mistake about whether a game had ended into a mistake about every Windows
+/// program on the machine, and it is why those mistakes were catastrophic
+/// rather than annoying.
+///
+/// And it began the moment `Steam.exe -shutdown` had been *sent*, which is not
+/// when Steam has finished. Steam writes its own state on the way down; it was
+/// being killed in the middle of doing so.
+///
+/// So: wait for the bottle to go quiet by itself, bounded -- a bottle that will
+/// not settle must not hold the application forever -- and only then end what
+/// remains, through wine's own mechanism for exactly that, scoped to this one
+/// bottle by `--bottle` and `CX_BOTTLE_PATH`.
+func closeBottle(cxAppPath: String, bottle: String,
+                 waitingUpTo settleTimeout: TimeInterval = 20) async throws {
+    let pollInterval: UInt64 = 500_000_000
+    let deadline = Date().addingTimeInterval(settleTimeout)
+
+    while Date() < deadline {
+        if runningWindowsApps().isEmpty {
+            console.log("the bottle closed on its own")
+            return
         }
-        app.terminate()
-    }
-
-    // Helper to check if all targets have terminated
-    func allTerminated(_ apps: [NSRunningApplication]) -> Bool {
-        apps.allSatisfy { $0.isTerminated }
-    }
-
-    var elapsed: UInt64 = 0
-    // First grace period loop
-    while !allTerminated(targets) && elapsed < gracePeriod {
         try await Task.sleep(nanoseconds: pollInterval)
-        elapsed += pollInterval
     }
 
-    // If still not all terminated after grace period, escalate with terminate
-    if !allTerminated(targets) {
-        for app in targets where !app.isTerminated {
-            console.warn("force terminating \(app.executableURL?.lastPathComponent ?? "<unknown>")")
-            app.forceTerminate()
-        }
-    }
+    let left = runningWindowsApps()
+    console.warn("still running after \(Int(settleTimeout))s: \(left.sorted().joined(separator: ", "))")
+    // wineserver -k ends every process of this prefix and nothing outside it.
+    try await quitWine(cxAppPath: cxAppPath, bottle: bottle)
 
-    // Final wait until absolute timeout or done
-    while !allTerminated(targets) && elapsed < absoluteTimeout {
-        try await Task.sleep(nanoseconds: pollInterval)
-        elapsed += pollInterval
+    try await Task.sleep(nanoseconds: 2_000_000_000)
+    let survivors = runningWindowsApps()
+    if survivors.isEmpty {
+        console.log("the bottle is closed")
+    } else {
+        // Deliberately not escalating to a machine-wide sweep: whatever these
+        // are, they are not this bottle's to kill.
+        console.warn("still standing, and not ours to end: \(survivors.sorted().joined(separator: ", "))")
     }
 }
 

@@ -253,7 +253,13 @@ struct GamesList: View {
 
                     Button {
                         Task {
-                            try! await closeWineActivities()
+                            // Stopping by hand deserves the same courtesy as stopping by
+                            // itself: ask Steam to go, let it finish, then close this
+                            // bottle -- not every bottle on the machine.
+                            if let cx = appGlobals.cxAppPath {
+                                try? await quitSteam(cxAppPath: cx, bottle: appGlobals.selectedBottle, isNative: false)
+                                try? await closeBottle(cxAppPath: cx, bottle: appGlobals.selectedBottle)
+                            }
                             libraryPageGlobals.isLaunchingGame = false
                         }
                     } label: {

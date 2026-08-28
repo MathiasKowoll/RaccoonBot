@@ -723,7 +723,9 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
                 try await cloudSync.waitForSteamCloudSync()
             }
             try await quitSteam(cxAppPath: cxAppPath, bottle: bottle, isNative: isNative)
-            try await closeWineActivities()
+            // Steam has been asked, not told. Give it time to finish writing
+            // its own state before ending anything.
+            try await closeBottle(cxAppPath: cxAppPath, bottle: bottle)
         } catch {
             // Whatever failed on the way out, the game is over as far as the
             // window is concerned. Leaving the loader spinning helps nobody.

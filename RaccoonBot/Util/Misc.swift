@@ -892,10 +892,26 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
                     }
                 }
             } else {
-                // Nothing ever came up. The observer is now waiting for a game
-                // that does not exist, so say so here instead of leaving the
-                // window on its loader forever.
-                await shutDown(because: "no game came up for \(appNames.joined(separator: ", ")), giving up")
+                // Failing to recognise the game is not evidence that there
+                // isn't one, and this branch used to close the bottle as
+                // though it were. It killed MGS4 ninety seconds into every
+                // launch -- exactly the length of this wait -- because Steam
+                // records that game as
+                //
+                //   adding PID 1752 as a tracked process ""-region eu -lan en
+                //   -selfregion EU -resolution 0 -launcherpath launcher.exe"
+                //
+                // which is a command line, not an executable name. Nothing by
+                // that name was ever going to appear, so the wait always
+                // expired, and the game playing at the time was destroyed for
+                // it.
+                //
+                // So this only stops watching. The window is released, and the
+                // process log -- which never needed the name -- carries on
+                // deciding when the session is really over.
+                console.warn("could not tell which executable is the game; "
+                             + "leaving it running and watching steam instead")
+                onTerminate()
             }
         } catch {
             console.log("\(appNames.joined(separator: ", ")), timeout...")

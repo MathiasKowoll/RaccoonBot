@@ -349,6 +349,20 @@ struct SteamGameProcessLogTests {
         w.poll()
         #expect(w.tracked == [100])
     }
+
+    /// MGS4's game is recorded by Steam as a command line, not a name:
+    ///   adding PID 1752 as a tracked process ""-region eu -lan en ... -launcherpath launcher.exe"
+    /// There is no executable there to wait for, which is why the wait always
+    /// expired -- and why expiring must never mean "close the bottle".
+    @Test func aGameRecordedAsACommandLineStillHasItsProcessesTracked() throws {
+        let (w, log) = try watcher()
+        try append(#"[..] AppID 1340990 adding PID 1752 as a tracked process ""-region eu -lan en -selfregion EU -resolution 0 -launcherpath launcher.exe""# + "\n", to: log)
+        w.poll()
+        // The name is unusable, but the PID is not: the session is still known.
+        #expect(w.tracked == [1752])
+        #expect(w.everStarted)
+        #expect(w.emptySince == nil)
+    }
 }
 
 @Suite("Telling a game apart from the furniture")
@@ -381,4 +395,5 @@ struct BottleFurnitureTests {
     func somethingThatIsNotAWindowsExecutableIsNotAGame(_ name: String) {
         #expect(name.lowercased().hasSuffix(".exe") == false)
     }
+
 }

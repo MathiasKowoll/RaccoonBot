@@ -130,3 +130,73 @@ struct SavedOptionsReachTheLaunchTests {
         #expect(launch.envVariables.isEmpty, "a cleared field came back with its old value")
     }
 }
+
+/// One backend, one family of variables.
+///
+/// A peer session read the environment from inside three running games and
+/// found D3DM_ENABLE_METALFX, D3DM_MTL4 and DXMT_ENABLE_NVEXT arriving
+/// together with a single backend selected. Nothing broke -- each layer
+/// ignores what it does not understand -- but it makes an environment dump
+/// unreadable, and they lost hours reading variables that were set and did
+/// not apply.
+@MainActor
+struct BackendVariableScopeTests {
+
+    private func env(_ backend: String) -> String {
+        let o = GameOptions(cxGraphicsBackend: backend,
+                            dxmtPreferredMaxFrameRate: 60,
+                            dxmtMetalFXSpatial: true)
+        o.d3dMtl4Enabled = true
+        o.d3dMaxFPS = 60
+        return getInlineEnvs(from: o)
+    }
+
+    @Test func dxmtGetsNoD3DMetalVariables() {
+        let e = env("dxmt")
+        #expect(e.contains("DXMT_ENABLE_NVEXT"))
+        #expect(e.contains("DXMT_METALFX_SPATIAL_SWAPCHAIN"))
+        #expect(!e.contains("D3DM_"), "a D3DMetal variable reached a DXMT launch")
+        #expect(!e.contains("DXVK_"))
+    }
+
+    @Test func d3dMetalGetsNoDxmtVariables() {
+        for backend in ["d3dmetal3", "d3dmetal4"] {
+            let e = env(backend)
+            #expect(e.contains("D3DM_ENABLE_METALFX"), "\(backend) lost its own variable")
+            #expect(!e.contains("DXMT_"), "\(backend) received a DXMT variable")
+            #expect(!e.contains("DXVK_"), "\(backend) received a DXVK variable")
+        }
+    }
+
+    @Test func dxvkGetsNeither() {
+        let e = env("dxvk")
+        #expect(e.contains("DXVK_ASYNC"))
+        #expect(!e.contains("D3DM_"))
+        #expect(!e.contains("DXMT_"))
+    }
+
+    /// Auto is the engine choosing, so every family goes: there is nothing
+    /// here that knows which one will be picked.
+    @Test func autoStillGetsAllThree() {
+        let e = env("auto")
+        #expect(e.contains("D3DM_ENABLE_METALFX"))
+        #expect(e.contains("DXMT_ENABLE_NVEXT"))
+        #expect(e.contains("DXVK_ASYNC"))
+    }
+
+    /// Scoping the families must not touch what belongs to no backend.
+    @Test func theBackendAgnosticOnesAreUntouched() {
+        for backend in ["dxmt", "d3dmetal4", "dxvk", "wined3d"] {
+            let e = env(backend)
+            #expect(e.contains("ROSETTA_ADVERTISE_AVX"), "\(backend)")
+            #expect(e.contains("MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS"), "\(backend)")
+            #expect(e.contains("CX_GRAPHICS_BACKEND"), "\(backend)")
+        }
+    }
+
+    /// And what the user typed is theirs, whatever the backend.
+    @Test func theGamesOwnVariablesAlwaysGoThrough() {
+        let o = GameOptions(cxGraphicsBackend: "dxmt", envVariables: "MY_OWN=1")
+        #expect(getInlineEnvs(from: o).contains("MY_OWN=1"))
+    }
+}

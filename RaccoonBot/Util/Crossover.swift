@@ -309,10 +309,25 @@ func getInlineEnvs(from: GameOptions, cxAppPath: String? = nil) -> String {
         return value != nil && value == true ? "1" : "0"
     }
     var value = from.envVariables == "" ? "" : "\(from.envVariables) "
-    var defaults = [
-        "D3DM_ENABLE_METALFX=1",
-        "DXMT_ENABLE_NVEXT=1",
-        "DXVK_ASYNC=1",
+    // Each family reaches only the layer that reads it.
+    //
+    // These three used to be written together on every launch, so a game on
+    // d3dmetal received DXMT_ENABLE_NVEXT and a game on dxmt received
+    // D3DM_ENABLE_METALFX. Nothing broke -- each layer ignores what it does
+    // not understand -- but it makes an environment dump unreadable, and a
+    // peer session lost hours reading variables that were set and did not
+    // apply. "auto" gets all three, because it is the engine that chooses.
+    let backend = from.cxGraphicsBackend
+    let isD3DMetal = backend.hasPrefix("d3dmetal")
+    let isDXMT = backend == "dxmt"
+    let isDXVK = backend == "dxvk"
+    let unknownBackend = backend == "auto" || backend.isEmpty
+
+    var defaults: [String] = []
+    if isD3DMetal || unknownBackend { defaults.append("D3DM_ENABLE_METALFX=1") }
+    if isDXMT || unknownBackend { defaults.append("DXMT_ENABLE_NVEXT=1") }
+    if isDXVK || unknownBackend { defaults.append("DXVK_ASYNC=1") }
+    defaults += [
 //        "MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=1", //slower, but more reliable
 //        "MVK_CONFIG_PREFILL_METAL_COMMAND_BUFFERS=3", //this actually slows down everything
 //        "MVK_CONFIG_USE_MTLHEAP=2",
@@ -346,7 +361,7 @@ func getInlineEnvs(from: GameOptions, cxAppPath: String? = nil) -> String {
     // Launcher.swift copies apple_gptk 3 or 4 in on every launch -- so
     // writing them for a 3 engine sets variables nothing reads and puts a
     // frame cap in a launch line that will not honour it.
-    if from.cxGraphicsBackend == "d3dmetal4" {
+    if backend == "d3dmetal4" {
         value += "D3DM_MTL4=\(from.d3dMtl4Enabled ? "1" : "0") "
         if from.d3dMaxFPS > 20 {
             value += "D3DM_MAX_FPS=\(DoubleToFormattedStr(from.d3dMaxFPS)) "
@@ -372,8 +387,10 @@ func getInlineEnvs(from: GameOptions, cxAppPath: String? = nil) -> String {
 //        default:
 //            break
 //    }
-    let dxmtMetalFXSpatial = from.dxmtMetalFXSpatial ? "DXMT_METALFX_SPATIAL_SWAPCHAIN=1 " : ""
-    value += dxmtMetalFXSpatial
+    // DXMT's own, and only DXMT's.
+    if isDXMT || unknownBackend {
+        value += from.dxmtMetalFXSpatial ? "DXMT_METALFX_SPATIAL_SWAPCHAIN=1 " : ""
+    }
     
     var dxmtConfigValues: [String] = []
     if from.dxmtPreferredMaxFrameRate > 20 {
@@ -432,7 +449,9 @@ func getInlineEnvs(from: GameOptions, cxAppPath: String? = nil) -> String {
         }
     }
     
-    value += getDxmtConfigEnv(values:  dxmtConfigValues)
+    if isDXMT || unknownBackend {
+        value += getDxmtConfigEnv(values: dxmtConfigValues)
+    }
     return value
 }
 

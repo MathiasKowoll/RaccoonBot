@@ -745,6 +745,25 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
     }
 
     func shutDown(because reason: String) async {
+        // The last word, and it belongs to the machine rather than to a log.
+        //
+        // Every judgement that leads here is made from Steam's own record, and
+        // a record can be misread or be a minute out of date. That is what
+        // killed MGS4: its first attempt ended in a line this code did not
+        // understand, the old name-watching path fired instead, and by the time
+        // its teardown arrived the game had been relaunched and was playing.
+        //
+        // So before anything is closed, ask what is actually running in the
+        // bottle. If it is a game, this decision was made about a different
+        // moment and does not apply any more.
+        if let directory = BottleReference(bottle)?.directory {
+            let playing = BottleProcesses.gamesRunning(inBottleAt: directory)
+            if !playing.isEmpty {
+                console.warn("not closing down: \(playing.joined(separator: ", ")) "
+                             + "is running in this bottle (\(reason))")
+                return
+            }
+        }
         guard loaded.claimShutdown() else { return }
         console.log(reason)
         do {

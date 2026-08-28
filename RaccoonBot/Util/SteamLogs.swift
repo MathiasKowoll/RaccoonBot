@@ -122,6 +122,20 @@ final class SteamGameProcessLog {
                 events.append(.sessionEnded)
                 continue
             }
+            // Steam has a second way of saying a process ended, used when it
+            // takes the app down itself rather than noticing it exit:
+            //   "Game 2492670 going away; no longer tracking PID 1664"
+            // Not knowing it left the tracked set holding processes that were
+            // already dead, so it never emptied -- and MGS4, whose launcher
+            // exits this way, became invisible to every judgement made here.
+            if let app = Self.number(after: "Game ", in: line),
+               line.contains("going away"),
+               let pid = Self.integer(after: "no longer tracking PID ", in: line) {
+                trackedByApp[app, default: []].remove(pid)
+                if app == appID { events.append(.stopped(pid: pid, exitCode: 0)) }
+                continue
+            }
+
             guard let app = Self.appID(in: line) else { continue }
             let ours = app == appID
 
@@ -179,6 +193,13 @@ final class SteamGameProcessLog {
     func hasBeenIdle(for seconds: TimeInterval, now: Date = Date()) -> Bool {
         guard let emptySince else { return false }
         return now.timeIntervalSince(emptySince) >= seconds
+    }
+
+    /// The digits following a marker, as a string.
+    private static func number(after marker: String, in line: String) -> String? {
+        guard let range = line.range(of: marker) else { return nil }
+        let digits = line[range.upperBound...].prefix { $0.isNumber }
+        return digits.isEmpty ? nil : String(digits)
     }
 
     /// The AppID a "AppID N ..." line is about.

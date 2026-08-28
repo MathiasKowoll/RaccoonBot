@@ -324,4 +324,52 @@ struct SteamGameProcessLogTests {
         w.poll()
         #expect(w.lastExitWasACrash == false)
     }
+
+    /// The line that made MGS4 invisible. Steam uses it when it takes an app
+    /// down itself, and not understanding it left the tracked set holding
+    /// processes that were already dead.
+    @Test func theOtherWaySteamSaysAProcessEndedIsUnderstood() throws {
+        let (w, log) = try watcher()
+        try append("[..] AppID 1340990 adding PID 1664 as a tracked process \"\"Z:\\launcher.exe\"\n", to: log)
+        try append("[..] AppID 1340990 adding PID 1684 as a tracked process \"\"Z:\\helper.exe\"\n", to: log)
+        w.poll()
+        #expect(w.tracked == [1664, 1684])
+
+        try append("[..] Game 1340990 going away; no longer tracking PID 1664\n", to: log)
+        try append("[..] Game 1340990 going away; no longer tracking PID 1684\n", to: log)
+        w.poll()
+        #expect(w.tracked.isEmpty)
+        #expect(w.emptySince != nil)
+    }
+
+    @Test func anotherGameGoingAwayIsNotOurs() throws {
+        let (w, log) = try watcher()
+        try append("[..] AppID 1340990 adding PID 100 as a tracked process \"\"Z:\\ours.exe\"\n", to: log)
+        try append("[..] Game 485510 going away; no longer tracking PID 999\n", to: log)
+        w.poll()
+        #expect(w.tracked == [100])
+    }
+}
+
+@Suite("Telling a game apart from the furniture")
+struct BottleFurnitureTests {
+
+    /// Named from what actually runs in this bottle. Everything not on the
+    /// list is somebody's game, which is the only way to ask "is anyone
+    /// playing?" without keeping a list per title.
+    @Test(arguments: [
+        "wineserver", "services.exe", "plugplay.exe", "rpcss.exe",
+        "explorer.exe", "svchost.exe", "winedevice.exe", "winewrapper.exe",
+        "steam.exe", "steamwebhelper.exe", "steamservice.exe",
+        "steamerrorreporter64.exe",
+    ])
+    func wineAndSteamsOwnProcessesAreNotGames(_ name: String) {
+        #expect(BottleProcesses.infrastructure.contains(name))
+    }
+
+    @Test(arguments: ["Ronin.exe", "nioh.exe", "launcher.exe", "RDR2.exe",
+                      "UnityCrashHandler64.exe", "MGSRVersion.exe"])
+    func anythingElseCountsAsSomebodyPlaying(_ name: String) {
+        #expect(BottleProcesses.infrastructure.contains(name.lowercased()) == false)
+    }
 }

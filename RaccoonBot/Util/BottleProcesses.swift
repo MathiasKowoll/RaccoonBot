@@ -57,6 +57,32 @@ enum BottleProcesses {
         return found.map { Running(pid: $0.key, name: $0.value) }.sorted { $0.pid < $1.pid }
     }
 
+    /// What wine and Steam always run, whatever game is playing.
+    ///
+    /// Everything else in a bottle is somebody's game. Naming the furniture is
+    /// a short, fixed list; naming the games would be a list per title, which
+    /// is exactly what this whole change exists to avoid.
+    static let infrastructure: Set<String> = [
+        "wineserver", "winewrapper.exe", "services.exe", "winedevice.exe",
+        "plugplay.exe", "rpcss.exe", "explorer.exe", "svchost.exe",
+        "conhost.exe", "start.exe", "wineboot.exe", "rundll32.exe",
+        "steam.exe", "steamwebhelper.exe", "steamservice.exe",
+        "steamerrorreporter64.exe", "gldriverquery64.exe",
+        "vulkandriverquery.exe", "hardwareupdater.exe", "tabtip.exe",
+    ]
+
+    /// Anything running in this bottle that is not wine's or Steam's own.
+    ///
+    /// The last word before a teardown. Every judgement above this one is made
+    /// from a log, and a log can be read wrongly or be a minute out of date --
+    /// which is how a relaunched MGS4 got killed by a decision taken about the
+    /// attempt before it. This asks the machine instead of the record.
+    static func gamesRunning(inBottleAt bottle: URL) -> [String] {
+        running(inBottleAt: bottle)
+            .map(\.name)
+            .filter { !infrastructure.contains($0.lowercased()) }
+    }
+
     /// Is the server that owns these processes still alive?
     ///
     /// While it is, they belong to a live session and are nobody else's to end.

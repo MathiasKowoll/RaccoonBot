@@ -190,4 +190,40 @@ struct SteamGameProcessLogTests {
         #expect(w.tracked.isEmpty)
         #expect(w.emptySince == nil)
     }
+
+    /// The bottle is shared. A teardown decided for a game that finished must
+    /// not take down a game that has not.
+    @Test func anotherGameUsingTheBottleIsVisible() throws {
+        let (w, log) = try watcher()
+        try append("[..] AppID 1340990 adding PID 100 as a tracked process \"\"Z:\\ours.exe\"\n", to: log)
+        try append("[..] AppID 485510 adding PID 200 as a tracked process \"\"Z:\\theirs.exe\"\n", to: log)
+        w.poll()
+        #expect(w.tracked == [100])
+        #expect(w.otherAppRunning == "485510")
+
+        // Ours finishes; theirs is still playing.
+        try append("[..] AppID 1340990 no longer tracking PID 100, exit code 0\n", to: log)
+        w.poll()
+        #expect(w.tracked.isEmpty)
+        #expect(w.otherAppRunning == "485510")   // so: do not touch the bottle
+
+        // Theirs finishes too.
+        try append("[..] AppID 485510 no longer tracking PID 200, exit code 0\n", to: log)
+        w.poll()
+        #expect(w.otherAppRunning == nil)
+    }
+
+    /// Another game's processes must not keep our own idle clock from starting.
+    @Test func anotherGamesProcessesDoNotCountAsOurs() throws {
+        let (w, log) = try watcher()
+        let t0 = Date()
+        try append("[..] AppID 1340990 adding PID 100 as a tracked process \"\"Z:\\ours.exe\"\n", to: log)
+        w.poll(now: t0)
+        try append("[..] AppID 1340990 no longer tracking PID 100, exit code 0\n", to: log)
+        try append("[..] AppID 485510 adding PID 200 as a tracked process \"\"Z:\\theirs.exe\"\n", to: log)
+        w.poll(now: t0)
+        #expect(w.emptySince != nil)
+        #expect(w.hasBeenIdle(for: 120, now: t0.addingTimeInterval(200)) == true)
+        #expect(w.otherAppRunning == "485510")
+    }
 }

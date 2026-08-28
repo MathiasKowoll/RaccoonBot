@@ -78,8 +78,19 @@ final class SteamGameProcessLog {
     private let tail: SteamLogTail
     private let appID: String
 
+    /// The PIDs Steam has tracked, per AppID, and not yet released.
+    ///
+    /// Every app is followed, not just ours, because the bottle is shared: a
+    /// teardown decided for one game would take another game down with it.
+    private(set) var trackedByApp: [String: Set<Int>] = [:]
+
     /// The PIDs Steam has tracked for this app and not yet released.
-    private(set) var tracked: Set<Int> = []
+    var tracked: Set<Int> { trackedByApp[appID] ?? [] }
+
+    /// Another application using this bottle right now, if there is one.
+    var otherAppRunning: String? {
+        trackedByApp.first { $0.key != appID && !$0.value.isEmpty }?.key
+    }
     /// Set once the app has been seen running at all; before that, an empty set
     /// means "not started yet", which is not the same as finished.
     private(set) var everStarted = false
@@ -97,7 +108,7 @@ final class SteamGameProcessLog {
         for line in tail.newLines() {
             // Steam restarted: everything it knew is void.
             if line.contains("Client version:") {
-                tracked.removeAll()
+                trackedByApp.removeAll()
                 everStarted = false
                 emptySince = nil
                 continue
@@ -106,17 +117,22 @@ final class SteamGameProcessLog {
                 events.append(.sessionEnded)
                 continue
             }
-            guard line.contains("AppID \(appID) ") else { continue }
+            guard let app = Self.appID(in: line) else { continue }
+            let ours = app == appID
 
             if let pid = Self.integer(after: "adding PID ", in: line) {
-                tracked.insert(pid)
-                everStarted = true
-                emptySince = nil
-                events.append(.started(pid: pid, path: Self.quotedPath(in: line) ?? "unknown"))
+                trackedByApp[app, default: []].insert(pid)
+                if ours {
+                    everStarted = true
+                    emptySince = nil
+                    events.append(.started(pid: pid, path: Self.quotedPath(in: line) ?? "unknown"))
+                }
             } else if let pid = Self.integer(after: "no longer tracking PID ", in: line) {
-                tracked.remove(pid)
-                let code = Self.integer(after: "exit code ", in: line) ?? 0
-                events.append(.stopped(pid: pid, exitCode: code))
+                trackedByApp[app, default: []].remove(pid)
+                if ours {
+                    let code = Self.integer(after: "exit code ", in: line) ?? 0
+                    events.append(.stopped(pid: pid, exitCode: code))
+                }
             }
         }
         if everStarted && tracked.isEmpty {
@@ -135,6 +151,13 @@ final class SteamGameProcessLog {
     func hasBeenIdle(for seconds: TimeInterval, now: Date = Date()) -> Bool {
         guard let emptySince else { return false }
         return now.timeIntervalSince(emptySince) >= seconds
+    }
+
+    /// The AppID a "AppID N ..." line is about.
+    private static func appID(in line: String) -> String? {
+        guard let range = line.range(of: "AppID ") else { return nil }
+        let digits = line[range.upperBound...].prefix { $0.isNumber }
+        return digits.isEmpty ? nil : String(digits)
     }
 
     private static func integer(after marker: String, in line: String) -> Int? {

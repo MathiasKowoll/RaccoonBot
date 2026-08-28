@@ -793,15 +793,27 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
                 }
                 if processLog.emptySince != nil {
                     if !reportedIdle {
-                        console.log("nothing of the game is running; waiting \(Int(steamIdleGrace))s in case it is still starting")
+                        // Two different questions, and they were tied together
+                        // by mistake. Whether somebody may play something else
+                        // is answered the moment nothing of this game is left.
+                        // Whether it is safe to destroy the bottle is not.
+                        console.log("nothing of the game is running; the window is free again")
+                        onTerminate()
                         reportedIdle = true
                     }
                     if processLog.hasBeenIdle(for: steamIdleGrace) {
+                        // The bottle is shared. Tearing it down for a game that
+                        // finished would take down a game that has not.
+                        if let other = processLog.otherAppRunning {
+                            console.log("app \(other) is using the bottle; leaving it up")
+                            return
+                        }
                         await shutDown(because: "nothing has run for this game in \(Int(steamIdleGrace))s, closing down...")
                         return
                     }
                 } else if reportedIdle {
                     console.log("the game is running again; it was still starting")
+                    onLoad(loaded.name ?? "")
                     reportedIdle = false
                 }
                 try? await Task.sleep(nanoseconds: 1_000_000_000)

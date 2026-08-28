@@ -352,16 +352,22 @@ func getInlineEnvs(from: GameOptions, cxAppPath: String? = nil) -> String {
     // The HUD, how much of it, and how solid.
     //
     // MTL_HUD_ELEMENTS takes the rows to draw, MTL_HUD_OPACITY how solidly.
-    // Neither appears in anything macOS advertises -- the system names only
-    // MTL_HUD_ENABLED and MTL_HUD_PATH, and the HUD itself is a separate
-    // library loaded through the second. The element names come from
-    // Jfishin's MetalHUDmenu, which is where they are written down.
+    // Neither turns up in the dyld shared cache, where only MTL_HUD_ENABLED
+    // and MTL_HUD_PATH appear -- the HUD is a separate library loaded through
+    // the second, so what it reads was never going to be in the framework that
+    // loads it. Both are Apple's own, documented in "Customizing the Metal
+    // Performance HUD"; opacity is [0.0, 1.0] and defaults to 1.0, which is
+    // why it is only written when it is something else.
     if from.mtlHudEnabled {
         let detail = MetalHudDetail(rawValue: from.mtlHudDetail) ?? .fpsOnly
         value += "MTL_HUD_ENABLED=1 "
         value += "MTL_HUD_ELEMENTS=\(detail.elements.joined(separator: ",")) "
         if from.mtlHudOpacity < 1.0 {
             value += "MTL_HUD_OPACITY=\(String(format: "%.3f", max(0, from.mtlHudOpacity))) "
+        }
+        let alignment = MetalHudAlignment(rawValue: from.mtlHudAlignment) ?? .byDefault
+        if alignment != .byDefault {
+            value += "MTL_HUD_ALIGNMENT=\(alignment.rawValue) "
         }
         // D3DMetal's own twenty-two counters, for the level that asked for
         // everything. Only where D3DMetal is what draws: a game running through

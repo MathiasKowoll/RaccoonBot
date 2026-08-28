@@ -36,22 +36,25 @@ typealias CXDrives = [String: URL]
 
 /// How much of the Metal HUD to show.
 ///
-/// The HUD takes a comma-separated list of the rows it should draw, in
-/// MTL_HUD_ELEMENTS. Twenty-one are known; these three groupings come from
-/// Jfishin's MetalHUDmenu, which is where the variable and the element names
-/// are documented -- macOS itself advertises only MTL_HUD_ENABLED and
-/// MTL_HUD_PATH, and the HUD is a separate library loaded through the latter.
+/// The HUD takes a comma-separated list of the rows to draw, in
+/// MTL_HUD_ELEMENTS. These names are Apple's, from "Customizing the Metal
+/// Performance HUD" -- not from any tool that wraps it. That distinction cost
+/// something: a third-party menu bar app lists `gamemode`, `refreshrate` and
+/// `client`, which Apple documents nowhere, and omits two it does. A name the
+/// HUD does not know could take the whole list down with it, so the ones
+/// shipped here are only the documented twenty.
 enum MetalHudDetail: String, CaseIterable {
     case fpsOnly = "fps"
     case normal = "normal"
     case extended = "extended"
 
-    /// Every row the HUD knows about.
+    /// Every metric Apple documents.
     static let allElements = [
-        "device", "rosetta", "layersize", "memory", "fps", "frameinterval",
-        "frameintervalhistogram", "metalcpu", "gputimeline", "shaders",
-        "framenumber", "disk", "frameintervalgraph", "presentdelay", "gputime",
-        "thermal", "fpsgraph", "layerscale", "refreshrate", "gamemode", "client",
+        "device", "rosetta", "layersize", "layerscale", "memory", "fps",
+        "frameinterval", "gputime", "thermal", "frameintervalgraph",
+        "presentdelay", "frameintervalhistogram", "metalcpu", "gputimeline",
+        "shaders", "framenumber", "disk", "fpsgraph",
+        "toplabeledcommandbuffers", "toplabeledencoders",
     ]
 
     /// The rows this level draws.
@@ -60,9 +63,8 @@ enum MetalHudDetail: String, CaseIterable {
         case .fpsOnly:
             return ["fps"]
         case .normal:
-            // What the HUD shows when nobody has chosen.
-            return ["device", "rosetta", "layersize", "memory", "gamemode",
-                    "fps", "gputime", "frameinterval", "frameintervalgraph"]
+            return ["device", "rosetta", "layersize", "memory", "fps",
+                    "gputime", "frameinterval", "frameintervalgraph", "thermal"]
         case .extended:
             return Self.allElements
         }
@@ -79,8 +81,43 @@ enum MetalHudDetail: String, CaseIterable {
     var explanation: String {
         switch self {
         case .fpsOnly: return "One line, and nothing in the way of the game."
-        case .normal: return "Memory, GPU time and frame intervals as well."
-        case .extended: return "Every row the HUD has, plus the toolkit's own counters."
+        case .normal: return "Memory, GPU time, frame intervals and thermal state."
+        case .extended: return "Every metric Apple documents, plus the toolkit's own counters."
+        }
+    }
+}
+
+/// Where the Metal HUD sits on screen.
+///
+/// Apple's names, from the same page as the metrics. Worth spelling out because
+/// the menu bar app that wraps the HUD sets this to numbers -- "10", "12", "20"
+/// -- and Apple documents words. Whichever that app is talking to, it is not
+/// what is written here.
+enum MetalHudAlignment: String, CaseIterable {
+    case topLeft = "topleft"
+    case topCenter = "topcenter"
+    case topRight = "topright"
+    case centerLeft = "centerleft"
+    case centered = "centered"
+    case centerRight = "centerright"
+    case bottomLeft = "bottomleft"
+    case bottomCenter = "bottomcenter"
+    case bottomRight = "bottomright"
+
+    /// What the HUD does when nobody has said.
+    static let byDefault = MetalHudAlignment.topRight
+
+    var label: String {
+        switch self {
+        case .topLeft: return "Top left"
+        case .topCenter: return "Top centre"
+        case .topRight: return "Top right"
+        case .centerLeft: return "Left"
+        case .centered: return "Centre"
+        case .centerRight: return "Right"
+        case .bottomLeft: return "Bottom left"
+        case .bottomCenter: return "Bottom centre"
+        case .bottomRight: return "Bottom right"
         }
     }
 }
@@ -93,6 +130,8 @@ struct GameOptionsData: Codable { // this is used for reading saved properties
     var mtlHudDetail: String?
     /// How solid the Metal HUD is drawn, from 0 to 1.
     var mtlHudOpacity: Double?
+    /// Where the Metal HUD sits on screen.
+    var mtlHudAlignment: String?
     var d3dMtl4Enabled: Bool?
     var x87PatchEnabled: Bool?
     /// Run this title in the ARM bottle instead of the default one.
@@ -155,6 +194,9 @@ class GameOptions: ObservableObject { // this is used as form state
     @Published var mtlHudDetail: String = MetalHudDetail.fpsOnly.rawValue
     /// How solid the HUD is drawn. Fully opaque unless somebody says otherwise.
     @Published var mtlHudOpacity: Double = 1.0
+    /// Where the HUD sits. Top right unless somebody moves it, which is where
+    /// the HUD puts itself anyway.
+    @Published var mtlHudAlignment: String = MetalHudAlignment.byDefault.rawValue
     @Published var x87PatchEnabled: Bool
     /// Defaults to false and is not in the initialiser on purpose: every
     /// existing call site keeps working, and a title only moves bottles when
@@ -210,6 +252,7 @@ class GameOptions: ObservableObject { // this is used as form state
         self.mtlHudEnabled = data.mtlHudEnabled ?? false
         self.mtlHudDetail = data.mtlHudDetail ?? MetalHudDetail.fpsOnly.rawValue
         self.mtlHudOpacity = data.mtlHudOpacity ?? 1.0
+        self.mtlHudAlignment = data.mtlHudAlignment ?? MetalHudAlignment.byDefault.rawValue
         self.x87PatchEnabled = data.x87PatchEnabled ?? false
         self.useArmBottle = data.useArmBottle ?? false
         self.dx9PatchEnabled = data.dx9PatchEnabled ?? false
@@ -242,6 +285,7 @@ class GameOptions: ObservableObject { // this is used as form state
         if let v = data.mtlHudEnabled { self.mtlHudEnabled = v }
         if let v = data.mtlHudDetail { self.mtlHudDetail = v }
         if let v = data.mtlHudOpacity { self.mtlHudOpacity = v }
+        if let v = data.mtlHudAlignment { self.mtlHudAlignment = v }
         if let v = data.x87PatchEnabled { self.x87PatchEnabled = v }
         if let v = data.useArmBottle { self.useArmBottle = v }
         if let v = data.dx9PatchEnabled { self.dx9PatchEnabled = v }

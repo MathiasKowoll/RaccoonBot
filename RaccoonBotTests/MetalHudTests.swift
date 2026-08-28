@@ -114,4 +114,64 @@ struct MetalHudDetailTests {
         #expect(o.mtlHudEnabled)
         #expect(o.mtlHudDetail == MetalHudDetail.fpsOnly.rawValue)
     }
+
+    /// Apple's documented names, and only those. A menu bar app that wraps the
+    /// HUD lists three Apple documents nowhere -- gamemode, refreshrate,
+    /// client -- and one of them had already reached a preset here. A name the
+    /// HUD does not know could take the whole list with it.
+    @Test(arguments: ["gamemode", "refreshrate", "client"])
+    func anUndocumentedNameIsNotShipped(_ name: String) {
+        #expect(!MetalHudDetail.allElements.contains(name))
+        for level in MetalHudDetail.allCases {
+            #expect(!level.elements.contains(name))
+        }
+    }
+
+    @Test func everyRowShippedIsOneAppleDocuments() {
+        for level in MetalHudDetail.allCases {
+            for row in level.elements {
+                #expect(MetalHudDetail.allElements.contains(row), "\(row) is not documented")
+            }
+        }
+    }
+
+    /// The two Apple documents that the wrapper does not know about.
+    @Test(arguments: ["toplabeledcommandbuffers", "toplabeledencoders"])
+    func theDocumentedOnesTheWrapperMissedAreThere(_ name: String) {
+        #expect(MetalHudDetail.extended.elements.contains(name))
+    }
+
+    /// Apple's nine, spelled Apple's way.
+    @Test func theNineDocumentedPositionsAreAllThere() {
+        #expect(Set(MetalHudAlignment.allCases.map(\.rawValue)) == [
+            "topleft", "topcenter", "topright",
+            "centerleft", "centered", "centerright",
+            "bottomleft", "bottomcenter", "bottomright",
+        ])
+    }
+
+    /// The wrapper app writes numbers here. Apple documents words, so a number
+    /// must never reach the launch line.
+    @Test(arguments: MetalHudAlignment.allCases)
+    func noPositionIsANumber(_ a: MetalHudAlignment) {
+        #expect(Int(a.rawValue) == nil)
+    }
+
+    @Test func theHudsOwnPositionIsNotWrittenDown() {
+        let o = GameOptions(cxGraphicsBackend: "d3dmetal4", mtlHudEnabled: true)
+        o.mtlHudAlignment = MetalHudAlignment.byDefault.rawValue
+        #expect(!getInlineEnvs(from: o, cxAppPath: "/nowhere").contains("MTL_HUD_ALIGNMENT"))
+    }
+
+    @Test func movingItSaysWhere() {
+        let o = GameOptions(cxGraphicsBackend: "d3dmetal4", mtlHudEnabled: true)
+        o.mtlHudAlignment = MetalHudAlignment.bottomLeft.rawValue
+        #expect(getInlineEnvs(from: o, cxAppPath: "/nowhere").contains("MTL_HUD_ALIGNMENT=bottomleft"))
+    }
+
+    @Test func withNoHudThereIsNoPositionEither() {
+        let o = GameOptions(cxGraphicsBackend: "d3dmetal4", mtlHudEnabled: false)
+        o.mtlHudAlignment = MetalHudAlignment.centered.rawValue
+        #expect(!getInlineEnvs(from: o, cxAppPath: "/nowhere").contains("MTL_HUD_ALIGNMENT"))
+    }
 }

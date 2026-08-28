@@ -131,6 +131,13 @@ struct GameOptionsView: View {
                                             .frame(width: 34, alignment: .trailing)
                                     }
                                     .frame(maxWidth: 180)
+                                    Picker("", selection: $gameOptions.mtlHudAlignment) {
+                                        ForEach(MetalHudAlignment.allCases, id: \.rawValue) { where_ in
+                                            Text(where_.label).tag(where_.rawValue)
+                                        }
+                                    }
+                                    .labelsHidden()
+                                    .frame(maxWidth: 180)
                                 }
                                 Toggle("Advertise AVX", isOn: $gameOptions.advertiseAVX)
                                 if !current.isNative {

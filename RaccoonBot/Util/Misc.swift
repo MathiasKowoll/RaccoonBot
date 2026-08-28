@@ -552,32 +552,103 @@ class SteamLaunchWatcher: SteamLogWatcher {
     }
 }
 
-func getGameTracker(appNames: [String], cxAppPath: String, bottleName: String, onLoad: @escaping (_ appName: String) -> Void, onTerminate: @escaping () -> Void, isNative: Bool, steamID: Int?, steamPath: String) async throws -> TerminationObserver {
+/// The executable Steam actually started, once it is known.
+///
+/// Written from the tracking task and read from a workspace notification, so
+/// it carries its own lock rather than relying on where either happens to run.
+final class LoadedGame: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: String?
+
+    var name: String? {
+        get { lock.lock(); defer { lock.unlock() }; return value }
+        set { lock.lock(); defer { lock.unlock() }; value = newValue }
+    }
+}
+
+/// Which of `names` is running right now, if any.
+func runningExecutable(among names: [String]) -> String? {
+    let running = Set(NSWorkspace.shared.runningApplications.flatMap {
+        [$0.executableURL?.lastPathComponent, $0.bundleURL?.lastPathComponent]
+    }.compactMap { $0 })
+    return names.first { running.contains($0) }
+}
+
+func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoad: @escaping (_ appName: String) -> Void, onTerminate: @escaping () -> Void, isNative: Bool, steamID: Int?, steamPath: String) async throws -> TerminationObserver {
+    // `appNames` lists every executable a game is known by, and for a game with
+    // a launcher that is two: the launcher, and the game the launcher starts.
+    // The launcher exits as soon as it has handed off -- that is its whole job.
+    //
+    // Treating any of those names exiting as the game closing tore the bottle
+    // down while the game was still coming up. Nioh died this way every time:
+    // `nioh_launcher.exe` handed off, Steam and explorer were killed, and
+    // `nioh.exe` finished starting seconds later into a bottle with nothing
+    // left in it.
+    //
+    // So the game is the one executable Steam reports as started, and nothing
+    // is torn down before we know which one that is.
+    let loaded = LoadedGame()
+
+    func shutDown(because reason: String) async {
+        console.log(reason)
+        do {
+            if(!isNative && steamID != nil){ // SteamCloudSyncWatcher isn't for native steam games
+                let cloudSyncWatcher = SteamCloudSyncWatcher(steamID: String(steamID!), steamPath: steamPath)
+                try await cloudSyncWatcher.waitForSteamCloudSync()
+            }
+            try await quitSteam(cxAppPath: cxAppPath, bottle: bottle, isNative: isNative)
+            try await closeWineActivities()
+        } catch {
+            // Whatever failed on the way out, the game is over as far as the
+            // window is concerned. Leaving the loader spinning helps nobody.
+            console.error("while closing down: \(error.localizedDescription)")
+        }
+        onTerminate()
+        console.log("onTerminate() was called")
+    }
+
     let tOb = TerminationObserver(then: { output in
-        console.log(output.userInfo?.description ?? "no userInfo")
         let terminatedAppProcessName = output.userInfo?[AnyHashable("NSApplicationName")] as? String ?? "unknown"
         let terminatedAppPath = output.userInfo?[AnyHashable("NSApplicationPath")] as? String ?? "unknown"
         let terminatedAppName = String(terminatedAppPath.split(separator: "/").last ?? "unknown")
-        if (appNames.contains(terminatedAppName) || appNames.contains(terminatedAppProcessName)) {
-            console.log("\(appNames) -> \(terminatedAppName) or \(terminatedAppProcessName) has been terminated, closing steam...")
-            Task {
-                if(!isNative && steamID != nil){ // SteamCloudSyncWatcher isn't for native steam games
-                    let cloudSyncWatcher = SteamCloudSyncWatcher(steamID: String(steamID!), steamPath: steamPath)
-                    try await cloudSyncWatcher.waitForSteamCloudSync()
-                }
-                try await quitSteam(cxAppPath: cxAppPath, bottleName: bottleName, isNative: isNative)
-                try await closeWineActivities()
-                onTerminate()
-                console.log("onTerminate() was called")
+        guard appNames.contains(terminatedAppName) || appNames.contains(terminatedAppProcessName) else { return }
+        console.log(output.userInfo?.description ?? "no userInfo")
+
+        guard let game = loaded.name else {
+            if steamID != nil {
+                // Steam will tell us what the game is; until it does, an exit
+                // is a launcher handing off, not the game closing.
+                console.log("\(terminatedAppProcessName) exited before the game was up; waiting for the game itself")
+                return
             }
+            // No Steam to ask, so go by what can be seen: if another name we
+            // know is still running, the thing that exited was not the game.
+            if let stillUp = runningExecutable(among: appNames) {
+                console.log("\(terminatedAppProcessName) exited but \(stillUp) is still running; leaving the bottle alone")
+                return
+            }
+            Task { await shutDown(because: "\(appNames) -> \(terminatedAppName) or \(terminatedAppProcessName) has been terminated, closing steam...") }
+            return
         }
+
+        guard terminatedAppName == game || terminatedAppProcessName == game else {
+            console.log("\(terminatedAppProcessName) exited, but the game is \(game); leaving the bottle alone")
+            return
+        }
+        Task { await shutDown(because: "\(game) has been terminated, closing steam...") }
     })
     if let steamID = steamID {
         do {
             let appName = try await SteamLaunchWatcher(steamID: String(steamID), steamPath: steamPath).trackLaunch()
             if appName != "" {
                 console.log("found game \(appName), loading...")
+                loaded.name = appName
                 onLoad(appName)
+            } else {
+                // Nothing ever came up. The observer is now waiting for a game
+                // that does not exist, so say so here instead of leaving the
+                // window on its loader forever.
+                await shutDown(because: "no game came up for \(appNames.joined(separator: ", ")), giving up")
             }
         } catch {
             console.log("\(appNames.joined(separator: ", ")), timeout...")

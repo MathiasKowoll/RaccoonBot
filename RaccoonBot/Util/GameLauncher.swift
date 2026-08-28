@@ -92,7 +92,7 @@ final class GameLauncher {
                     let observer = try await getGameTracker(
                         appNames: updatedItem.appNames,
                         cxAppPath: appGlobals.cxAppPath!,
-                        bottleName: appGlobals.selectedBottle,
+                        bottle: appGlobals.selectedBottle,
                         onLoad: { appName in
                             libraryPageGlobals.playingID = item.id
                             DispatchQueue.main.asyncAfter(deadline: .now() + 4) {

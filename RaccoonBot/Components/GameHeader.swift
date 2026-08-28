@@ -119,7 +119,7 @@ struct GameHeader: View {
         Task {
             do {
                 Task(priority: .background) {
-                    tObserver = try await getGameTracker(appNames: game!.appNames, cxAppPath: appGlobals.cxAppPath!, bottleName: appGlobals.selectedBottle, onLoad: { appName in
+                    tObserver = try await getGameTracker(appNames: game!.appNames, cxAppPath: appGlobals.cxAppPath!, bottle: appGlobals.selectedBottle, onLoad: { appName in
                         DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
                             libraryPageGlobals.setLoader(state: false)
                             Task {

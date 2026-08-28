@@ -68,7 +68,7 @@ func closeWineActivities() async throws {
     }
 }
 
-func quitSteam(cxAppPath: String, bottleName: String, isNative: Bool) async throws -> Void {
+func quitSteam(cxAppPath: String, bottle: String, isNative: Bool) async throws -> Void {
     console.log("quitting steam...")
     if(isNative) {
         let steamBundleID = "com.valvesoftware.steam"
@@ -76,13 +76,25 @@ func quitSteam(cxAppPath: String, bottleName: String, isNative: Bool) async thro
             steamApp.terminate() // polite request to quit
         }
     } else {
-        try safeShell("\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \"C:\\Program Files (x86)\\Steam\\Steam.exe\" -shutdown")
+        // Callers hold the bottle as a file:// URL; `--bottle` wants the name.
+        // Passing the URL straight through made every shutdown fail with
+        // "invalid bottle name", which is how Steam ended up being killed
+        // rather than asked to leave.
+        guard let ref = BottleReference(bottle) else {
+            console.error("cannot quit steam: \(bottle) does not name a bottle")
+            return
+        }
+        try safeShell("\(ref.environmentPrefix)\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \"\(ref.name)\" \"C:\\Program Files (x86)\\Steam\\Steam.exe\" -shutdown")
     }
 }
 
-func quitWine(cxAppPath: String, bottleName: String) async throws -> Void {
+func quitWine(cxAppPath: String, bottle: String) async throws -> Void {
     console.log("quitting wine...")
-    try safeShell("\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) wineserver -k")
+    guard let ref = BottleReference(bottle) else {
+        console.error("cannot quit wine: \(bottle) does not name a bottle")
+        return
+    }
+    try safeShell("\(ref.environmentPrefix)\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \"\(ref.name)\" wineserver -k")
 }
 
 func openSteam(cxAppPath: String?, selectedBottle: String?, SteamX86AppPath: String) {

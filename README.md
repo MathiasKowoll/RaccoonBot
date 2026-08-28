@@ -45,12 +45,11 @@ application and adds DXMT, an updated MoltenVK, and Apple's Game Porting Toolkit
 **Fixes cutscenes.** This is the part that is not in Procyon. Many Windows games
 run fine under CrossOver until a video starts: Wine's media pipeline has no
 decoder for the format, and the game either plays audio over a blank picture or
-exits. RaccoonBot stages the missing GStreamer decoders per engine and applies
-per-title fixes where a decoder alone is not enough.
+exits. RaccoonBot copies the missing decoder into your patched CrossOver and
+applies per-title fixes where a decoder alone is not enough.
 
-**Installs what is missing.** It reports whether the GStreamer framework is
-present and offers to download the right version for your CrossOver, and it can
-apply every fix your library needs in one pass.
+**Installs what is missing.** It reports whether GStreamer is installed and
+which version, and it can apply every fix your library needs in one pass.
 
 **Tells you before you are surprised.** A title that needs its fix is marked in
 the library and warned about *before* it launches, not after the cutscene fails.
@@ -63,7 +62,7 @@ the library and warned about *before* it launches, not after the cutscene fails.
 |---|---|
 | macOS | **15 or later**, Apple Silicon. The build targets `arm64` only |
 | [CrossOver](https://www.codeweavers.com/crossover) | 26.x or 27.x. You buy and install it yourself; RaccoonBot does not include it |
-| [GStreamer](https://gstreamer.freedesktop.org/download/) | The universal macOS framework. RaccoonBot checks for it and offers to fetch it |
+| [GStreamer](https://gstreamer.freedesktop.org/data/pkg/osx/1.24.13/) | **1.24.13** exactly, the universal macOS runtime. It is where the decoder is taken from when CrossOver is patched — needed for Nioh, Nioh 2, Persona 5 Strikers, Returnal, Ghostwire Tokyo and the WMV/VC-1 titles |
 | Steam | Installed inside a RaccoonBot bottle, and signed in |
 
 D3DMetal and the Wine components for the 32-bit path come with RaccoonBot and
@@ -126,12 +125,6 @@ whether GStreamer is installed and current. **Patch all** applies every fix your
 installed library needs in one pass — it checks each title is really there
 first, and skips anything you have chosen to leave alone.
 
-**Stage codecs** builds the decoders CrossOver does not ship, for the engine you
-have chosen. It runs by itself when RaccoonBot patches CrossOver; the button is
-for afterwards, because a staging stops being right on its own — CrossOver
-updates, GStreamer updates — and re-patching a whole engine to rebuild it is not
-a reasonable thing to ask.
-
 > **RaccoonBot keeps its own bottles.** They live in
 > `~/Library/Application Support/RaccoonBot/CXPBottles`, which is not where
 > CrossOver keeps its own. If you already use CrossOver, its bottles will not
@@ -159,18 +152,20 @@ the application.
 
 ### The codecs
 
-Wine's `winegstreamer` asks GStreamer to decode a game's video. The official
-GStreamer framework carries the pieces, but CrossOver's own copy does not always
-have the ones a game needs. RaccoonBot stages two plugins per engine:
+Wine's `winegstreamer` asks GStreamer to decode a game's video, and CrossOver
+ships everything it needs except one plugin: **`libgstlibav`**, which is where
+VC-1, WMV, WMA and software VP9 come from. Without it those cutscenes play their
+sound over a blank picture.
 
-| Plugin | What it decodes |
-|---|---|
-| `libgstlibav` | The FFmpeg-backed decoders — WMV2, H.264, VP9 and the rest |
-| `libgstmatroska` | The Matroska/WebM container, which several Unreal Engine titles use |
+RaccoonBot copies it, and the FFmpeg libraries it needs, out of your own
+GStreamer install and into the patched CrossOver while it is patching it.
+Anything already there is kept as `.orig`, so the engine can be put back.
 
-They are staged into a per-engine directory with FFmpeg alongside, and
-CrossOver's own GStreamer core is symlinked rather than copied, so exactly one
-core is loaded per process.
+Inside the engine rather than beside it, on purpose. The plugin then binds to
+the GStreamer that engine already carries, and there is never a second core in
+the process — which is the crash this whole arrangement exists to avoid.
+
+Nothing is copied that the engine already has.
 
 ### What the per-title fixes actually do
 
@@ -178,8 +173,8 @@ The catalogue covers four distinct failures. They are different problems and the
 fixes are not interchangeable:
 
 - **No decoder.** *Nioh*, *Nioh 2*, *Nioh 3*, *Persona 5 Strikers*, *Devil May
-  Cry 5* — the cutscene runs with sound and no picture. The staged codec is the
-  whole fix for these; nothing is installed in the game folder.
+  Cry 5* — the cutscene runs with sound and no picture. The decoder in the
+  engine is the whole fix for these; nothing is installed in the game folder.
 - **Media Foundation reports nothing.** *NINJA GAIDEN 4* asks the system what
   can decode VP9, is told nothing can, and exits. It needs the decoder count to
   be answered honestly.
@@ -232,16 +227,19 @@ it, replace it, or work without it.
 
 ### Why do I have to install GStreamer separately?
 
-Because it belongs to your system rather than to RaccoonBot: other applications
-use it, it updates on its own schedule, and the official installer is one click
-away. RaccoonBot works out which version fits your CrossOver, tells you whether
-you already have it, and opens the download when you do not.
+Because the decoder is taken from your copy of it, and it is not ours to
+redistribute. It belongs to your system: other applications use it, and it
+updates on its own schedule.
+
+It is read **when RaccoonBot patches CrossOver**, which is when the decoder is
+copied in. After that the engine carries its own and a game does not need the
+framework at all.
 
 ### A game still shows a black screen
 
 Open its options and check the fix is applied. If it is, the title may need a
-decoder that is not staged yet, or a fix that does not exist yet — open an issue
-with the game and what you see, and it can be looked at.
+decoder the engine does not carry, or a fix that does not exist yet — open an
+issue with the game and what you see, and it can be looked at.
 
 ### Does it send my library anywhere?
 

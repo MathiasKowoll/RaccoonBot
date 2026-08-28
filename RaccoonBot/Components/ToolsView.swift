@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct ToolsView: View {
+    @State private var savedLogResult: String?
     @State var bottles: [URL] = []
     @State var progress: Double = 0
     @State var progressLabel = "Processing..."
@@ -58,13 +59,42 @@ struct ToolsView: View {
                     Divider().padding(.top, 10)
                     Text("Debug")
                         .padding(.vertical, 5)
-                    VStack(alignment: .leading) {
-                        ProminentButton("Start Logging", systemImage: "ant") {
-                            console.enableLogFile = true
-                        }
-                        Spacer()
-                        ProminentButton("Download logs", systemImage: "square.and.arrow.down") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        // Start Logging used to be here. It set enableLogFile
+                        // to true, which is already true whenever this section
+                        // is visible -- the section and the flag are both
+                        // decided by DEBUG_ENABLED. A button that can only
+                        // ever be a no-op reads as something not working.
+                        Text("Logging is on. Messages are kept in memory until you save them, and are lost if the application is quit first.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Text(Console.logURL.path(percentEncoded: false))
+                            .font(.footnote.monospaced())
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                            .lineLimit(2)
+                            .truncationMode(.middle)
+
+                        ProminentButton("Save logs", systemImage: "square.and.arrow.down") {
+                            let lines = console.logMessages.count
                             console.saveLogs()
+                            let url = Console.logURL
+                            if FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) {
+                                savedLogResult = "^[\(lines) line](inflect: true) saved."
+                                // Straight to it, because the next thing anyone
+                                // wants is the file.
+                                NSWorkspace.shared.activateFileViewerSelecting([url])
+                            } else {
+                                savedLogResult = "Could not write \(url.path(percentEncoded: false))"
+                            }
+                        }
+
+                        if let savedLogResult {
+                            Text(savedLogResult)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }

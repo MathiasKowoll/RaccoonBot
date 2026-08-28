@@ -78,16 +78,20 @@ enum BottleProcesses {
     /// which is how a relaunched MGS4 got killed by a decision taken about the
     /// attempt before it. This asks the machine instead of the record.
     ///
-    /// A game is a Windows executable. That qualifier matters: `lsof` reports a
-    /// command name, not a path, and during a shutdown this bottle produces one
-    /// simply called "Program" -- three times, in the traces taken today.
-    /// Treated as a game it would have refused every teardown that overlapped
-    /// it, forever. A list of furniture can always be missing a piece, so the
-    /// rule cannot rest on the list alone.
+    /// Anything not on the list counts, whatever it is called.
+    ///
+    /// Requiring a `.exe` seemed the safe way to keep an unknown name from
+    /// blocking a teardown forever. It was not: `lsof` reports a command name,
+    /// and MGS4's game presents itself as "-region" -- the first word of its
+    /// own command line. The qualifier excluded the very game the guard exists
+    /// to protect.
+    ///
+    /// So the test is only "not furniture", and the answer to an unrecognised
+    /// name is not to narrow it but to wait and ask again: a stray process is
+    /// gone by the next second, and a game is not.
     static func gamesRunning(inBottleAt bottle: URL) -> [String] {
         running(inBottleAt: bottle)
             .map(\.name)
-            .filter { $0.lowercased().hasSuffix(".exe") }
             .filter { !infrastructure.contains($0.lowercased()) }
     }
 

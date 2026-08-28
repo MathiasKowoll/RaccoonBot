@@ -829,6 +829,7 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
             // So the set emptying only asks the question. Staying empty
             // answers it.
             var reportedIdle = false
+            var waitingOnSomething = false
             while !Task.isCancelled {
                 for event in processLog.poll() {
                     switch event {
@@ -855,6 +856,23 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
                     let grace = steamIdleGrace(forSessionLasting: processLog.sessionLength,
                                                        crashed: processLog.lastExitWasACrash)
                     if processLog.hasBeenIdle(for: grace) {
+                        // Something is still playing in there. Wait and ask
+                        // again rather than giving up on closing: a stray
+                        // process is gone by the next second, and a game is
+                        // not.
+                        if let dir = BottleReference(bottle)?.directory {
+                            let playing = BottleProcesses.gamesRunning(inBottleAt: dir)
+                            if !playing.isEmpty {
+                                if !waitingOnSomething {
+                                    console.log("steam says this game is done, but "
+                                                + "\(playing.joined(separator: ", ")) is still in the bottle; waiting")
+                                    waitingOnSomething = true
+                                }
+                                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                                continue
+                            }
+                            waitingOnSomething = false
+                        }
                         // The bottle is shared. Tearing it down for a game that
                         // finished would take down a game that has not.
                         if let other = processLog.otherAppRunning {

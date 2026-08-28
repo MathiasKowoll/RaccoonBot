@@ -382,7 +382,11 @@ struct BottleFurnitureTests {
     }
 
     @Test(arguments: ["Ronin.exe", "nioh.exe", "launcher.exe", "RDR2.exe",
-                      "UnityCrashHandler64.exe", "MGSRVersion.exe"])
+                      "UnityCrashHandler64.exe", "MGSRVersion.exe",
+                      // MGS4's game names itself after the first word of its
+                      // own command line. Requiring a .exe here excluded the
+                      // very game the guard exists to protect.
+                      "-region"])
     func anythingElseCountsAsSomebodyPlaying(_ name: String) {
         #expect(BottleProcesses.infrastructure.contains(name.lowercased()) == false)
     }

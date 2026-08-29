@@ -123,6 +123,35 @@ struct MGVFRunnerProcessTests {
         #expect(result.stdout.contains("frontend=[RaccoonBot]"))
     }
 
+    /// A survey says it is read-only in a way that does not depend on one
+    /// string surviving every hop. The installers default to MODE=--install,
+    /// so if the argument were ever built wrong a status pass over the library
+    /// would install instead -- and this application surveys a whole library
+    /// at a time.
+    @Test func aStatusRunDeclaresItselfReadOnly() async throws {
+        let script = try makeScript("""
+        echo "only=[${MGVF_STATUS_ONLY:-unset}]"
+        echo installed
+        """)
+        let result = try await MGVFRunner.shared.run(script: script, target: "/tmp",
+                                                     verb: .status, timeout: 60)
+        #expect(result.stdout.contains("only=[1]"))
+    }
+
+    /// And a run that is meant to write must not claim otherwise, or nothing
+    /// would ever be installed.
+    @Test func aWritingRunDoesNotSetTheReadOnlyValve() async throws {
+        let script = try makeScript("""
+        echo "only=[${MGVF_STATUS_ONLY:-unset}]"
+        echo installed
+        """)
+        for verb in [MGVFRunner.Verb.install, .restore] {
+            let result = try await MGVFRunner.shared.run(script: script, target: "/tmp",
+                                                         verb: verb, timeout: 60)
+            #expect(result.stdout.contains("only=[unset]"), "for \(verb)")
+        }
+    }
+
     @Test func reportsTheExitCodeOfAFailure() async throws {
         // The whole point. safeShell returns before the process does and sends
         // both streams to /dev/null, so this case looks exactly like success.

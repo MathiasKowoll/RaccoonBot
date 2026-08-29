@@ -201,6 +201,20 @@ final class MGVFRunner: @unchecked Sendable {
         // unknown variable is inert, and arriving late is the failure mode
         // that has no symptom.
         environment["MGVF_FRONTEND"] = "RaccoonBot"
+        // A read-only pass says so structurally, not only positionally.
+        //
+        // The installers default to MODE=--install and switch to status only
+        // when the literal string "--status" survives every hop from here to
+        // argv. MGVF_STATUS_ONLY=1 forces the mode regardless of the argument,
+        // so a mistake in building that argument cannot install something
+        // during a survey -- and this application surveys a whole library at a
+        // time. The valve protects us from our own error rather than from the
+        // scripts.
+        //
+        // Not honoured by every installer: as of 4.12.3, install-ng3-fix.sh and
+        // some others do not read it. So it is a second lock and never the only
+        // one -- the verb still carries --status on its own.
+        if !verb.writes { environment["MGVF_STATUS_ONLY"] = "1" }
         process.environment = environment
 
         let out = Pipe(), err = Pipe()

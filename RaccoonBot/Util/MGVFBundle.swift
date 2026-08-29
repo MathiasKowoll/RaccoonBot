@@ -19,6 +19,33 @@ import CryptoKit
 
 // MARK: - The manifest
 
+/// One run of an installer: what it is given as its argument, and which bottle
+/// it is pinned to.
+///
+/// The two are not the same question. A bottle-scoped installer takes the
+/// bottle as its argument; a folder-scoped one takes the game folder and still
+/// writes into a bottle, which it learns from `MGVF_BOTTLE`. Keeping them apart
+/// is what stops a folder fix being pinned to nothing.
+struct MGVFPlacement: Equatable, Sendable {
+    let target: String
+    /// Nil when this fix touches no bottle, which is not the same as "no bottle
+    /// was configured" -- that case yields no placements at all.
+    let bottle: String?
+
+    /// A bottle's directory as a script can use it.
+    ///
+    /// The trailing slash is stripped deliberately: `URL.path` reports one or
+    /// not depending on whether the directory happens to exist, so the same
+    /// setting produced two different argument strings between a machine where
+    /// the bottle was present and one where it was not.
+    static func path(of bottle: BottleReference) -> String? {
+        guard var path = bottle.directory?.path(percentEncoded: false) else { return nil }
+        while path.count > 1 && path.hasSuffix("/") { path.removeLast() }
+        return path
+    }
+}
+
+
 /// One title, as the fixes repository describes it.
 ///
 /// Derived over there from the installers themselves, so this is read and never
@@ -66,34 +93,38 @@ struct MGVFGame: Codable, Hashable {
     /// Does this installer take a bottle rather than a game folder?
     var installsIntoBottle: Bool { (scope ?? "folder") == "bottle" }
 
-    /// Every place this fix has to be installed, and nowhere else.
+    /// Does this fix need a bottle at all?
     ///
-    /// A folder-scoped fix has exactly one target, the game's own folder. A
-    /// bottle-scoped one has the bottles RaccoonBot is configured with -- all
-    /// of them, however many, in configuration order.
+    /// Two different reasons, one answer. A bottle-scoped installer is handed
+    /// the bottle as its argument. A folder-scoped one that writes registry
+    /// overrides is handed the game folder -- but the overrides still land in
+    /// a bottle, and it is that second kind, KINGDOM HEARTS among them, that
+    /// went looking for bottles on its own and wrote a KINGDOM HEARTS override
+    /// into the Battle.net bottle. Scope alone would have missed it.
+    var needsABottle: Bool { installsIntoBottle || writesRegistry }
+
+    /// Every run this fix takes, and nowhere else.
     ///
-    /// The bottles are handed in rather than looked up here, and that is the
-    /// point rather than a style choice. A Kingdom Hearts run that was told
-    /// nothing went and found four bottles by a criterion of its own, none of
-    /// them ours, and then reported that one of them "did not take every
-    /// override" -- a bottle belonging to stock CrossOver, with something open
-    /// in it, that we must never write into. The set is DERIVED from the
-    /// configuration; it is never DISCOVERED from the disk.
+    /// A fix that touches no bottle runs once against the game folder and no
+    /// bottle is named, because none is involved. Everything else runs once per
+    /// configured bottle, pinned to it: the argument is the bottle for a
+    /// bottle-scoped installer and the game folder for a folder-scoped one that
+    /// writes registry keys, but in both cases the bottle is stated rather than
+    /// discovered.
     ///
-    /// An empty result is a real answer and the caller must treat it as a
-    /// refusal to act, not as nothing to do.
-    /// The trailing slash is stripped deliberately. `URL.path` reports one or
-    /// not depending on whether the directory happens to exist on disk, so a
-    /// target built from the same setting changes shape between a machine
-    /// where the bottle is present and one where it is not -- and the argument
-    /// a script is handed must not depend on that. `BottleReference.root` is
-    /// trimmed for the same reason and says so.
-    func targets(gameFolder: String, bottles: [BottleReference]) -> [String] {
-        guard installsIntoBottle else { return [gameFolder] }
+    /// The bottles are handed in, never looked up here. That is the point
+    /// rather than a style choice: an installer that was told nothing found
+    /// four bottles by a criterion of its own, none of them chosen by anybody,
+    /// and reported that one "did not take every override" -- a bottle
+    /// belonging to another product, with something open in it.
+    ///
+    /// An empty result for a fix that needs a bottle is a real answer, and the
+    /// caller must treat it as a refusal rather than as nothing to do.
+    func placements(gameFolder: String, bottles: [BottleReference]) -> [MGVFPlacement] {
+        guard needsABottle else { return [MGVFPlacement(target: gameFolder, bottle: nil)] }
         return bottles.compactMap { bottle in
-            guard var path = bottle.directory?.path(percentEncoded: false) else { return nil }
-            while path.count > 1 && path.hasSuffix("/") { path.removeLast() }
-            return path
+            guard let path = MGVFPlacement.path(of: bottle) else { return nil }
+            return MGVFPlacement(target: installsIntoBottle ? path : gameFolder, bottle: path)
         }
     }
 

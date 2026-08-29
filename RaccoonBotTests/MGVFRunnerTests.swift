@@ -82,6 +82,47 @@ struct MGVFRunnerProcessTests {
         #expect(result.state == .installed)
     }
 
+    /// The pin has to ARRIVE. This is the one part of the change with no
+    /// symptom when it fails: the child environment is deliberately narrow --
+    /// HOME, PATH, LC_ALL, USER -- so a variable that is not named here simply
+    /// is not there, the installer finds MGVF_BOTTLE unset, and since 4.12.2
+    /// it goes back to scanning for bottles exactly as 4.12.1 did, silently.
+    /// So it is asserted by reading it out of a real child process rather than
+    /// by reading our own source.
+    @Test func thePinReachesTheScript() async throws {
+        let script = try makeScript("""
+        echo "bottle=[${MGVF_BOTTLE:-unset}]"
+        echo "frontend=[${MGVF_FRONTEND:-unset}]"
+        echo installed
+        """)
+        let result = try await MGVFRunner.shared.run(script: script,
+                                                     target: "/tmp",
+                                                     bottle: "/some/where/Steam",
+                                                     verb: .status,
+                                                     timeout: 60)
+        #expect(result.stdout.contains("bottle=[/some/where/Steam]"))
+        #expect(result.stdout.contains("frontend=[RaccoonBot]"))
+    }
+
+    /// A fix that touches no bottle names none -- and must not leak a stale one
+    /// from the environment this process happens to be running in.
+    @Test func aFixWithNoBottleLeavesThePinUnsetButStillDeclaresTheFrontend() async throws {
+        let script = try makeScript("""
+        echo "bottle=[${MGVF_BOTTLE:-unset}]"
+        echo "frontend=[${MGVF_FRONTEND:-unset}]"
+        echo installed
+        """)
+        let result = try await MGVFRunner.shared.run(script: script,
+                                                     target: "/tmp",
+                                                     verb: .status,
+                                                     timeout: 60)
+        #expect(result.stdout.contains("bottle=[unset]"))
+        // Set even here: the flag describes the caller, not the fix. It is what
+        // lets the installers treat a missing pin as an error for a program
+        // while a person at a terminal still gets the scan.
+        #expect(result.stdout.contains("frontend=[RaccoonBot]"))
+    }
+
     @Test func reportsTheExitCodeOfAFailure() async throws {
         // The whole point. safeShell returns before the process does and sends
         // both streams to /dev/null, so this case looks exactly like success.

@@ -212,16 +212,22 @@ final class MGVFCoordinator: ObservableObject {
                                folder: String,
                                verb: MGVFRunner.Verb) async throws -> Everywhere {
         // Validated against the disk before writing, and only for a fix that
-        // goes into a bottle: `forPatching` throws when nothing is configured
-        // and when nothing configured is there, and names what it skipped when
-        // some of it is. A game folder needs none of that -- it was found by
-        // being read, not by being configured.
-        let usable = entry.installsIntoBottle ? try ConfiguredBottles.forPatching(bottles).usable : bottles
-        let targets = entry.targets(gameFolder: folder, bottles: usable)
-        guard !targets.isEmpty else { throw ConfiguredBottles.Failure.noneConfigured }
+        // touches a bottle -- by scope, or by writing registry overrides from a
+        // folder-scoped installer, which is what KINGDOM HEARTS does and what
+        // scope alone would have missed. `forPatching` throws when nothing is
+        // configured and when nothing configured is there, and names what it
+        // skipped when some of it is. A fix that only rewrites a game folder
+        // needs none of that: the folder was found by being read, not by being
+        // configured.
+        let usable = entry.needsABottle ? try ConfiguredBottles.forPatching(bottles).usable : bottles
+        let placements = entry.placements(gameFolder: folder, bottles: usable)
+        guard !placements.isEmpty else { throw ConfiguredBottles.Failure.noneConfigured }
         var results: [MGVFResult] = []
-        for target in targets {
-            results.append(try await MGVFRunner.shared.run(script: script, target: target, verb: verb))
+        for placement in placements {
+            results.append(try await MGVFRunner.shared.run(script: script,
+                                                           target: placement.target,
+                                                           bottle: placement.bottle,
+                                                           verb: verb))
         }
         return Everywhere(results: results)
     }

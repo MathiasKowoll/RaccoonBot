@@ -257,13 +257,14 @@ final class MGVFCatalog: @unchecked Sendable {
         // staged codec, which is a property of the engine, not of the folder.
         if game.isCodecOnly { return .noFix }
         if store.isDismissed(folder) { return .dismissed }
-        let targets = game.targets(gameFolder: folder, bottles: bottles)
-        guard !targets.isEmpty else { return .unknown("No bottle is configured for this fix") }
+        let placements = game.placements(gameFolder: folder, bottles: bottles)
+        guard !placements.isEmpty else { return .unknown("No bottle is configured for this fix") }
         do {
             var worst: GameFixState?
-            for target in targets {
+            for placement in placements {
                 let result = try await MGVFRunner.shared.run(script: scriptPath(for: game),
-                                                             target: target,
+                                                             target: placement.target,
+                                                             bottle: placement.bottle,
                                                              verb: .status)
                 let state = Self.state(from: result)
                 if worst == nil || Self.isWorse(state, than: worst!) { worst = state }

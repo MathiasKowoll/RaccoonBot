@@ -112,6 +112,7 @@ final class MGVFRunner: @unchecked Sendable {
     ///     few hundred KB and asks the registry, so this is a hang, not slowness.
     func run(script: String,
              target gameFolder: String,
+             bottle: String? = nil,
              verb: Verb,
              timeout: Int = 120) async throws -> MGVFResult {
         guard FileManager.default.isExecutableFile(atPath: script) else {
@@ -134,6 +135,7 @@ final class MGVFRunner: @unchecked Sendable {
                 do {
                     let result = try self.execute(script: script,
                                                   gameFolder: gameFolder,
+                                                  bottle: bottle,
                                                   verb: verb,
                                                   timeout: timeout)
                     continuation.resume(returning: result)
@@ -148,6 +150,7 @@ final class MGVFRunner: @unchecked Sendable {
 
     private func execute(script: String,
                          gameFolder: String,
+                         bottle: String?,
                          verb: Verb,
                          timeout: Int) throws -> MGVFResult {
         let process = Process()
@@ -176,6 +179,28 @@ final class MGVFRunner: @unchecked Sendable {
             "LC_ALL": "C",
         ]
         if let user = ProcessInfo.processInfo.environment["USER"] { environment["USER"] = user }
+        // Which bottle, stated rather than left to be found.
+        //
+        // Since 4.12.2 the installers take MGVF_BOTTLE and use that bottle and
+        // no other; an invalid value is an error at source time rather than a
+        // fall back to scanning. But an UNSET value still scans, so this is not
+        // an optimisation: a build that forgets to set it behaves exactly like
+        // 4.12.1 did and nothing says so.
+        //
+        // Singular, and one character from its opposite: the same file also
+        // reads MGVF_BOTTLES, plural, which ADDS a root to the scan.
+        if let bottle, !bottle.isEmpty { environment["MGVF_BOTTLE"] = bottle }
+        // Says a program is asking, not a person at a terminal.
+        //
+        // It is what lets the installers treat an UNSET MGVF_BOTTLE as an error
+        // for us while a hand run still gets its scan. Without it a build that
+        // forgot the pin would fail silently in exactly the way this is meant
+        // to prevent, so it is set unconditionally -- including for a fix that
+        // names no bottle, because the flag describes the CALLER and not the
+        // fix. Set before the installers read it, which is deliberate: an
+        // unknown variable is inert, and arriving late is the failure mode
+        // that has no symptom.
+        environment["MGVF_FRONTEND"] = "RaccoonBot"
         process.environment = environment
 
         let out = Pipe(), err = Pipe()

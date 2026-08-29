@@ -62,42 +62,63 @@ enum BottleProcesses {
         return found.map { Running(pid: $0.key, name: $0.value) }.sorted { $0.pid < $1.pid }
     }
 
-    /// What wine and Steam always run, whatever game is playing.
-    ///
-    /// Everything else in a bottle is somebody's game. Naming the furniture is
-    /// a short, fixed list; naming the games would be a list per title, which
-    /// is exactly what this whole change exists to avoid.
-    static let infrastructure: Set<String> = [
+    /// What wine always runs. Short, and it does not change.
+    static let wineFurniture: Set<String> = [
         "wineserver", "winewrapper.exe", "services.exe", "winedevice.exe",
         "plugplay.exe", "rpcss.exe", "explorer.exe", "svchost.exe",
         "conhost.exe", "start.exe", "wineboot.exe", "rundll32.exe",
-        "steam.exe", "steamwebhelper.exe", "steamservice.exe",
-        "steamerrorreporter64.exe", "gldriverquery64.exe",
-        "vulkandriverquery.exe", "hardwareupdater.exe", "tabtip.exe",
+        "tabtip.exe", "winemenubuilder.exe",
     ]
 
-    /// Anything running in this bottle that is not wine's or Steam's own.
+    private static let steamCacheLock = NSLock()
+    private static var steamCache: [String: Set<String>] = [:]
+
+    /// Steam's own executables, read from the Steam that is about to run.
+    ///
+    /// This used to be a list written out by hand, and a list written out by
+    /// hand is wrong the moment Steam ships something new. It was: the overlay,
+    /// `gameoverlayui64.exe`, was missing, so the guard took Steam's own window
+    /// for a game and refused to close the bottle -- for as long as Steam was
+    /// running, which is to say forever.
+    ///
+    /// Asking the directory instead costs a twentieth of a second and cannot go
+    /// stale. There are twenty-five of them in this bottle, and the answer is
+    /// remembered per bottle after the first look.
+    static func steamsOwnExecutables(inBottleAt bottle: URL) -> Set<String> {
+        let key = bottle.path(percentEncoded: false)
+        steamCacheLock.lock()
+        if let known = steamCache[key] { steamCacheLock.unlock(); return known }
+        steamCacheLock.unlock()
+
+        let steam = bottle.appendingPathComponent("drive_c/Program Files (x86)/Steam")
+        var names: Set<String> = []
+        if let walker = FileManager.default.enumerator(
+            at: steam, includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]) {
+            for case let file as URL in walker where file.pathExtension.lowercased() == "exe" {
+                names.insert(file.lastPathComponent.lowercased())
+            }
+        }
+        steamCacheLock.lock()
+        steamCache[key] = names
+        steamCacheLock.unlock()
+        return names
+    }
+
+    /// Anything running in this bottle that belongs to neither wine nor Steam.
     ///
     /// The last word before a teardown. Every judgement above this one is made
-    /// from a log, and a log can be read wrongly or be a minute out of date --
-    /// which is how a relaunched MGS4 got killed by a decision taken about the
-    /// attempt before it. This asks the machine instead of the record.
-    ///
-    /// Anything not on the list counts, whatever it is called.
-    ///
-    /// Requiring a `.exe` seemed the safe way to keep an unknown name from
-    /// blocking a teardown forever. It was not: `lsof` reports a command name,
-    /// and MGS4's game presents itself as "-region" -- the first word of its
-    /// own command line. The qualifier excluded the very game the guard exists
-    /// to protect.
-    ///
-    /// So the test is only "not furniture", and the answer to an unrecognised
-    /// name is not to narrow it but to wait and ask again: a stray process is
-    /// gone by the next second, and a game is not.
+    /// from a log, and a log can be misread or be a minute out of date -- which
+    /// is how a relaunched MGS4 got killed by a decision taken about the attempt
+    /// before it. This asks the machine instead of the record.
     static func gamesRunning(inBottleAt bottle: URL) -> [String] {
-        running(inBottleAt: bottle)
+        let steams = steamsOwnExecutables(inBottleAt: bottle)
+        return running(inBottleAt: bottle)
             .map(\.name)
-            .filter { !infrastructure.contains($0.lowercased()) }
+            .filter { name in
+                let lower = name.lowercased()
+                return !wineFurniture.contains(lower) && !steams.contains(lower)
+            }
     }
 
     /// Is the server that owns these processes still alive?

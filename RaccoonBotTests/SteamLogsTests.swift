@@ -379,36 +379,45 @@ struct SteamGameProcessLogTests {
 @Suite("Telling a game apart from the furniture")
 struct BottleFurnitureTests {
 
-    /// Named from what actually runs in this bottle. Everything not on the
-    /// list is somebody's game, which is the only way to ask "is anyone
-    /// playing?" without keeping a list per title.
-    @Test(arguments: [
-        "wineserver", "services.exe", "plugplay.exe", "rpcss.exe",
-        "explorer.exe", "svchost.exe", "winedevice.exe", "winewrapper.exe",
-        "steam.exe", "steamwebhelper.exe", "steamservice.exe",
-        "steamerrorreporter64.exe",
-    ])
-    func wineAndSteamsOwnProcessesAreNotGames(_ name: String) {
-        #expect(BottleProcesses.infrastructure.contains(name))
+    /// Wine's own, which are few and do not change.
+    @Test(arguments: ["wineserver", "services.exe", "plugplay.exe", "rpcss.exe",
+                      "explorer.exe", "svchost.exe", "winedevice.exe",
+                      "winewrapper.exe"])
+    func wineProcessesAreNotGames(_ name: String) {
+        #expect(BottleProcesses.wineFurniture.contains(name))
     }
 
-    @Test(arguments: ["Ronin.exe", "nioh.exe", "launcher.exe", "RDR2.exe",
-                      "UnityCrashHandler64.exe", "MGSRVersion.exe",
-                      // MGS4's game names itself after the first word of its
-                      // own command line. Requiring a .exe here excluded the
-                      // very game the guard exists to protect.
-                      "-region"])
-    func anythingElseCountsAsSomebodyPlaying(_ name: String) {
-        #expect(BottleProcesses.infrastructure.contains(name.lowercased()) == false)
+    /// Steam's are not written down here at all -- they are read from Steam.
+    /// A hand-written list was missing gameoverlayui64.exe, so the guard took
+    /// Steam's own overlay for a game and refused to close the bottle for as
+    /// long as Steam was running.
+    @Test func steamsExecutablesComeFromSteam() throws {
+        let bottle = URL(fileURLWithPath: NSHomeDirectory())
+            .appendingPathComponent("Library/Application Support/RaccoonBot/CXPBottles/Steam")
+        try #require(FileManager.default.fileExists(
+            atPath: bottle.appendingPathComponent("drive_c/Program Files (x86)/Steam").path))
+
+        let theirs = BottleProcesses.steamsOwnExecutables(inBottleAt: bottle)
+        for name in ["steam.exe", "steamwebhelper.exe", "gameoverlayui64.exe",
+                     "steamerrorreporter64.exe", "steamservice.exe"] {
+            #expect(theirs.contains(name), "\(name) should have been found in Steam's own folder")
+        }
+        #expect(BottleProcesses.gamesRunning(inBottleAt: bottle).allSatisfy {
+            !theirs.contains($0.lowercased())
+        })
     }
 
-    /// Seen three times in today's traces: lsof reports a command name, not a
-    /// path, and this bottle produces one plainly called "Program" while
-    /// shutting down. Counted as a game it would refuse every teardown that
-    /// overlapped it -- a hang, not a kill, but a hang with no way out.
-    @Test(arguments: ["Program", "wineserver", "bash", "sh", "python3"])
-    func somethingThatIsNotAWindowsExecutableIsNotAGame(_ name: String) {
-        #expect(name.lowercased().hasSuffix(".exe") == false)
+    /// A bottle with no Steam in it answers empty rather than failing.
+    @Test func aBottleWithoutSteamIsQuiet() throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("nosteam-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        #expect(BottleProcesses.steamsOwnExecutables(inBottleAt: dir).isEmpty)
     }
 
+    @Test(arguments: ["Ronin.exe", "nioh.exe", "RDR2.exe", "-region",
+                      "NINJA GAIDEN 3 Razor's Edge.exe"])
+    func aGameIsNotWineFurniture(_ name: String) {
+        #expect(BottleProcesses.wineFurniture.contains(name.lowercased()) == false)
+    }
 }

@@ -290,7 +290,11 @@ struct GameOptionsView: View {
                 """)
             }
         }
-        .task(id: gameFolder) { await fix.load(folder: gameFolder, hasGame: game != nil) }
+        .task(id: gameFolder) {
+                    await fix.load(folder: gameFolder,
+                                   bottles: appGlobals.configuredBottles,
+                                   hasGame: game != nil)
+                }
             } else {
             EmptyView()
         }
@@ -301,7 +305,9 @@ struct GameOptionsView: View {
         // Per game, as the fixes application already works: the catalogue is
         // consulted for THIS title, so the button reports what it needs rather
         // than only filling in the form.
-        await fix.load(folder: gameFolder, hasGame: game != nil)
+        await fix.load(folder: gameFolder,
+                       bottles: appGlobals.configuredBottles,
+                       hasGame: game != nil)
         // The remote settings first, the measured catalogue second.
         //
         // importAutoConfig overwrites every non-nil field, so whichever runs

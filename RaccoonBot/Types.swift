@@ -1080,6 +1080,13 @@ final class AppGlobals: ObservableObject {
     @Published var cxAppPath: String?
     @Published var windowsSteamFolder: URL?
     
+    /// The bottles this application is configured with -- the one set anything
+    /// that writes into a bottle is allowed to touch. One question, one place
+    /// that answers it; see `ConfiguredBottles`.
+    var configuredBottles: [BottleReference] {
+        ConfiguredBottles.configured(selected: selectedBottle, arm: selectedArmBottle)
+    }
+
     init(selectedBottle: String? = "", cxAppPath: String? = nil) {
         self.selectedBottle = readUsrDefOptionString(key: "selectedBottle") ?? ""
         self.selectedArmBottle = readUsrDefOptionString(key: "selectedArmBottle") ?? ""

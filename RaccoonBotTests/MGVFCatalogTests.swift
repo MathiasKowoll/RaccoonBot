@@ -193,12 +193,12 @@ struct MGVFStateTests {
                                   store: store)
         catalog.pair(folder: folder, to: catalog.pairableGames[0])
         catalog.dismiss(folder: folder)
-        #expect(await catalog.state(forFolder: folder) == .dismissed)
+        #expect(await catalog.state(forFolder: folder, bottles: []) == .dismissed)
 
         catalog.undismiss(folder: folder)
         // With no real script at /tmp the run fails, which is `unknown` -- and
         // that is the correct answer, not `needsPatch`.
-        let state = await catalog.state(forFolder: folder)
+        let state = await catalog.state(forFolder: folder, bottles: [])
         #expect(state != .dismissed)
         #expect(state != .needsPatch)
     }
@@ -209,7 +209,7 @@ struct MGVFStateTests {
         let catalog = MGVFCatalog(manifest: manifest([]),
                                   directory: URL(fileURLWithPath: "/tmp"),
                                   store: MemoryStore())
-        #expect(await catalog.state(forFolder: folder) == .noFix)
+        #expect(await catalog.state(forFolder: folder, bottles: []) == .noFix)
     }
 }
 
@@ -329,7 +329,7 @@ struct MGVFSchemaThreeTests {
                                   store: SharedMemoryStore())
         catalog.pair(folder: folder, to: dmc)
         #expect(dmc.isCodecOnly)
-        #expect(await catalog.state(forFolder: folder) == .noFix)
+        #expect(await catalog.state(forFolder: folder, bottles: []) == .noFix)
     }
 
     @Test func namesTheCarrierWhereItActuallyIs() {

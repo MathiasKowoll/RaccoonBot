@@ -64,6 +64,14 @@ final class MGVFCoordinator: ObservableObject {
     private var catalog: MGVFCatalog?
     private var folder: String?
 
+    /// The bottles this fix may touch, handed in by whoever loaded us.
+    ///
+    /// Never discovered here. An installer that was told nothing once went
+    /// looking and found four bottles of its own choosing, none of them ours.
+    /// Empty means "we were told nothing", which is a refusal to act and not
+    /// an empty day's work -- see `runEverywhere`.
+    private var bottles: [BottleReference] = []
+
     /// Installing is offered whenever there is something to install, and that
     /// includes a fix the user removed on purpose.
     ///
@@ -132,7 +140,8 @@ final class MGVFCoordinator: ObservableObject {
     /// schedule; neither blocks the interface, and neither writes to a game
     /// folder. Downloading is safe, applying is not, and only one of the two
     /// happens without being asked for.
-    func load(folder: String?, hasGame: Bool = true) async {
+    func load(folder: String?, bottles: [BottleReference], hasGame: Bool = true) async {
+        self.bottles = bottles
         guard let folder else {
             // Silence here is indistinguishable from "this title needs
             // nothing", and the two are very different. If there is a game on
@@ -151,7 +160,7 @@ final class MGVFCoordinator: ObservableObject {
             self.catalog = catalog
             self.scopeWarning = manifest.scopeWarning
             self.entry = catalog.entry(forFolder: folder)
-            self.state = await catalog.state(forFolder: folder)
+            self.state = await catalog.state(forFolder: folder, bottles: bottles)
             console.log("MGVF folder=\(MGVFRunner.redacted(folder)) readable=\(FileManager.default.isReadableFile(atPath: folder)) entry=\(entry?.name ?? "none") state=\(state) catalog=\(manifest.games.count)")
         } catch {
             self.entry = nil
@@ -162,7 +171,7 @@ final class MGVFCoordinator: ObservableObject {
     func refresh() async {
         guard let folder, let catalog else { return }
         entry = catalog.entry(forFolder: folder)
-        state = await catalog.state(forFolder: folder)
+        state = await catalog.state(forFolder: folder, bottles: bottles)
     }
 
     /// Pair this folder with a title by hand, for the entries a folder cannot
@@ -177,6 +186,47 @@ final class MGVFCoordinator: ObservableObject {
 
     // MARK: - Writing
 
+    /// Everything one verb did, everywhere this fix belongs.
+    private struct Everywhere {
+        let results: [MGVFResult]
+        /// The first target that refused. One failure is a failure: a fix that
+        /// went on in one bottle and not the other is not installed.
+        var failure: MGVFResult? { results.first { $0.exitCode != 0 } }
+        var succeeded: Bool { !results.isEmpty && failure == nil }
+    }
+
+    private enum Refusal: LocalizedError {
+        case nowhereToInstall
+        var errorDescription: String? {
+            "No bottle is configured for this fix. Nothing was written."
+        }
+    }
+
+    /// Run one verb once per target, in configuration order, and nowhere else.
+    ///
+    /// The targets come from the entry and the configured bottles, so a
+    /// folder-scoped fix still runs exactly once against its own folder and a
+    /// bottle-scoped one runs against each bottle RaccoonBot defines. An empty
+    /// target list throws rather than returning quietly: "nothing to do" and
+    /// "we were told nothing" look identical at the call site, and treating the
+    /// second as the first is how a patch ends up somewhere nobody chose.
+    ///
+    /// Sequential on purpose. Two writers on one bottle registry is as bad as
+    /// two on one game folder, and the second bottle is not urgent.
+    private func runEverywhere(script: String,
+                               entry: MGVFGame,
+                               folder: String,
+                               verb: MGVFRunner.Verb) async throws -> Everywhere {
+        let targets = entry.targets(gameFolder: folder, bottles: bottles)
+        guard !targets.isEmpty else { throw Refusal.nowhereToInstall }
+        var results: [MGVFResult] = []
+        for target in targets {
+            results.append(try await MGVFRunner.shared.run(script: script, target: target, verb: verb))
+        }
+        return Everywhere(results: results)
+    }
+
+
     /// Apply the fix. Refuses rather than forces.
     func install() async {
         guard let folder, let catalog, let entry else { return }
@@ -184,17 +234,16 @@ final class MGVFCoordinator: ObservableObject {
         blocked = nil; lastError = nil; busy = true
         defer { busy = false }
         do {
-            let result = try await MGVFRunner.shared.run(script: catalog.scriptPath(for: entry),
-target: folder,
-                                                         verb: .install)
-            if result.exitCode != 0 {
-                lastError = MGVFRunner.redacted(result.stderr).trimmingCharacters(in: .whitespacesAndNewlines)
+            let outcome = try await runEverywhere(script: catalog.scriptPath(for: entry),
+                                                  entry: entry, folder: folder, verb: .install)
+            if let failed = outcome.failure {
+                lastError = MGVFRunner.redacted(failed.stderr).trimmingCharacters(in: .whitespacesAndNewlines)
             }
             catalog.undismiss(folder: folder)
             // What was applied, so a later bundle can be compared against it.
             // Only on success: recording a fix that failed to install would
             // claim this folder is current when nothing was written.
-            if result.exitCode == 0 { catalog.recordApplied(folder: folder, game: entry) }
+            if outcome.succeeded { catalog.recordApplied(folder: folder, game: entry) }
             await refresh()
         } catch {
             lastError = error.localizedDescription
@@ -219,12 +268,12 @@ target: folder,
         defer { busy = false }
         do {
             let script = catalog.scriptPath(for: entry)
-            let restored = try await MGVFRunner.shared.run(script: script,
-target: folder, verb: .restore)
-            guard restored.exitCode == 0 else {
+            let restored = try await runEverywhere(script: script, entry: entry,
+                                                   folder: folder, verb: .restore)
+            guard restored.succeeded else {
                 // Stop here. A failed restore leaves the old fix in place,
                 // which still works; carrying on would install over it.
-                lastError = MGVFRunner.redacted(restored.stderr).trimmingCharacters(in: .whitespacesAndNewlines)
+                lastError = MGVFRunner.redacted(restored.failure?.stderr ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
                 catalog.forgetApplied(folder: folder)
                 await refresh()
                 return
@@ -234,10 +283,10 @@ target: folder, verb: .restore)
             // a fingerprint claiming a fix that is not there.
             catalog.forgetApplied(folder: folder)
 
-            let installed = try await MGVFRunner.shared.run(script: script,
-target: folder, verb: .install)
-            if installed.exitCode != 0 {
-                lastError = MGVFRunner.redacted(installed.stderr).trimmingCharacters(in: .whitespacesAndNewlines)
+            let installed = try await runEverywhere(script: script, entry: entry,
+                                                    folder: folder, verb: .install)
+            if let failed = installed.failure {
+                lastError = MGVFRunner.redacted(failed.stderr).trimmingCharacters(in: .whitespacesAndNewlines)
             } else {
                 catalog.recordApplied(folder: folder, game: entry)
             }
@@ -259,15 +308,14 @@ target: folder, verb: .install)
         blocked = nil; lastError = nil; busy = true
         defer { busy = false }
         do {
-            let result = try await MGVFRunner.shared.run(script: catalog.scriptPath(for: entry),
-target: folder,
-                                                         verb: .restore)
-            if result.exitCode != 0 {
-                lastError = MGVFRunner.redacted(result.stderr).trimmingCharacters(in: .whitespacesAndNewlines)
+            let outcome = try await runEverywhere(script: catalog.scriptPath(for: entry),
+                                                  entry: entry, folder: folder, verb: .restore)
+            if let failed = outcome.failure {
+                lastError = MGVFRunner.redacted(failed.stderr).trimmingCharacters(in: .whitespacesAndNewlines)
             }
             catalog.dismiss(folder: folder)
             // The fix is off, so there is nothing to be current or stale.
-            if result.exitCode == 0 { catalog.forgetApplied(folder: folder) }
+            if outcome.succeeded { catalog.forgetApplied(folder: folder) }
             await refresh()
         } catch {
             lastError = error.localizedDescription

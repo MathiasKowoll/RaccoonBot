@@ -66,6 +66,37 @@ struct MGVFGame: Codable, Hashable {
     /// Does this installer take a bottle rather than a game folder?
     var installsIntoBottle: Bool { (scope ?? "folder") == "bottle" }
 
+    /// Every place this fix has to be installed, and nowhere else.
+    ///
+    /// A folder-scoped fix has exactly one target, the game's own folder. A
+    /// bottle-scoped one has the bottles RaccoonBot is configured with -- all
+    /// of them, however many, in configuration order.
+    ///
+    /// The bottles are handed in rather than looked up here, and that is the
+    /// point rather than a style choice. A Kingdom Hearts run that was told
+    /// nothing went and found four bottles by a criterion of its own, none of
+    /// them ours, and then reported that one of them "did not take every
+    /// override" -- a bottle belonging to stock CrossOver, with something open
+    /// in it, that we must never write into. The set is DERIVED from the
+    /// configuration; it is never DISCOVERED from the disk.
+    ///
+    /// An empty result is a real answer and the caller must treat it as a
+    /// refusal to act, not as nothing to do.
+    /// The trailing slash is stripped deliberately. `URL.path` reports one or
+    /// not depending on whether the directory happens to exist on disk, so a
+    /// target built from the same setting changes shape between a machine
+    /// where the bottle is present and one where it is not -- and the argument
+    /// a script is handed must not depend on that. `BottleReference.root` is
+    /// trimmed for the same reason and says so.
+    func targets(gameFolder: String, bottles: [BottleReference]) -> [String] {
+        guard installsIntoBottle else { return [gameFolder] }
+        return bottles.compactMap { bottle in
+            guard var path = bottle.directory?.path(percentEncoded: false) else { return nil }
+            while path.count > 1 && path.hasSuffix("/") { path.removeLast() }
+            return path
+        }
+    }
+
     // Schema 3. Optional so a schema 2 bundle still decodes.
     //
     // Empty is an answer, not a gap: the fixes repository reports a generation

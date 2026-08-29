@@ -67,7 +67,9 @@ final class PatchAll: ObservableObject {
         }
     }
 
-    func run(_ targets: [Target]) async {
+    /// The bottles are handed in rather than read here, so that a sweep over
+    /// the whole library cannot reach a bottle the caller did not name.
+    func run(_ targets: [Target], bottles: [BottleReference]) async {
         guard !running else { return }
 
         // Asked once, before touching anything. Applying a fix renames files in
@@ -89,7 +91,7 @@ final class PatchAll: ObservableObject {
         for target in targets {
             current = target.title
             let coordinator = MGVFCoordinator()
-            await coordinator.load(folder: target.folder)
+            await coordinator.load(folder: target.folder, bottles: bottles)
 
             // Two different jobs. A title with no fix gets one installed; a
             // title whose fix the bundle has since changed gets the old one

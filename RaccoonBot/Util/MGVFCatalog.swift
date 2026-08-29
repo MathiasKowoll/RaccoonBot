@@ -240,17 +240,35 @@ final class MGVFCatalog: @unchecked Sendable {
 
     /// Ask the installer, and translate its answer into something the interface
     /// can show without overstating it.
-    func state(forFolder folder: String) async -> GameFixState {
+    /// Asked of the right thing.
+    ///
+    /// A bottle-scoped fix is asked about the BOTTLE, not the game folder.
+    /// Passing the folder is why `--status` answered `error: not a bottle` and
+    /// exited 1, which became `.unknown`, which made `canInstall` false -- so
+    /// the gate could never be cleared from inside the interface for a fix that
+    /// was already installed and working on disk.
+    ///
+    /// With several bottles the answer is the worst of them. "Installed in one
+    /// of the two" is not installed, and reporting the better half would hide
+    /// precisely the case this change exists to stop.
+    func state(forFolder folder: String, bottles: [BottleReference]) async -> GameFixState {
         guard let game = entry(forFolder: folder) else { return .noFix }
         // Nothing to install and nothing to ask: what this title needs is a
         // staged codec, which is a property of the engine, not of the folder.
         if game.isCodecOnly { return .noFix }
         if store.isDismissed(folder) { return .dismissed }
+        let targets = game.targets(gameFolder: folder, bottles: bottles)
+        guard !targets.isEmpty else { return .unknown("No bottle is configured for this fix") }
         do {
-            let result = try await MGVFRunner.shared.run(script: scriptPath(for: game),
-target: folder,
-                                                         verb: .status)
-            let state = Self.state(from: result)
+            var worst: GameFixState?
+            for target in targets {
+                let result = try await MGVFRunner.shared.run(script: scriptPath(for: game),
+                                                             target: target,
+                                                             verb: .status)
+                let state = Self.state(from: result)
+                if worst == nil || Self.isWorse(state, than: worst!) { worst = state }
+            }
+            guard let state = worst else { return .unknown("the installer gave no answer") }
             // The script answers whether a fix is on, which is not whether it
             // is the one the bundle now carries.
             if state == .patched, isOutdated(folder: folder, game: game) { return .outdated }
@@ -258,6 +276,21 @@ target: folder,
         } catch {
             return .unknown(error.localizedDescription)
         }
+    }
+
+    /// Which answer to believe when the bottles disagree. Ordered by how much
+    /// it should stop us: not knowing beats needing a patch, which beats being
+    /// patched. Never the other way round.
+    static func isWorse(_ lhs: GameFixState, than rhs: GameFixState) -> Bool {
+        func rank(_ state: GameFixState) -> Int {
+            switch state {
+            case .unknown: return 3
+            case .needsPatch: return 2
+            case .outdated: return 1
+            default: return 0
+            }
+        }
+        return rank(lhs) > rank(rhs)
     }
 
     /// `broken` and `half` are both "a fix is here and it is not working", which

@@ -152,7 +152,7 @@ struct OptionsView: View {
                                 Button(patchAll.running
                                        ? "Patching \(patchAll.done)/\(patchAll.total)…"
                                        : "Patch all") {
-                                    Task { await patchAll.run(targets) }
+                                    Task { await patchAll.run(targets, bottles: appGlobals.configuredBottles) }
                                 }
                                 .disabled(patchAll.running)
                             }

@@ -62,6 +62,13 @@ final class MGVFLibrary: ObservableObject {
     func needsPatch(folder: String?) -> Bool {
         guard let folder, let catalog, let entry = catalog.entry(forFolder: folder) else { return false }
         if catalog.isDismissed(folder) { return false }
+        // A fix that goes into the bottle leaves nothing beside the game, so
+        // there is no kept-aside original to look for and the test below would
+        // be answering about a file that was never going to be there. Its
+        // installer answers properly, with --status, and that is a process to
+        // spawn rather than something to do while drawing a row -- so the row
+        // says nothing and the game's own options ask.
+        if entry.installsIntoBottle { return false }
         var url = URL(fileURLWithPath: folder)
         if !entry.carrierDir.isEmpty { url.appendPathComponent(entry.carrierDir) }
         let keptAside = url.appendingPathComponent(entry.keptAs).path(percentEncoded: false)

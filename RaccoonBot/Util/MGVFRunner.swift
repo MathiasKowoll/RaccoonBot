@@ -42,12 +42,16 @@ enum MGVFError: LocalizedError {
     case notExecutable(String)
     case timedOut(String, seconds: Int)
     case busy(String)
+    /// A wineserver is alive in the bottle this fix would edit.
+    case bottleInUse(String)
 
     var errorDescription: String? {
         switch self {
         case .notExecutable(let p): return "Cannot run \(p)"
         case .timedOut(let p, let s): return "\(p) did not finish within \(s)s and was stopped"
         case .busy(let p): return "Another operation is already running on \(p)"
+        case .bottleInUse(let p):
+            return "Close the bottle first: a running wineserver in \(p) would undo this edit when it exits"
         }
     }
 }
@@ -99,20 +103,33 @@ final class MGVFRunner: @unchecked Sendable {
         var writes: Bool { self != .status }
     }
 
-    /// Run one installer against one game folder.
+    /// Run one installer against whatever it takes.
     ///
     /// - Parameters:
     ///   - script: absolute path to the install-*.sh, with its DLL and pe.pl
     ///     beside it -- the scripts resolve siblings through `dirname "$0"`.
-    ///   - gameFolder: the folder the game is installed in.
+    ///   - target: what the installer is given as its first argument. Almost
+    ///     always the folder the game is installed in; for a bottle-scoped fix
+    ///     it is the bottle. The serialisation below is right either way -- two
+    ///     writers on one bottle registry is as bad as two on one game folder.
     ///   - timeout: seconds before the process is stopped. Installing copies a
     ///     few hundred KB and asks the registry, so this is a hang, not slowness.
     func run(script: String,
-             gameFolder: String,
+             target gameFolder: String,
              verb: Verb,
              timeout: Int = 120) async throws -> MGVFResult {
         guard FileManager.default.isExecutableFile(atPath: script) else {
             throw MGVFError.notExecutable(script)
+        }
+        // Nothing may edit a bottle's registry while its wineserver is alive.
+        //
+        // The server holds the registry in memory and writes it back when it
+        // exits, so an edit made underneath it is undone without a word --
+        // install and restore alike. The installer refuses in that case, and
+        // refusing is the right answer, but a caller that brings the bottle
+        // down first is a better one.
+        if verb.writes, BottleProcesses.serverIsAlive(inBottleAt: URL(fileURLWithPath: gameFolder)) {
+            throw MGVFError.bottleInUse(gameFolder)
         }
         if verb.writes {
             busyLock.lock()

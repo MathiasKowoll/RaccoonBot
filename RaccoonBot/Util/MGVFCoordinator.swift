@@ -185,7 +185,7 @@ final class MGVFCoordinator: ObservableObject {
         defer { busy = false }
         do {
             let result = try await MGVFRunner.shared.run(script: catalog.scriptPath(for: entry),
-                                                         gameFolder: folder,
+target: folder,
                                                          verb: .install)
             if result.exitCode != 0 {
                 lastError = MGVFRunner.redacted(result.stderr).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -219,7 +219,8 @@ final class MGVFCoordinator: ObservableObject {
         defer { busy = false }
         do {
             let script = catalog.scriptPath(for: entry)
-            let restored = try await MGVFRunner.shared.run(script: script, gameFolder: folder, verb: .restore)
+            let restored = try await MGVFRunner.shared.run(script: script,
+target: folder, verb: .restore)
             guard restored.exitCode == 0 else {
                 // Stop here. A failed restore leaves the old fix in place,
                 // which still works; carrying on would install over it.
@@ -233,7 +234,8 @@ final class MGVFCoordinator: ObservableObject {
             // a fingerprint claiming a fix that is not there.
             catalog.forgetApplied(folder: folder)
 
-            let installed = try await MGVFRunner.shared.run(script: script, gameFolder: folder, verb: .install)
+            let installed = try await MGVFRunner.shared.run(script: script,
+target: folder, verb: .install)
             if installed.exitCode != 0 {
                 lastError = MGVFRunner.redacted(installed.stderr).trimmingCharacters(in: .whitespacesAndNewlines)
             } else {
@@ -258,7 +260,7 @@ final class MGVFCoordinator: ObservableObject {
         defer { busy = false }
         do {
             let result = try await MGVFRunner.shared.run(script: catalog.scriptPath(for: entry),
-                                                         gameFolder: folder,
+target: folder,
                                                          verb: .restore)
             if result.exitCode != 0 {
                 lastError = MGVFRunner.redacted(result.stderr).trimmingCharacters(in: .whitespacesAndNewlines)

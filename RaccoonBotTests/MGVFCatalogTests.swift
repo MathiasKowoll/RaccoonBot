@@ -31,7 +31,7 @@ private func game(_ script: String, exe: String = "") -> MGVFGame {
     MGVFGame(name: script.replacingOccurrences(of: "install-", with: ""),
              script: script, exe: exe, files: ["proxy.dll"],
              carrier: "carrier.dll", keptAs: "carrier_real.dll",
-             carrierDir: "", why: "test", writesRegistry: false,
+             carrierDir: "", why: "test", writesRegistry: false, scope: nil,
              backend: nil, gptk: nil, env: nil, codec: nil)
 }
 
@@ -218,7 +218,7 @@ struct MGVFRecommendedOptionsTests {
     private func entry(backend: String?, gptk: String?, env: [String: String]? = nil) -> MGVFGame {
         MGVFGame(name: "t", script: "s.sh", exe: "t.exe", files: [],
                  carrier: "c.dll", keptAs: "c_real.dll", carrierDir: "", why: "",
-                 writesRegistry: false, backend: backend, gptk: gptk, env: env, codec: nil)
+                 writesRegistry: false, scope: nil, backend: backend, gptk: gptk, env: env, codec: nil)
     }
 
     @MainActor
@@ -295,7 +295,7 @@ struct MGVFSchemaThreeTests {
     private func titled(_ name: String, script: String, gptk: String? = "", codec: String? = "") -> MGVFGame {
         MGVFGame(name: name, script: script, exe: "", files: [], carrier: "c.dll",
                  keptAs: "c_real.dll", carrierDir: "Engine/Binaries/ThirdParty/Ogg/Win64",
-                 why: "because \(name)", writesRegistry: false,
+                 why: "because \(name)", writesRegistry: false, scope: nil,
                  backend: "d3dmetal", gptk: gptk, env: nil, codec: codec)
     }
 

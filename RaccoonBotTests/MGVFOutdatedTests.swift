@@ -32,7 +32,7 @@ struct MGVFFingerprintTests {
     private func game(files: [String] = []) -> MGVFGame {
         MGVFGame(name: "Some Title", script: "install.sh", exe: "Game.exe",
                  files: files, carrier: "libogg_64.dll", keptAs: "libogg_real.dll",
-                 carrierDir: "", why: "VP9 in WebM", writesRegistry: false,
+                 carrierDir: "", why: "VP9 in WebM", writesRegistry: false, scope: nil,
                  backend: nil, gptk: nil, env: nil, codec: "libgstlibav")
     }
 
@@ -63,7 +63,7 @@ struct MGVFFingerprintTests {
         let b = MGVFGame(name: "Some Title", script: "install.sh", exe: "Game.exe",
                          files: [], carrier: "libogg_64.dll", keptAs: "libogg_real.dll",
                          carrierDir: "Engine/Binaries", why: "VP9 in WebM",
-                         writesRegistry: false, backend: nil, gptk: nil, env: nil,
+                         writesRegistry: false, scope: nil, backend: nil, gptk: nil, env: nil,
                          codec: "libgstlibav")
         #expect(a.fingerprint(inDirectory: dir) != b.fingerprint(inDirectory: dir))
     }
@@ -74,10 +74,10 @@ struct MGVFFingerprintTests {
         let dir = try bundleDir(script: "#!/bin/sh\n")
         let a = MGVFGame(name: "T", script: "install.sh", exe: "Game.exe", files: [],
                          carrier: "ab", keptAs: "c", carrierDir: "", why: "",
-                         writesRegistry: false, backend: nil, gptk: nil, env: nil, codec: nil)
+                         writesRegistry: false, scope: nil, backend: nil, gptk: nil, env: nil, codec: nil)
         let b = MGVFGame(name: "T", script: "install.sh", exe: "Game.exe", files: [],
                          carrier: "a", keptAs: "bc", carrierDir: "", why: "",
-                         writesRegistry: false, backend: nil, gptk: nil, env: nil, codec: nil)
+                         writesRegistry: false, scope: nil, backend: nil, gptk: nil, env: nil, codec: nil)
         #expect(a.fingerprint(inDirectory: dir) != b.fingerprint(inDirectory: dir))
     }
 
@@ -89,7 +89,7 @@ struct MGVFFingerprintTests {
         let b = MGVFGame(name: "Some Title", script: "install.sh", exe: "Game.exe",
                          files: [], carrier: "libogg_64.dll", keptAs: "libogg_real.dll",
                          carrierDir: "", why: "a completely different sentence",
-                         writesRegistry: false, backend: nil, gptk: nil, env: nil,
+                         writesRegistry: false, scope: nil, backend: nil, gptk: nil, env: nil,
                          codec: "libgstlibav")
         #expect(a.fingerprint(inDirectory: dir) == b.fingerprint(inDirectory: dir))
     }

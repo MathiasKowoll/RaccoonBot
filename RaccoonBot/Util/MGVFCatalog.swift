@@ -235,7 +235,7 @@ final class MGVFCatalog: @unchecked Sendable {
         if store.isDismissed(folder) { return .dismissed }
         do {
             let result = try await MGVFRunner.shared.run(script: scriptPath(for: game),
-                                                         gameFolder: folder,
+target: folder,
                                                          verb: .status)
             let state = Self.state(from: result)
             // The script answers whether a fix is on, which is not whether it

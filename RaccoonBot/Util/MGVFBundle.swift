@@ -51,6 +51,21 @@ struct MGVFGame: Codable, Hashable {
     /// Whether the fix also needs a DLL override in the bottle's registry.
     let writesRegistry: Bool
 
+    // Schema 4. Optional, and absent means "folder", so every bundle written
+    // before this decodes unchanged and keeps its meaning.
+    /// What the installer is handed: "folder" or "bottle".
+    ///
+    /// Almost every fix goes beside the game, and the game folder is what the
+    /// user chooses. Ninja Gaiden 3's does not: it puts DLLs into the bottle's
+    /// system32 and writes an AppDefaults override, and the bottle cannot be
+    /// derived from the game folder -- the game is on an external drive and the
+    /// bottle is under ~/Library. This application creates and launches the
+    /// bottle, so it is the only piece that knows the path.
+    let scope: String?
+
+    /// Does this installer take a bottle rather than a game folder?
+    var installsIntoBottle: Bool { (scope ?? "folder") == "bottle" }
+
     // Schema 3. Optional so a schema 2 bundle still decodes.
     //
     // Empty is an answer, not a gap: the fixes repository reports a generation

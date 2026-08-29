@@ -73,7 +73,7 @@ struct MGVFRunnerProcessTests {
         echo installed
         """)
         let result = try await MGVFRunner.shared.run(script: script,
-                                                     gameFolder: "/tmp",
+                                                     target: "/tmp",
                                                      verb: .status,
                                                      timeout: 60)
         #expect(result.exitCode == 0)
@@ -90,7 +90,7 @@ struct MGVFRunnerProcessTests {
         exit 3
         """)
         let result = try await MGVFRunner.shared.run(script: script,
-                                                     gameFolder: "/tmp",
+                                                     target: "/tmp",
                                                      verb: .status,
                                                      timeout: 60)
         #expect(result.exitCode == 3)
@@ -107,7 +107,7 @@ struct MGVFRunnerProcessTests {
         [ "$1" = "\(awkward)" ] && echo installed || echo absent
         """)
         let result = try await MGVFRunner.shared.run(script: script,
-                                                     gameFolder: awkward,
+                                                     target: awkward,
                                                      verb: .status,
                                                      timeout: 60)
         #expect(result.state == .installed)
@@ -123,7 +123,7 @@ struct MGVFRunnerProcessTests {
         echo installed
         """)
         let result = try await MGVFRunner.shared.run(script: script,
-                                                     gameFolder: "/tmp",
+                                                     target: "/tmp",
                                                      verb: .status,
                                                      timeout: 60)
         #expect(result.exitCode == 0, "stderr: \(result.stderr)")
@@ -134,7 +134,7 @@ struct MGVFRunnerProcessTests {
         let script = try makeScript("sleep 30\necho installed")
         await #expect(throws: MGVFError.self) {
             _ = try await MGVFRunner.shared.run(script: script,
-                                                gameFolder: "/tmp",
+                                                target: "/tmp",
                                                 verb: .status,
                                                 timeout: 2)
         }
@@ -143,7 +143,7 @@ struct MGVFRunnerProcessTests {
     @Test func refusesAScriptItCannotRun() async throws {
         await #expect(throws: MGVFError.self) {
             _ = try await MGVFRunner.shared.run(script: "/nonexistent/install-nope.sh",
-                                                gameFolder: "/tmp",
+                                                target: "/tmp",
                                                 verb: .status,
                                                 timeout: 5)
         }

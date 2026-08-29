@@ -103,12 +103,22 @@ final class MGVFLibrary: ObservableObject {
         guard let folder, let catalog, let entry = catalog.entry(forFolder: folder) else { return false }
         if catalog.isDismissed(folder) { return false }
         // A fix that goes into the bottle leaves nothing beside the game, so
-        // there is no kept-aside original to look for and the test below would
-        // be answering about a file that was never going to be there. Its
-        // installer answers properly, with --status, and that is a process to
-        // spawn rather than something to do while drawing a row -- so the row
-        // says nothing and the game's own options ask.
-        if entry.installsIntoBottle { return false }
+        // there is no kept-aside original to look for: the test below would be
+        // asking about a file that was never going to be there.
+        //
+        // What this application knows instead is what it did. A successful
+        // install records a fingerprint and a restore clears it, so the answer
+        // is already on disk and costs nothing -- where asking the installer
+        // costs a process, and a list of fifty-eight titles redraws often.
+        //
+        // A memory is not the fact. The bottle can be changed by other means,
+        // and --status is the only thing that can say so -- which is why it is
+        // asked before installing or restoring, where being wrong matters, and
+        // not while drawing a row, where it does not.
+        if entry.installsIntoBottle {
+            guard catalog.hasApplied(folder: folder) else { return true }
+            return catalog.isOutdated(folder: folder, game: entry)
+        }
         var url = URL(fileURLWithPath: folder)
         if !entry.carrierDir.isEmpty { url.appendPathComponent(entry.carrierDir) }
         let keptAside = url.appendingPathComponent(entry.keptAs).path(percentEncoded: false)

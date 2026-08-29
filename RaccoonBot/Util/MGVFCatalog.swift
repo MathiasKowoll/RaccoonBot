@@ -210,6 +210,15 @@ final class MGVFCatalog: @unchecked Sendable {
 
     func forgetApplied(folder: String) { store.setAppliedFingerprint(nil, for: folder) }
 
+    /// Did this application install a fix here, and does it still say so?
+    ///
+    /// The record is written on a successful install and cleared on restore, so
+    /// for a fix that leaves nothing beside the game it is what we know without
+    /// asking anybody. Its installer can still be asked -- and must be, before
+    /// acting, since a record is a memory and the bottle is the fact -- but not
+    /// once per row while a list of fifty-eight titles is drawn.
+    func hasApplied(folder: String) -> Bool { store.appliedFingerprint(for: folder) != nil }
+
     func pair(folder: String, to game: MGVFGame) { store.setPairedTitle(game.name, for: folder) }
     func unpair(folder: String) { store.setPairedTitle(nil, for: folder) }
 

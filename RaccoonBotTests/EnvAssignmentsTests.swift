@@ -72,4 +72,25 @@ struct EnvAssignmentsTests {
     @Test func anEmptyValueIsKept() {
         #expect(EnvAssignments.normalised("WINEDEBUG=") == #"WINEDEBUG="""#)
     }
+
+    /// A second one the sweep turned up: a title whose variables were typed one
+    /// per line. A newline ends a shell command, so `env A=1` ran on its own --
+    /// printing the environment and exiting -- and the rest became a separate
+    /// command that kept only the variables on its own line. The game started,
+    /// with most of what was asked for quietly missing.
+    @Test func variablesTypedOneToALineBecomeOneLine() {
+        let typed = """
+        MVK_CONFIG_METAL_COMPILE_TIMEOUT=5000000000
+        MVK_CONFIG_RESUME_LOST_DEVICE=1
+        MVK_CONFIG_SHOULD_MAXIMIZE_CONCURRENT_COMPILATION=1
+        """
+        #expect(EnvAssignments.normalised(typed)
+                == "MVK_CONFIG_METAL_COMPILE_TIMEOUT=5000000000 "
+                 + "MVK_CONFIG_RESUME_LOST_DEVICE=1 "
+                 + "MVK_CONFIG_SHOULD_MAXIMIZE_CONCURRENT_COMPILATION=1")
+    }
+
+    @Test func trailingSpacesAndBlankLinesAreNotVariables() {
+        #expect(EnvAssignments.normalised("A=1  \n\n  B=2  \n") == "A=1 B=2")
+    }
 }

@@ -101,6 +101,22 @@ struct MGVFGame: Codable, Hashable {
     /// a bottle, and it is that second kind, KINGDOM HEARTS among them, that
     /// went looking for bottles on its own and wrote a KINGDOM HEARTS override
     /// into the Battle.net bottle. Scope alone would have missed it.
+    ///
+    /// `writesRegistry` can be leaned on because it is DERIVED and not declared:
+    /// the bundle builder reads each installer's own text for `reg.exe` or
+    /// `user.reg` and sets the flag from that, so a new script that writes keys
+    /// is marked without anybody remembering to. Four of nineteen entries carry
+    /// it today, across three installers.
+    ///
+    /// The gap it leaves is a different shape, and worth knowing where to look
+    /// rather than guarding against here: a script that reached a bottle by
+    /// editing `cxbottle.conf` matches neither spelling and would not be
+    /// flagged. Nothing does today. This application does write cxbottle.conf
+    /// from Swift, so the pattern exists in this project and could move into a
+    /// script. If a bottle is ever changed by a fix this did not fire for, that
+    /// is the reason, and the repair belongs in the derivation rather than in a
+    /// second rule here. Meanwhile MGVF_FRONTEND makes even that case loud: an
+    /// unpinned run exits 1 instead of scanning.
     var needsABottle: Bool { installsIntoBottle || writesRegistry }
 
     /// Every run this fix takes, and nowhere else.

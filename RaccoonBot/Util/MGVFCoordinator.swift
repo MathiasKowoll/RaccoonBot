@@ -195,12 +195,6 @@ final class MGVFCoordinator: ObservableObject {
         var succeeded: Bool { !results.isEmpty && failure == nil }
     }
 
-    private enum Refusal: LocalizedError {
-        case nowhereToInstall
-        var errorDescription: String? {
-            "No bottle is configured for this fix. Nothing was written."
-        }
-    }
 
     /// Run one verb once per target, in configuration order, and nowhere else.
     ///
@@ -217,8 +211,14 @@ final class MGVFCoordinator: ObservableObject {
                                entry: MGVFGame,
                                folder: String,
                                verb: MGVFRunner.Verb) async throws -> Everywhere {
-        let targets = entry.targets(gameFolder: folder, bottles: bottles)
-        guard !targets.isEmpty else { throw Refusal.nowhereToInstall }
+        // Validated against the disk before writing, and only for a fix that
+        // goes into a bottle: `forPatching` throws when nothing is configured
+        // and when nothing configured is there, and names what it skipped when
+        // some of it is. A game folder needs none of that -- it was found by
+        // being read, not by being configured.
+        let usable = entry.installsIntoBottle ? try ConfiguredBottles.forPatching(bottles).usable : bottles
+        let targets = entry.targets(gameFolder: folder, bottles: usable)
+        guard !targets.isEmpty else { throw ConfiguredBottles.Failure.noneConfigured }
         var results: [MGVFResult] = []
         for target in targets {
             results.append(try await MGVFRunner.shared.run(script: script, target: target, verb: verb))

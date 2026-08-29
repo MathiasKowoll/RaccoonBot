@@ -103,7 +103,10 @@ nonisolated enum ConfiguredBottles {
     /// that installs is the shape that invites a fallback, and the fallback is
     /// what went looking for bottles on its own.
     static func forPatching(selected: String, arm: String) throws -> Selection {
-        let references = configured(selected: selected, arm: arm)
+        try forPatching(configured(selected: selected, arm: arm))
+    }
+
+    static func forPatching(_ references: [BottleReference]) throws -> Selection {
         guard !references.isEmpty else { throw Failure.noneConfigured }
         let selection = onDisk(references)
         guard !selection.usable.isEmpty else { throw Failure.noneOnDisk(selection.missing) }

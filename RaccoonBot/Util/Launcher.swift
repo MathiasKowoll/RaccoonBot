@@ -23,7 +23,18 @@ import AppKit
 /// Save data is already safe by the time this runs: the caller waits for
 /// Steam's exit sync to finish before asking Steam to quit at all.
 func closeBottle(cxAppPath: String, bottle: String,
-                 waitingUpTo settleTimeout: TimeInterval = 30) async throws {
+                 waitingUpTo settleTimeout: TimeInterval = 30,
+                 decidedAt generation: Int = LaunchGeneration.shared.current) async throws {
+    // Asked before every destructive step, not once at the top. The waits below
+    // run for half a minute, and a launch inside that window was destroyed by a
+    // decision taken before it existed.
+    func superseded() -> Bool {
+        if LaunchGeneration.shared.supersedes(generation) {
+            console.log("a game has been launched since this was decided; leaving the bottle up")
+            return true
+        }
+        return false
+    }
     guard let directory = BottleReference(bottle)?.directory else {
         console.error("cannot close \(bottle): it does not name a bottle")
         return
@@ -40,6 +51,7 @@ func closeBottle(cxAppPath: String, bottle: String,
     // screen.
     let deadline = Date().addingTimeInterval(settleTimeout)
     while Date() < deadline {
+        if superseded() { return }
         let here = BottleProcesses.running(inBottleAt: directory)
         if here.isEmpty {
             console.log("the bottle closed on its own")
@@ -58,6 +70,7 @@ func closeBottle(cxAppPath: String, bottle: String,
                      + left.map(\.name).sorted().joined(separator: ", "))
     }
 
+    if superseded() { return }
     // wineserver -k ends the prefix through wine's own mechanism.
     try await quitWine(cxAppPath: cxAppPath, bottle: bottle)
     try await Task.sleep(nanoseconds: 2_000_000_000)
@@ -66,6 +79,7 @@ func closeBottle(cxAppPath: String, bottle: String,
     // reason the next launch fails: they keep the bottle's devices and its
     // registry claimed. Ending them is the whole point of knowing which bottle
     // they belong to.
+    if superseded() { return }
     let survivors = await BottleProcesses.end(inBottleAt: directory)
     if survivors.isEmpty {
         console.log("the bottle is closed")
@@ -251,6 +265,9 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
     console.warn("applying config changes to the bottle \(selectedBottle)...")
     
     let bottleName = URL(string: selectedBottle)?.lastPathComponent ?? ""
+    // From here on, any teardown decided before this moment is about a session
+    // that no longer exists.
+    LaunchGeneration.shared.launched()
     console.warn("attempting to run steam.exe on game id \(id)")
     let arguments = options != nil ? " " + options!.gameArguments : ""
     let x87cxAppURL = f.homeDirectoryForCurrentUser.appendingPathComponent("Applications", isDirectory: true).appendingPathComponent(PATCHED_CX_X87_APPNAME)

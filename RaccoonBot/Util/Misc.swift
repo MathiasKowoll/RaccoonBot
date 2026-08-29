@@ -752,7 +752,15 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
         processLog = SteamGameProcessLog(steamPath: steamPath, steamID: String(steamID))
     }
 
+    // The generation this tracker belongs to. A teardown decided here must not
+    // arrive in the middle of a session started afterwards.
+    let generation = LaunchGeneration.shared.current
+
     func shutDown(because reason: String) async {
+        if LaunchGeneration.shared.supersedes(generation) {
+            console.log("not closing down: a game has been launched since (\(reason))")
+            return
+        }
         // The last word, and it belongs to the machine rather than to a log.
         //
         // Every judgement that leads here is made from Steam's own record, and
@@ -784,7 +792,8 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
             try await quitSteam(cxAppPath: cxAppPath, bottle: bottle, isNative: isNative)
             // Steam has been asked, not told. Give it time to finish writing
             // its own state before ending anything.
-            try await closeBottle(cxAppPath: cxAppPath, bottle: bottle)
+            try await closeBottle(cxAppPath: cxAppPath, bottle: bottle,
+                                  decidedAt: generation)
         } catch {
             // Whatever failed on the way out, the game is over as far as the
             // window is concerned. Leaving the loader spinning helps nobody.

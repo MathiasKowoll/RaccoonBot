@@ -572,7 +572,15 @@ class SteamLaunchWatcher: SteamLogWatcher {
             try await Task.sleep(nanoseconds: 1_000_000_000)
             do {
                 let content = try String(contentsOfFile: logPath, encoding: .utf8)
-                for fileContentLine in content.split(separator: "[") {
+                // Split by lines, not by "[".
+            //
+            // Splitting on the bracket that opens each entry's timestamp works
+            // until a path contains one, and Ninja Gaiden 3 installs into
+            // "[NINJA GAIDEN Master Collection] NINJA GAIDEN 3 Razor's Edge".
+            // The line broke in the middle, the AppID landed in one piece and
+            // the executable in another, and the game was never identified --
+            // ninety seconds of waiting, every launch.
+            for fileContentLine in content.split(whereSeparator: \.isNewline) {
                     if(fileContentLine.contains(appIDMarker)) {
                         let match = fileContentLine.firstMatch(of: pattern)
                         print(fileContentLine)

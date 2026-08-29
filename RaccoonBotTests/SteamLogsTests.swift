@@ -12,14 +12,25 @@ import Foundation
 private func tempLog(_ contents: String) throws -> URL {
     let url = URL(fileURLWithPath: NSTemporaryDirectory())
         .appendingPathComponent("steamlog-\(UUID().uuidString).txt")
-    try contents.write(to: url, atomically: true, encoding: .utf8)
+    try contents.replacingOccurrences(of: "\n", with: "\r\n")
+        .write(to: url, atomically: true, encoding: .utf8)
     return url
 }
 
+/// Steam writes these logs with CRLF, so the tests do too.
+///
+/// They used to write "\n". That is why a splitter which could not handle CRLF
+/// passed every one of them while failing on the only file that matters: the
+/// tests were not describing the thing being tested. Anything written here as
+/// "\n" is turned into "\r\n" so a test cannot accidentally be easier than
+/// reality.
 private func append(_ text: String, to url: URL) throws {
+    let asSteamWritesIt = text
+        .replacingOccurrences(of: "\r\n", with: "\n")
+        .replacingOccurrences(of: "\n", with: "\r\n")
     let handle = try FileHandle(forWritingTo: url)
     try handle.seekToEnd()
-    try handle.write(contentsOf: Data(text.utf8))
+    try handle.write(contentsOf: Data(asSteamWritesIt.utf8))
     try handle.close()
 }
 

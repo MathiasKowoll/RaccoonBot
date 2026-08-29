@@ -47,7 +47,17 @@ final class SteamLogTail {
         offset += UInt64(complete.count)
 
         guard let text = String(data: complete, encoding: .utf8) else { return [] }
-        return text.split(separator: "\n", omittingEmptySubsequences: true).map(String.init)
+        // Split on newlines, not on "\n".
+        //
+        // Steam writes these logs with CRLF, and in Swift "\r\n" is a single
+        // Character -- one extended grapheme cluster, not equal to "\n". So
+        // splitting on "\n" found no separator at all and handed back the whole
+        // block as one enormous line. The parser then matched the first thing it
+        // recognised in that block and skipped everything else, which is how a
+        // game's start and its exit could arrive together and only the exit be
+        // seen. Every test written for this used "\n" and so never met the
+        // problem.
+        return text.split(whereSeparator: \.isNewline).map(String.init)
     }
 }
 

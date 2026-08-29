@@ -36,7 +36,7 @@ private func game(_ script: String, exe: String = "") -> MGVFGame {
 }
 
 private func manifest(_ games: [MGVFGame]) -> MGVFManifest {
-    MGVFManifest(schema: 2, version: "v0", commit: "test", games: games, scopeWarning: nil)
+    MGVFManifest(schema: 2, version: "v0", commit: "test", games: games, scopeWarning: nil, engine: nil)
 }
 
 private func makeFolder(_ build: (URL) throws -> Void) throws -> String {
@@ -309,7 +309,7 @@ struct MGVFSchemaThreeTests {
         defer { try? FileManager.default.removeItem(atPath: folder) }
 
         let catalog = MGVFCatalog(manifest: MGVFManifest(schema: 3, version: "v", commit: "c",
-                                                         games: [a, b], scopeWarning: nil),
+                                                         games: [a, b], scopeWarning: nil, engine: nil),
                                   directory: URL(fileURLWithPath: "/tmp"),
                                   store: SharedMemoryStore())
         catalog.pair(folder: folder, to: b)
@@ -324,7 +324,7 @@ struct MGVFSchemaThreeTests {
         defer { try? FileManager.default.removeItem(atPath: folder) }
         let dmc = titled("Devil May Cry 5", script: "", codec: "libgstlibav")
         let catalog = MGVFCatalog(manifest: MGVFManifest(schema: 3, version: "v", commit: "c",
-                                                         games: [dmc], scopeWarning: nil),
+                                                         games: [dmc], scopeWarning: nil, engine: nil),
                                   directory: URL(fileURLWithPath: "/tmp"),
                                   store: SharedMemoryStore())
         catalog.pair(folder: folder, to: dmc)

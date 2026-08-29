@@ -146,6 +146,18 @@ struct MGVFManifest: Codable {
     /// building the interface.
     let scopeWarning: String?
 
+    /// Files that belong to the engine rather than to any title.
+    ///
+    /// Deliberately not an entry under `games`: nothing about it is per-title,
+    /// and a nameless row in a title-keyed list is a row somebody eventually
+    /// tries to match against a game folder.
+    ///
+    /// Optional, and absent in every bundle published so far, so this reads a
+    /// contract that does not exist yet without inventing one: it does nothing
+    /// until a bundle carries it.
+    let engine: MGVFEnginePayload?
+
+
     /// Refuse a manifest written to a contract this build does not know.
     ///
     /// Reading an unfamiliar schema on a best-effort basis is how a field that
@@ -158,6 +170,53 @@ struct MGVFManifest: Codable {
     /// which is the safe reading.
     static let supportedSchemas: Set<Int> = [2, 3]
     var isSupported: Bool { Self.supportedSchemas.contains(schema) }
+}
+
+/// Media support the engine itself needs, copied while it is being patched.
+///
+/// Codecs that are present will not show without it, and every codec-dependent
+/// fix in the catalogue assumes the engine can decode at all -- so a machine
+/// running those fixes without this has not been tested, rather than being one
+/// title short.
+struct MGVFEnginePayload: Codable {
+    struct Item: Codable {
+        /// The file, in the bundle.
+        let file: String
+        /// Where it goes, relative to the engine's CrossOver directory.
+        let dest: String
+    }
+
+    /// The engine these halves were compiled against.
+    ///
+    /// Both fields are checked, not just the version. They speak an interface
+    /// that changes between wine revisions, and onto a different wine they do
+    /// not degrade -- media stops loading, which is the exact shape of the
+    /// fault they repair. And a version alone does not identify an engine: a
+    /// patched copy and a stock CrossOver both report 26.3.0.39832, so the
+    /// application name is the only part that tells them apart.
+    struct BuiltFor: Codable {
+        let app: String?
+        let version: String?
+        let wine: String?
+    }
+
+    let script: String?
+    let scope: String?
+    let install: [Item]
+    let builtFor: BuiltFor?
+
+    /// Is this payload meant for the engine being patched?
+    ///
+    /// Unknown is not yes. A payload with nothing to compare against is not
+    /// applied, because the failure it causes looks exactly like the fault it
+    /// exists to repair and nobody would think to suspect it.
+    func matches(app: String, version: String?, wine: String?) -> Bool {
+        guard let builtFor else { return false }
+        if let wanted = builtFor.app, wanted != app { return false }
+        if let wanted = builtFor.wine { guard let wine, wanted == wine else { return false } }
+        if let wanted = builtFor.version { guard let version, wanted == version else { return false } }
+        return true
+    }
 }
 
 // MARK: - Errors

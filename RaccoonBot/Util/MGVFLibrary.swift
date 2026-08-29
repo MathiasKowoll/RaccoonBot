@@ -39,6 +39,7 @@ final class MGVFLibrary: ObservableObject {
             let directory = try await MGVFBundle.shared.ensureAvailable()
             let manifest = try MGVFBundle.shared.manifest(at: directory)
             catalog = MGVFCatalog(manifest: manifest, directory: directory)
+            noteNewTitles()
             generation += 1
         } catch {
             console.warn("Fixes catalogue unavailable: \(error.localizedDescription)")
@@ -74,15 +75,56 @@ final class MGVFLibrary: ObservableObject {
         }
     }
 
-    /// Keeps asking, for an application left open for days.
+    /// Asks once on opening, then keeps asking for an application left open.
     ///
-    /// Hourly, but the bundle's own throttle means at most one request every
-    /// six hours actually leaves the machine.
+    /// The first ask ignores the six-hour throttle. That throttle exists so an
+    /// application does not phone home on every launch, and Mathias asked for
+    /// the opposite: he publishes fixes and wants the machine that runs them
+    /// current the moment it opens, not up to six hours later. One request per
+    /// launch against a limit of sixty an hour is not the cost the throttle was
+    /// written to avoid, and a failure changes nothing -- what is on disk stays
+    /// on disk.
+    ///
+    /// Every ask after the first honours it, so an application left open for a
+    /// week asks about thirty times rather than a hundred and sixty-eight.
     func watchForNewFixes(every interval: TimeInterval = 3600) async {
+        var first = true
         while !Task.isCancelled {
-            await checkForNewFixes()
+            await checkForNewFixes(force: first)
+            first = false
             try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
         }
+    }
+
+    private let seenTitlesKey = "mgvf.titlesSeen"
+
+    /// Titles that have appeared in a catalogue this machine has read.
+    private var titlesSeen: Set<String> {
+        get { Set(UserDefaults.standard.stringArray(forKey: seenTitlesKey) ?? []) }
+        set { UserDefaults.standard.set(Array(newValue).sorted(), forKey: seenTitlesKey) }
+    }
+
+    /// Titles the newest catalogue has that no catalogue read here ever did.
+    ///
+    /// A new bundle usually means a new game rather than a change to an old
+    /// one, and that is the part worth saying out loud: somebody who fixed a
+    /// title last week has no way of knowing this machine now knows about it.
+    ///
+    /// The first catalogue a machine ever reads announces nothing -- eighteen
+    /// titles are not eighteen pieces of news -- it just records what it saw.
+    @discardableResult
+    func noteNewTitles() -> [String] {
+        guard let catalog else { return [] }
+        let now = Set(catalog.allTitles)
+        let before = titlesSeen
+        titlesSeen = before.union(now)
+        guard !before.isEmpty else { return [] }
+        let added = now.subtracting(before).sorted()
+        if !added.isEmpty {
+            console.log("fixes exist for \(added.count) title(s) that did not have one: "
+                        + added.joined(separator: ", "))
+        }
+        return added
     }
 
     /// Does a fix exist for this folder at all?

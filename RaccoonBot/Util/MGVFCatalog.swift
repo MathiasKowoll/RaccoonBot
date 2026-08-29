@@ -176,6 +176,10 @@ final class MGVFCatalog: @unchecked Sendable {
     /// Titles the user can be offered when the automatic match finds nothing.
     var pairableGames: [MGVFGame] { manifest.games }
 
+    /// Every title this catalogue knows a fix for, for telling one catalogue
+    /// from the one before it.
+    var allTitles: [String] { manifest.games.map(\.name) }
+
     /// The fingerprint of a title's fix as this bundle carries it.
     ///
     /// Memoised: it reads and hashes the script and every file the fix

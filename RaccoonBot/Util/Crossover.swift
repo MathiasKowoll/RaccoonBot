@@ -308,7 +308,11 @@ func getInlineEnvs(from: GameOptions, cxAppPath: String? = nil) -> String {
     func onOff(_ value: Bool?) -> String {
         return value != nil && value == true ? "1" : "0"
     }
-    var value = from.envVariables == "" ? "" : "\(from.envVariables) "
+    // Repaired before it reaches `env`, which accepts NAME=VALUE and nothing
+    // else. A space either side of the `=` makes `env` read the name as the
+    // program to run, and the launch dies before anything starts.
+    let typedEnvs = EnvAssignments.normalised(from.envVariables)
+    var value = typedEnvs.isEmpty ? "" : "\(typedEnvs) "
     // Each family reaches only the layer that reads it.
     //
     // These three used to be written together on every launch, so a game on

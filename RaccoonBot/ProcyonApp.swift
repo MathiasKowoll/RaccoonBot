@@ -68,6 +68,14 @@ struct RaccoonBotApp: App {
         Task(priority: .background) {
             await BottleProcesses.clearResidualAtStartup()
         }
+
+        // A fixes bundle published while this was open used to go unseen until
+        // the next launch, and the catalogue was only ever fetched once. The
+        // check has existed, with its tests and its six-hour throttle, since
+        // before tonight -- nothing called it.
+        Task(priority: .background) {
+            await MGVFLibrary.shared.watchForNewFixes()
+        }
     }
 
     var body: some Scene {

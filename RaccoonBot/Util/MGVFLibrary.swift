@@ -45,6 +45,46 @@ final class MGVFLibrary: ObservableObject {
         }
     }
 
+    /// Ask whether a newer fixes bundle exists, and take it if so.
+    ///
+    /// MGVFBundle has had this check, with its tests and its six-hour throttle,
+    /// since before tonight -- and nothing called it. Its own comment says
+    /// "called at startup and then on an interval", which described an
+    /// intention rather than the code: the catalogue was fetched once per
+    /// launch and a bundle published while the application was open was never
+    /// seen. This machine sat on v4.8.6 while v4.11.1 was out.
+    ///
+    /// Throttled by the bundle itself, so calling this on every start costs one
+    /// request a day rather than one a launch, and a failure leaves what is on
+    /// disk exactly where it is.
+    func checkForNewFixes(force: Bool = false) async {
+        switch await MGVFBundle.shared.checkForUpdate(force: force) {
+        case .newer(let tag), .nothingCached(let tag):
+            console.log("a newer fixes bundle is available: \(tag)")
+            // Dropping the catalogue is what lets the new one take effect
+            // without a restart, which is the whole point of asking.
+            catalog = nil
+            await loadIfNeeded()
+        case .upToDate(let tag):
+            console.log("fixes are up to date (\(tag))")
+        case .throttled:
+            break
+        case .unknown(let why):
+            console.warn("could not check for newer fixes: \(why)")
+        }
+    }
+
+    /// Keeps asking, for an application left open for days.
+    ///
+    /// Hourly, but the bundle's own throttle means at most one request every
+    /// six hours actually leaves the machine.
+    func watchForNewFixes(every interval: TimeInterval = 3600) async {
+        while !Task.isCancelled {
+            await checkForNewFixes()
+            try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+        }
+    }
+
     /// Does a fix exist for this folder at all?
     func entry(for folder: String?) -> MGVFGame? {
         guard let folder, let catalog else { return nil }

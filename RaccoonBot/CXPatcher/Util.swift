@@ -493,20 +493,35 @@ func makeCrossoverPatchedCopy(sourceCXPath: URL, setProgress: @escaping (Double,
             // MARK: Step 5 put the decoders CrossOver does not ship inside it
             //
             // Before signing, because the files have to be inside the bundle
-            // when its signature is made. Copied out of the user's own
-            // GStreamer, moving anything already there aside as .orig -- the
-            // same treatment every other resource here gets, so the engine can
-            // always be put back.
+            // when its signature is made. Moving anything already there aside
+            // as .orig -- the same treatment every other resource here gets,
+            // so the engine can always be put back.
+            //
+            // Out of our own bundle, not out of the user's GStreamer. The
+            // framework route is kept underneath because it still works and
+            // is tested, but it is the fallback now rather than the source:
+            // on a machine without the framework it copied nothing and said
+            // the patch had succeeded, and on a machine with a different
+            // 1.24.x it copied the wrong build, which loads rather than
+            // refuses and only shows itself later as a cutscene playing
+            // black. What we carry is twelve files checked against the
+            // hashes in CODEC-LICENCES.md before any of them is written.
             //
             // A failure here is reported and not fatal: an engine with no
             // libav still runs every title whose video it can already decode,
             // and refusing to finish the patch would take those away too.
             setProgress(1, "Installing video decoders")
             do {
-                let installed = try EngineCodecs.install(intoEngineAt: destUrl.path(percentEncoded: false))
+                let installed = try BundledCodecs.install(intoEngineAt: destUrl.path(percentEncoded: false))
                 console.log("decoders in \(installed.pluginDirectory)")
             } catch {
-                console.warn("No decoders installed: \(error.localizedDescription)")
+                console.warn("Bundled decoders not installed: \(error.localizedDescription)")
+                do {
+                    let installed = try EngineCodecs.install(intoEngineAt: destUrl.path(percentEncoded: false))
+                    console.log("decoders in \(installed.pluginDirectory), from the user's framework")
+                } catch {
+                    console.warn("No decoders installed: \(error.localizedDescription)")
+                }
             }
 
             // MARK: Step 6 sign

@@ -30,6 +30,59 @@ struct BottleProcessesTests {
         #expect(server.deletingLastPathComponent().lastPathComponent == ".wine-\(getuid())")
     }
 
+    /// A process that arrives while the teardown is waiting is not something
+    /// that "ignored the request" -- it never got one.
+    ///
+    /// The one that arrives in practice is a fix installer: it starts a
+    /// short-lived wineserver to run `reg.exe add`, and it is allowed to,
+    /// because the guard forbidding a write while the bottle is busy is a
+    /// one-shot check made before `wineserver -k` emptied the bottle. Killing
+    /// it mid-write does not crash anything: `reg.exe` has already returned 0,
+    /// so the fix is recorded as applied while some of its keys never reached
+    /// user.reg.
+    ///
+    /// Signals only `/bin/sleep` processes this test started itself. No wine,
+    /// no CrossOver, no game, no installer.
+    /// A process that arrives while the teardown is waiting never received the
+    /// request it is about to be killed for ignoring.
+    ///
+    /// The one that arrives in practice is a fix installer: it starts a
+    /// short-lived wineserver to run `reg.exe add`, and it is allowed to,
+    /// because the guard forbidding a write while the bottle is busy is a
+    /// one-shot check made before `wineserver -k` emptied the bottle. Killing
+    /// it mid-write does not crash anything -- `reg.exe` has already returned
+    /// 0, so the fix is recorded as applied while some of its keys never
+    /// reached user.reg.
+    @Test func onlyWhatWasCondemnedIsKilled() {
+        let doomed = [BottleProcesses.Running(pid: 100, name: "Game.exe"),
+                      BottleProcesses.Running(pid: 101, name: "wineserver")]
+        let now = [BottleProcesses.Running(pid: 100, name: "Game.exe"),      // ignored the request
+                   BottleProcesses.Running(pid: 300, name: "wineserver")]    // the installer's
+        #expect(BottleProcesses.stillThere(now, of: doomed).map(\.pid) == [100])
+    }
+
+    /// A pid the system reused between the two scans is a different process
+    /// wearing an old number, and it is not under sentence.
+    @Test func aReusedPidIsNotCondemnedForWhoeverHeldItBefore() {
+        let doomed = [BottleProcesses.Running(pid: 100, name: "Game.exe")]
+        let now = [BottleProcesses.Running(pid: 100, name: "wineserver")]
+        #expect(BottleProcesses.stillThere(now, of: doomed).isEmpty)
+    }
+
+    /// Everything that was there and stayed is still killed -- the point is to
+    /// narrow the second sweep, not to stop it working.
+    @Test func whatWasThereAndStayedIsStillEnded() {
+        let doomed = [BottleProcesses.Running(pid: 1, name: "a.exe"),
+                      BottleProcesses.Running(pid: 2, name: "b.exe")]
+        #expect(BottleProcesses.stillThere(doomed, of: doomed).map(\.pid) == [1, 2])
+    }
+
+    /// And a bottle that emptied itself during the grace leaves nothing to do.
+    @Test func aBottleThatWentQuietLeavesNothing() {
+        let doomed = [BottleProcesses.Running(pid: 1, name: "a.exe")]
+        #expect(BottleProcesses.stillThere([], of: doomed).isEmpty)
+    }
+
     /// Two bottles never share a server directory, which is why ending one
     /// cannot reach the other.
     @Test func twoBottlesGetDifferentDirectories() throws {

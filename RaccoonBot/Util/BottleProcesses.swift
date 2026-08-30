@@ -32,6 +32,24 @@ enum BottleProcesses {
         let name: String
     }
 
+    /// Which of the condemned are still there.
+    ///
+    /// A second scan of a bottle finds whatever is in it now, which is not the
+    /// same set as the one that was asked to leave. Anything that arrived in
+    /// between never received the request, so killing it for ignoring one is
+    /// both wrong and silent -- and the thing that arrives in practice is a fix
+    /// installer, which starts a short-lived wineserver to run `reg.exe add`.
+    /// Killing that between `add` returning 0 and the flush leaves the script
+    /// reporting success with some of its keys missing.
+    ///
+    /// Matched on pid AND name, so a pid the system has reused since the first
+    /// scan is not condemned for the sins of whoever held it before.
+    static func stillThere(_ current: [Running], of condemned: [Running]) -> [Running] {
+        let sentenced = Dictionary(condemned.map { ($0.pid, $0.name) },
+                                   uniquingKeysWith: { first, _ in first })
+        return current.filter { sentenced[$0.pid] == $0.name }
+    }
+
     /// Everything holding this bottle's server open.
     static func running(inBottleAt bottle: URL) -> [Running] {
         guard let server = serverDirectory(ofBottleAt: bottle),
@@ -144,13 +162,36 @@ enum BottleProcesses {
 
         try? await Task.sleep(nanoseconds: UInt64(gracePeriod * 1_000_000_000))
 
-        let stubborn = running(inBottleAt: bottle)
+        // Only what was condemned, never what arrived meanwhile.
+        //
+        // `running(inBottleAt:)` is a fresh scan of the bottle's server
+        // directory, so anything that entered during the grace period was in
+        // the second list too -- and got a SIGKILL for ignoring a request it
+        // was never sent. A fix installer is exactly such a newcomer: it starts
+        // a short-lived wineserver to run `reg.exe add`, and the window is
+        // reachable because the guard that forbids installing while a bottle is
+        // busy is a one-shot check. Teardown asks wineserver to go, waits two
+        // seconds, then calls this -- and once `wineserver -k` has landed there
+        // is no wineserver left for that check to find, so an install becomes
+        // permitted while this is still inside its grace.
+        //
+        // The damage would not look like a crash. If the kill lands after
+        // `reg.exe add` returned 0 but before the server flushed user.reg, the
+        // script reports success, the fix is recorded as applied, and some of
+        // the keys are simply not there -- the half-applied state the installer
+        // has its own comment calling the dangerous one.
+        //
+        // Matched on pid AND name so a pid the system has since reused is not
+        // condemned for the sins of the process that held it.
+        let stubborn = stillThere(running(inBottleAt: bottle), of: doomed)
         for process in stubborn {
             console.warn("\(process.name) ignored the request; ending it")
             kill(process.pid, SIGKILL)
         }
         try? await Task.sleep(nanoseconds: 500_000_000)
-        return running(inBottleAt: bottle)
+        // Filtered too: a newcomer reported here would be logged as a process
+        // that would not end, which is a false accusation and a misleading log.
+        return stillThere(running(inBottleAt: bottle), of: doomed)
     }
 
     /// Applications that run wine themselves.

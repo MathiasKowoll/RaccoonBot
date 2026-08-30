@@ -9,7 +9,15 @@ import Testing
 import Foundation
 @testable import RaccoonBot
 
-@Suite("A teardown must not arrive in the next session")
+/// Serialised because the thing under test is a process-wide singleton.
+///
+/// swift-testing runs cases in parallel, so `everyLaunchGetsItsOwnGeneration`
+/// was bumping the counter between the two expectations of
+/// `withoutALaunchNothingIsSuperseded`. It showed up as a suite that failed
+/// when run ALONE and passed inside the full suite -- the collision is more
+/// likely when there is nothing else to spread the two cases apart, which is
+/// the opposite of how a flake usually reads.
+@Suite("A teardown must not arrive in the next session", .serialized)
 struct LaunchGenerationTests {
 
     /// The fault this exists for, in the order it happened.

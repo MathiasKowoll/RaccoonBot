@@ -20,6 +20,32 @@ import Foundation
 /// and either way the log says which.
 enum EnvAssignments {
 
+    /// The names somebody asked to have REMOVED rather than set.
+    ///
+    /// Written as a bare name with a leading `-`:
+    ///
+    ///     -MVK_CONFIG_UE4_HACK_ENABLED
+    ///
+    /// Absence is not a value, and until this existed there was no way to say
+    /// it. A toggle that is off does not remove its variable, it writes the
+    /// opposite -- `MVK_CONFIG_UE4_HACK_ENABLED=0` rather than nothing -- so
+    /// "we set it to 0 and it still failed" says nothing about whether setting
+    /// it at all is the problem. Comparing against a launch that names neither
+    /// needs a way to name neither.
+    static func removals(_ text: String) -> [String] {
+        text.split(whereSeparator: { $0.isNewline || $0 == ";" })
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { $0.hasPrefix("-") && !$0.contains("=") }
+            .map { String($0.dropFirst()).trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && $0.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" } }
+    }
+
+    /// The same removals as `env` arguments: `-u NAME` for each.
+    static func removalArguments(_ text: String) -> String {
+        let names = removals(text)
+        return names.isEmpty ? "" : names.map { "-u \($0)" }.joined(separator: " ") + " "
+    }
+
     /// Repairs `text` into assignments `env` will accept.
     static func normalised(_ text: String) -> String {
         let cleaned = assignments(in: text).map { "\($0.name)=\(quoted($0.value))" }

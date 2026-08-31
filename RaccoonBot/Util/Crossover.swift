@@ -311,8 +311,14 @@ func getInlineEnvs(from: GameOptions, cxAppPath: String? = nil) -> String {
     // Repaired before it reaches `env`, which accepts NAME=VALUE and nothing
     // else. A space either side of the `=` makes `env` read the name as the
     // program to run, and the launch dies before anything starts.
+    // Read here, appended LAST -- see the end of this function.
+    //
+    // They used to be written first, and `env` lets the last assignment win,
+    // so anything typed whose name this function also sets was silently
+    // overridden. The box was inert for exactly the variables somebody would
+    // most want to change, and said nothing about it.
     let typedEnvs = EnvAssignments.normalised(from.envVariables)
-    var value = typedEnvs.isEmpty ? "" : "\(typedEnvs) "
+    var value = ""
     // Each family reaches only the layer that reads it.
     //
     // These three used to be written together on every launch, so a game on
@@ -482,6 +488,13 @@ func getInlineEnvs(from: GameOptions, cxAppPath: String? = nil) -> String {
     if isDXMT || unknownBackend {
         value += getDxmtConfigEnv(values: dxmtConfigValues)
     }
+    // Last, so that what somebody typed wins.
+    //
+    // `env` takes the last assignment for a repeated name, so position is the
+    // whole of the precedence rule here. Typed first meant the box could not
+    // change any variable this function also writes, and gave no sign: the
+    // launch line contained both, and only the second had any effect.
+    if !typedEnvs.isEmpty { value += "\(typedEnvs) " }
     return value
 }
 

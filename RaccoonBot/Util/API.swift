@@ -300,6 +300,9 @@ final class SteamAPI {
                 if let gameInfo = try await self.fetchGameInfo(appID: meta.appid) {
                     let game = Game(from: gameInfo, id: meta.id, isNative: meta.isNative, downloadProgress: Double(downloadProgress), isInstalled: meta.installdir.isEmpty == false, appNames: [])
                     items.append(game)
+                    // Configured on discovery, so no launch ever has to fall
+                    // back to defaults that were never chosen.
+                    GameDefaults.seedIfAbsent(forAppID: game.steamAppID, id: game.id)
                     if !BLACKLIST.contains(String(describing: game.steamAppID)) {
                         await MainActor.run { onGame(game) }
                     }

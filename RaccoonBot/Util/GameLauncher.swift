@@ -81,11 +81,18 @@ final class GameLauncher {
                 let id = item.steamAppID != 0 ? String(describing: item.steamAppID) : String(describing: item.id)
                 let gameOptKey = namespacedKey("GameOptions", id)
                 let gameOptions = GameOptions()
+                // A title with nothing saved is configured here and then read
+                // back, rather than launched from a fresh object. Falling back
+                // to defaults is what let the interface show one toolkit while
+                // the launch installed another -- see GameDefaults.
+                GameDefaults.seedIfAbsent(key: gameOptKey)
                 if let saved: GameOptionsData = readUsrDefData(key: gameOptKey) {
                     gameOptions.set(data: saved)
                     console.log("options retrieved")
                 } else {
-                    console.warn("failed to retrieve game options")
+                    // Now genuinely exceptional: the write above failed.
+                    console.error("no saved options for \(gameOptKey) and none could be written; "
+                                  + "launching on defaults, which may not be what is configured")
                 }
 
                 Task(priority: .background) {

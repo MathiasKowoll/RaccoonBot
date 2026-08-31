@@ -158,6 +158,14 @@ struct GameOptionsData: Codable { // this is used for reading saved properties
         self.cxGraphicsBackend = data.cxGraphicsBackend
         self.wineMSync = data.wineMSync
         self.mtlHudEnabled = data.mtlHudEnabled
+        // Declared, read by set(data:) and by importAutoConfig, and until
+        // now never written back here -- so the detail level, the opacity
+        // and the alignment were dropped by every save and came back as
+        // defaults on every load. A round trip that silently loses a field
+        // is worse than one that refuses it.
+        self.mtlHudDetail = data.mtlHudDetail
+        self.mtlHudOpacity = data.mtlHudOpacity
+        self.mtlHudAlignment = data.mtlHudAlignment
         self.x87PatchEnabled = data.x87PatchEnabled
         self.useArmBottle = data.useArmBottle
         self.dx9PatchEnabled = data.dx9PatchEnabled

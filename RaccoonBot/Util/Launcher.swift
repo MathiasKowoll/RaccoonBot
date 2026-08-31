@@ -322,15 +322,38 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
         }
     }
     
+    // Run from the folder the executable is in.
+    //
+    // Only for a direct launch: a title started through Steam is Steam's to
+    // place, and `appExeURL` is nil there, so this is empty and nothing about
+    // that path changes.
+    //
+    // This existed on the x87 branch alone. Both branches launch the same way
+    // otherwise, and nothing recorded why only one of them got a working
+    // directory -- it predates the fork. The asymmetry has a cost: KINGDOM
+    // HEARTS 0.2 Birth by Sleep lives in a subfolder,
+    // `KINGDOM HEARTS 0.2 Birth by Sleep/Binaries/Win64/`, and launched from
+    // here its process was never created at all. Not a crash and not an error:
+    // a `WINEDEBUG=+process` trace carries no CreateProcessInternalW for it,
+    // so the selector never asked -- which is what looking for something
+    // relative to the wrong directory and not finding it looks like. Launched
+    // by hand from the game's own folder it runs, four times out of four.
+    //
+    // This is the smaller of the two differences from a launch that works; the
+    // other is that we pass a native path positionally where a hand launch
+    // uses `--cx-app`. Trying the cheaper one first.
+    let workdirCommand = appExeURL != nil
+        ? "cd \"\(appExeURL!.deletingLastPathComponent().path(percentEncoded: false))\" && "
+        : ""
+
     if useX87Bundle {
         if(!f.fileExists(atPath: x87cxAppURL.path())) {
             console.error("Couldn't find \(x87cxAppURL.path())")
             return
         }
-        let workdirCommand = appExeURL != nil ? "cd \"\(appExeURL!.deletingLastPathComponent().path(percentEncoded: false))\" && " : ""
         command = "\(workdirCommand)env \(getInlineEnvs(from: options!, cxAppPath: cxAppPath) + wineEnvs) \(x87cxAppURL.path())Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/wine \(gameLaunchCommand) \(arguments)"
     } else {
-        command = "env \(getInlineEnvs(from: options!, cxAppPath: cxAppPath) + wineEnvs) \(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \(gameLaunchCommand) \(arguments)"
+        command = "\(workdirCommand)env \(getInlineEnvs(from: options!, cxAppPath: cxAppPath) + wineEnvs) \(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \(gameLaunchCommand) \(arguments)"
     }
     
     #if DEBUG

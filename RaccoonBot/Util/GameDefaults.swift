@@ -50,7 +50,7 @@ nonisolated enum GameDefaults {
         let options = GameOptions()
         options.mtlHudEnabled = true
         options.mtlHudDetail = MetalHudDetail.fpsOnly.rawValue
-        options.cxGraphicsBackend = "d3dmetal4"
+        options.cxGraphicsBackend = newestD3DMetalBackend
         // The same rule the panel applies when somebody picks this backend
         // (GameOptionsView, onChange of the picker). Written explicitly rather
         // than left to the computed fallback in set(data:), because building
@@ -59,7 +59,7 @@ nonisolated enum GameDefaults {
         // with D3DM_MTL4=0, which is not what the panel produces for the same
         // choice. Off below macOS 27, where the toggle is disabled and nobody
         // could turn it back off.
-        options.d3dMtl4Enabled = OSVersion >= 27
+        options.d3dMtl4Enabled = newestD3DMetalBackend == "d3dmetal4" && OSVersion >= 27
         return GameOptionsData(data: options)
     }
 

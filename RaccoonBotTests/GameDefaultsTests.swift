@@ -28,7 +28,7 @@ struct GameDefaultsTests {
     /// engine gets generation 3 while the interface says 4 -- which is the
     /// whole defect this exists to close.
     @Test func theBackendIsSpelledTheWayTheLauncherReadsIt() {
-        #expect(GameDefaults.freshOptions().cxGraphicsBackend == "d3dmetal4")
+        #expect(GameDefaults.freshOptions().cxGraphicsBackend == newestD3DMetalBackend)
     }
 
     /// A field added later must arrive with its own default rather than nil,
@@ -84,8 +84,8 @@ struct GameDefaultsTests {
     /// is the opposite of what the panel produces for the same choice.
     @Test func aSeededTitleIsInternallyConsistent() {
         let data = GameDefaults.freshOptions()
-        #expect(data.cxGraphicsBackend == "d3dmetal4")
-        #expect(data.d3dMtl4Enabled == (OSVersion >= 27))
+        #expect(data.cxGraphicsBackend == newestD3DMetalBackend)
+        #expect(data.d3dMtl4Enabled == (newestD3DMetalBackend == "d3dmetal4" && OSVersion >= 27))
         let options = GameOptions()
         options.set(data: data)
         let rendered = getInlineEnvs(from: options)
@@ -98,7 +98,7 @@ struct GameDefaultsTests {
     /// picker offers, and it was reaching the launcher as generation 3 while
     /// the panel displayed D3Dmetal4.
     @Test func aLegacyBackendBecomesTheFourthToolkit() {
-        #expect(pickableBackend("d3dmetal") == "d3dmetal4")
+        #expect(pickableBackend("d3dmetal") == newestD3DMetalBackend)
         #expect(pickableBackend(nil) == "auto")
         #expect(pickableBackend("") == "auto")
     }
@@ -117,22 +117,32 @@ struct GameDefaultsTests {
         let data = try JSONDecoder().decode(GameOptionsData.self, from: Data(json.utf8))
         let options = GameOptions()
         options.set(data: data)
-        #expect(options.cxGraphicsBackend == "d3dmetal4")
+        #expect(options.cxGraphicsBackend == newestD3DMetalBackend)
         let rendered = getInlineEnvs(from: options)
         #expect(rendered.contains("D3DM_MTL4=\(OSVersion >= 27 ? "1" : "0")"))
         #expect(rendered.contains("D3DM_ENABLE_METALFX=1"))
     }
 
-    /// And the other ten, whose Metal 4 was the old default rather than an
-    /// answer: a folded record gets the rule the panel applies to that choice,
-    /// not a stored value nobody chose.
-    @Test func aFoldedRecordIsMadeInternallyConsistent() throws {
+    /// Folding repairs the backend and nothing else. Six records carry Metal 4
+    /// off; once a title has a configuration file, that file is respected, and
+    /// a switch somebody could have set is not overruled by a repair to a value
+    /// they never could.
+    @Test func foldingRepairsTheBackendAndLeavesTheRestAlone() throws {
         let json = #"{"cxGraphicsBackend":"d3dmetal","d3dMtl4Enabled":false}"#
         let data = try JSONDecoder().decode(GameOptionsData.self, from: Data(json.utf8))
         let options = GameOptions()
         options.set(data: data)
-        #expect(options.cxGraphicsBackend == "d3dmetal4")
-        #expect(options.d3dMtl4Enabled == (OSVersion >= 27))
+        #expect(options.cxGraphicsBackend == newestD3DMetalBackend)
+        #expect(options.d3dMtl4Enabled == false, "a saved switch was overruled")
+    }
+
+    /// And where the file says nothing, the computed default still applies.
+    @Test func anAbsentMetalFourStillGetsTheComputedDefault() throws {
+        let json = #"{"cxGraphicsBackend":"d3dmetal"}"#
+        let data = try JSONDecoder().decode(GameOptionsData.self, from: Data(json.utf8))
+        let options = GameOptions()
+        options.set(data: data)
+        #expect(options.d3dMtl4Enabled == (newestD3DMetalBackend == "d3dmetal4" && OSVersion >= 27))
     }
 
     /// But a record that really did say d3dmetal4 with Metal 4 off keeps it --
@@ -145,6 +155,13 @@ struct GameDefaultsTests {
         #expect(options.d3dMtl4Enabled == false)
     }
 
+    /// The default follows the newest toolkit the build carries, rather than a
+    /// string somebody has to remember to change when a d3dMetal5 ships.
+    @Test func theDefaultIsTheNewestToolkitAndTheParkerCanShowIt() {
+        #expect(cxGraphicsBackend.contains(where: { $0.id == newestD3DMetalBackend }))
+        #expect(GameOptions().cxGraphicsBackend == newestD3DMetalBackend)
+    }
+
     // MARK: seeding
 
     @Test func aTitleWithNothingSavedIsGivenAConfiguration() throws {
@@ -152,7 +169,7 @@ struct GameDefaultsTests {
         defer { clean(key) }
         #expect(GameDefaults.seedIfAbsent(key: key) == true)
         let read: GameOptionsData? = readUsrDefData(key: key)
-        #expect(read?.cxGraphicsBackend == "d3dmetal4")
+        #expect(read?.cxGraphicsBackend == newestD3DMetalBackend)
         #expect(read?.mtlHudEnabled == true)
     }
 

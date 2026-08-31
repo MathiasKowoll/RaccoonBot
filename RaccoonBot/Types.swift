@@ -19,6 +19,29 @@ let cxGraphicsBackend: DropdownOptions = [
     (id: "auto", label: "Auto")
 ]
 
+/// The newest toolkit this build actually carries.
+///
+/// Derived from the bundle rather than written down. `installd3dMetal` loads a
+/// generation from a `d3dMetal<N>` resource directory, so shipping a
+/// `d3dMetal5` makes it the default here without anybody remembering to change
+/// a string -- and a generation the picker cannot offer is skipped rather than
+/// becoming a default nothing can display.
+let newestD3DMetalBackend: String = {
+    let offered = Set(cxGraphicsBackend.map(\.id))
+    let root = Bundle.main.resourceURL?.path(percentEncoded: false) ?? ""
+    let generations = ((try? FileManager.default.contentsOfDirectory(atPath: root)) ?? [])
+        .compactMap { name -> Int? in
+            guard name.hasPrefix("d3dMetal") else { return nil }
+            return Int(name.dropFirst("d3dMetal".count))
+        }
+        .sorted(by: >)
+    for generation in generations where offered.contains("d3dmetal\(generation)") {
+        return "d3dmetal\(generation)"
+    }
+    // A test bundle carries no toolkit; the picker's newest is still right.
+    return offered.contains("d3dmetal4") ? "d3dmetal4" : "auto"
+}()
+
 /// A backend the picker cannot offer is not a choice, it is a leftover.
 ///
 /// `"d3dmetal"` was this application's default for months and migrated in from
@@ -33,7 +56,7 @@ let cxGraphicsBackend: DropdownOptions = [
 /// than in the sheet, where it corrected only what was on screen.
 func pickableBackend(_ backend: String?) -> String {
     guard let backend, !backend.isEmpty else { return "auto" }
-    return cxGraphicsBackend.contains(where: { $0.id == backend }) ? backend : "d3dmetal4"
+    return cxGraphicsBackend.contains(where: { $0.id == backend }) ? backend : newestD3DMetalBackend
 }
 
 
@@ -247,7 +270,7 @@ class GameOptions: ObservableObject { // this is used as form state
     @Published var d3dMtl4Enabled: Bool
     @Published var d3dMaxFPS: Double
     
-    init(cxGraphicsBackend: String = "d3dmetal4", wineMSync: Bool = true, mtlHudEnabled: Bool = false, d3dMtl4Enabled: Bool = false, x87PatchEnabled: Bool = false, dx9PatchEnabled: Bool = false, gameArguments: String = "", dxmtPreferredMaxFrameRate: Double = 0, dxmtMetalFXSpatial: Bool = false, dxmtMetalSpatialUpscaleFactor: Double = 1.0, advertiseAVX: Bool = true, envVariables: String = "", sdlEnabled: Bool = true, hidrawDisabled: Bool = false, ue4Hack: Bool = true, mvkArgBuff: Bool = true, vulkanLib: String = "latest", dxvk: String? = nil, wineEsync: String? = nil, d3dMEnableMetalFX: String? = nil, d3dMaxFPS: Double = 0, d3dSupportDXR: String? = nil) {
+    init(cxGraphicsBackend: String = newestD3DMetalBackend, wineMSync: Bool = true, mtlHudEnabled: Bool = false, d3dMtl4Enabled: Bool = false, x87PatchEnabled: Bool = false, dx9PatchEnabled: Bool = false, gameArguments: String = "", dxmtPreferredMaxFrameRate: Double = 0, dxmtMetalFXSpatial: Bool = false, dxmtMetalSpatialUpscaleFactor: Double = 1.0, advertiseAVX: Bool = true, envVariables: String = "", sdlEnabled: Bool = true, hidrawDisabled: Bool = false, ue4Hack: Bool = true, mvkArgBuff: Bool = true, vulkanLib: String = "latest", dxvk: String? = nil, wineEsync: String? = nil, d3dMEnableMetalFX: String? = nil, d3dMaxFPS: Double = 0, d3dSupportDXR: String? = nil) {
         self.cxGraphicsBackend = cxGraphicsBackend
         self.wineMSync = wineMSync
         self.mtlHudEnabled = mtlHudEnabled
@@ -273,12 +296,7 @@ class GameOptions: ObservableObject { // this is used as form state
     }
     
     func set(data: GameOptionsData) {
-        // Kept for the Metal 4 decision below: a record whose backend had to be
-        // folded never deliberately chose D3DMetal 4, so its stored Metal 4
-        // value is the old default rather than an answer, and the rule the
-        // panel applies to that choice is used instead.
         let foldedBackend = pickableBackend(data.cxGraphicsBackend)
-        let wasFolded = data.cxGraphicsBackend != nil && data.cxGraphicsBackend != foldedBackend
         self.cxGraphicsBackend = foldedBackend
         self.wineMSync = data.wineMSync ?? true
         self.mtlHudEnabled = data.mtlHudEnabled ?? false
@@ -308,9 +326,11 @@ class GameOptions: ObservableObject { // this is used as form state
         // not a default anybody would ask for, and it was the default: the
         // picker falls back to d3dmetal4 for a game with no valid saved
         // backend, so most games were getting D3DM_MTL4=0.
-        self.d3dMtl4Enabled = wasFolded
-            ? (foldedBackend == "d3dmetal4" && OSVersion >= 27)
-            : (data.d3dMtl4Enabled ?? (foldedBackend == "d3dmetal4" && OSVersion >= 27))
+        // The saved value wins, folded record or not. Repairing a backend the
+        // picker cannot show is one thing; overruling a switch somebody could
+        // have set is another, and once a title has a configuration file that
+        // file is respected. Six records here carry Metal 4 off and keep it.
+        self.d3dMtl4Enabled = data.d3dMtl4Enabled ?? (foldedBackend == "d3dmetal4" && OSVersion >= 27)
         self.d3dMaxFPS = data.d3dMaxFPS ?? 0
     }
     func importAutoConfig(data: GameOptionsData) {

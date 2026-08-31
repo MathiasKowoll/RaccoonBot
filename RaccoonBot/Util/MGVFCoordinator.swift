@@ -38,6 +38,7 @@ extension GameOptionsData {
         self.dxmtMetalFXSpatial = nil
         self.dxmtMetalSpatialUpscaleFactor = nil
         self.advertiseAVX = nil
+        self.steamFullBoot = nil
         self.envVariables = nil
         self.enableSDL = nil
         self.disableHidraw = nil

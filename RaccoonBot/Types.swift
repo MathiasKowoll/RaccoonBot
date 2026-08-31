@@ -142,6 +142,8 @@ struct GameOptionsData: Codable { // this is used for reading saved properties
     var dxmtMetalFXSpatial: Bool?
     var dxmtMetalSpatialUpscaleFactor: Double?
     var advertiseAVX: Bool?
+    /// Let Steam start the way it normally would, for a title that needs it.
+    var steamFullBoot: Bool?
     var envVariables: String?
     var enableSDL: Bool?
     var disableHidraw: Bool?
@@ -166,6 +168,7 @@ struct GameOptionsData: Codable { // this is used for reading saved properties
         self.dxmtMetalFXSpatial = data.dxmtMetalFXSpatial
         self.dxmtMetalSpatialUpscaleFactor = data.dxmtMetalSpatialUpscaleFactor
         self.advertiseAVX = data.advertiseAVX
+        self.steamFullBoot = data.steamFullBoot
         self.envVariables = data.envVariables
         self.enableSDL = data.enableSDL
         self.disableHidraw = data.disableHidraw
@@ -208,6 +211,26 @@ class GameOptions: ObservableObject { // this is used as form state
     @Published var dxmtMetalFXSpatial: Bool
     @Published var dxmtMetalSpatialUpscaleFactor: Double
     @Published var advertiseAVX: Bool
+    /// Start Steam the way it normally starts, for the few titles that need it.
+    ///
+    /// Off by default and deliberately not in the initialiser: every existing
+    /// call site keeps working, and a title only asks for a slower start when
+    /// somebody has found that it needs one.
+    ///
+    /// What it drops is `-skipinitialbootstrap`. The flags this application
+    /// normally passes bring Steam up as little as possible, which is right for
+    /// a title that only needs Steam present -- and wrong for one that asks
+    /// Steam for something after it has started. KINGDOM HEARTS HD 2.8 is the
+    /// second kind: its executable is a menu that requests a title, and in the
+    /// log of a failed launch Steam's own client reports
+    ///
+    ///     CSteamEngine::BMainLoop appears to have stalled > 15 seconds
+    ///     without event signalled
+    ///
+    /// with the game's own WaitTitleProject.exe exiting before the game came
+    /// up. A client that skipped its bootstrap cannot answer, and nothing in
+    /// the chain says so.
+    @Published var steamFullBoot: Bool = false
     @Published var envVariables: String
     @Published var enableSDL: Bool
     @Published var disableHidraw: Bool
@@ -261,6 +284,7 @@ class GameOptions: ObservableObject { // this is used as form state
         self.dxmtMetalSpatialUpscaleFactor = data.dxmtMetalSpatialUpscaleFactor ?? 1.0
         self.dxmtPreferredMaxFrameRate = data.dxmtPreferredMaxFrameRate ?? 0
         self.advertiseAVX = data.advertiseAVX ?? true
+        self.steamFullBoot = data.steamFullBoot ?? false
         self.envVariables = data.envVariables ?? ""
         self.enableSDL = data.enableSDL ?? true
         self.disableHidraw = data.disableHidraw ?? false
@@ -294,6 +318,7 @@ class GameOptions: ObservableObject { // this is used as form state
         if let v = data.dxmtMetalSpatialUpscaleFactor { self.dxmtMetalSpatialUpscaleFactor = v }
         if let v = data.dxmtPreferredMaxFrameRate { self.dxmtPreferredMaxFrameRate = v }
         if let v = data.advertiseAVX { self.advertiseAVX = v }
+        if let v = data.steamFullBoot { self.steamFullBoot = v }
         if let v = data.envVariables { self.envVariables = v }
         if let v = data.enableSDL { self.enableSDL = v }
         if let v = data.disableHidraw { self.disableHidraw = v }

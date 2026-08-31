@@ -135,6 +135,27 @@ func openSteam(cxAppPath: String?, selectedBottle: String?, SteamX86AppPath: Str
     }
 }
 
+/// How much of Steam to bring up for a title.
+///
+/// The short list is right for almost every title: Steam has to be there,
+/// nothing more, and starting it fully costs seconds on every launch.
+///
+/// It is wrong for a title that ASKS Steam for something after it has started.
+/// KINGDOM HEARTS HD 2.8 is a menu that requests a title, and with the short
+/// list its request is never answered: Steam's own client logs
+/// `CSteamEngine::BMainLoop appears to have stalled > 15 seconds without event
+/// signalled`, the game's own WaitTitleProject.exe exits before the game is up,
+/// and nothing in the chain reports an error. So the fuller start is an
+/// exception a title opts into, not a default everybody pays for.
+///
+/// Only `-skipinitialbootstrap` is dropped. `-no-browser` and `-no-cef-sandbox`
+/// have never been separated from it by measurement, and dropping three things
+/// to fix one would make the next failure unreadable.
+func steamBootFlags(fullBoot: Bool) -> String {
+    let common = "-nochatui -nofriendsui -silent -no-browser -no-cef-sandbox"
+    return fullBoot ? common : common + " -skipinitialbootstrap"
+}
+
 /// What the Steam client inside the bottle can be asked to do.
 ///
 /// Steam registers the `steam://` protocol on Windows and steam.exe accepts one
@@ -273,7 +294,7 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
     let x87cxAppURL = f.homeDirectoryForCurrentUser.appendingPathComponent("Applications", isDirectory: true).appendingPathComponent(PATCHED_CX_X87_APPNAME)
     // El bundle x87 sólo existe en 26; en 27 la precisión x87 es una variable.
     let useX87Bundle = options!.x87PatchEnabled && EngineLayout.of(URL(fileURLWithPath: cxAppPath)) == .cx26
-    let steamBootOptions = "-nochatui -nofriendsui -silent -no-browser -no-cef-sandbox -skipinitialbootstrap"
+    let steamBootOptions = steamBootFlags(fullBoot: options?.steamFullBoot == true)
     // CX_BOTTLE_PATH names the root this bottle lives under, so `--bottle` can
     // only resolve to this one.
     //

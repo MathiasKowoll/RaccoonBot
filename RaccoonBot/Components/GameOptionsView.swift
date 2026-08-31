@@ -108,11 +108,6 @@ struct GameOptionsView: View {
                             VStack(alignment: .trailing) {
                                 Toggle("Metal HUD", isOn: $gameOptions.mtlHudEnabled)
                                 Toggle("Advertise AVX", isOn: $gameOptions.advertiseAVX)
-                                Toggle("Full Steam startup", isOn: $gameOptions.steamFullBoot)
-                                    .help("Starts Steam the way it normally starts instead of the "
-                                          + "minimum this application usually asks for. Slower, and "
-                                          + "needed by a title whose launcher asks Steam for another "
-                                          + "title after it has started.")
                                 if !current.isNative {
                                     Toggle("MSync", isOn: $gameOptions.wineMSync)
                                     Toggle("Enable SDL", isOn: $gameOptions.enableSDL)

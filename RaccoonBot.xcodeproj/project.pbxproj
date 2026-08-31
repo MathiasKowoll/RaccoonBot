@@ -500,7 +500,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RaccoonBot/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "RaccoonBot Dev";
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
 				INFOPLIST_KEY_NSCameraUsageDescription = "A Windows game launched through this application can ask for the camera. The request is attributed to this application, so without this line macOS cannot ask you.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "A Windows game launched through this application can ask for the microphone. The request is attributed to this application, so without this line macOS cannot even ask you -- and a client waiting on that answer waits forever.";
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Events are used to dynamically update your game library as soon as drive is disconnected or become available";
@@ -573,7 +573,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RaccoonBot/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = RaccoonBot;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
 				INFOPLIST_KEY_NSCameraUsageDescription = "A Windows game launched through this application can ask for the camera. The request is attributed to this application, so without this line macOS cannot ask you.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "A Windows game launched through this application can ask for the microphone. The request is attributed to this application, so without this line macOS cannot even ask you -- and a client waiting on that answer waits forever.";
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Events are used to dynamically update your game library as soon as drive is disconnected or become available";

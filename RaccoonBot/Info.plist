@@ -10,5 +10,12 @@
 	<string>$(API_PATH_M)</string>
 	<key>API_PROTOCOL</key>
 	<string>$(API_PROTOCOL)</string>
+	<!-- Apple's own string, verbatim out of the shared cache:
+	     "LSSupportsGameMode key not found in Info.plist. This key will become
+	      required to be eligible for Game Mode in a future OS release."
+	     Declared here rather than as a build setting because Xcode has no
+	     INFOPLIST_KEY for it yet. -->
+	<key>LSSupportsGameMode</key>
+	<true/>
 </dict>
 </plist>

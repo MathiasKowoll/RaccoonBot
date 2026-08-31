@@ -50,6 +50,33 @@ struct EnvPrecedenceTests {
                 == "-u MVK_CONFIG_UE4_HACK_ENABLED -u NAS_DISABLE_UE4_HACK ")
     }
 
+    /// The test that would have caught it. `env -u NAME` does NOT win against a
+    /// later `NAME=value` -- measured: `env -u A A=1 sh -c 'echo $A'` prints 1 --
+    /// so removing a variable we also set has to remove OUR assignment too, or
+    /// the launch line says "unset this" and "set this" and the second decides.
+    @Test func removingAVariableWeSetActuallyRemovesIt() {
+        let o = GameOptions()
+        o.cxGraphicsBackend = "d3dmetal4"
+        o.ue4Hack = true
+        o.envVariables = "-MVK_CONFIG_UE4_HACK_ENABLED\n-NAS_DISABLE_UE4_HACK"
+        let rendered = getInlineEnvs(from: o)
+        #expect(rendered.contains("MVK_CONFIG_UE4_HACK_ENABLED") == false)
+        #expect(rendered.contains("NAS_DISABLE_UE4_HACK") == false)
+        // and nothing else went with them
+        #expect(rendered.contains("MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS="))
+        #expect(rendered.contains("ROSETTA_ADVERTISE_AVX="))
+    }
+
+    /// Removing something we never set is not an error and disturbs nothing.
+    @Test func removingSomethingWeDoNotSetChangesNothing() {
+        let o = GameOptions()
+        o.cxGraphicsBackend = "d3dmetal4"
+        let before = getInlineEnvs(from: o)
+        o.envVariables = "-SOMETHING_WE_NEVER_WRITE"
+        let after = getInlineEnvs(from: o)
+        #expect(before.split(separator: " ").sorted() == after.split(separator: " ").sorted())
+    }
+
     @Test func anAssignmentIsNotARemoval() {
         #expect(EnvAssignments.removals("FOO=1").isEmpty)
         #expect(EnvAssignments.removals("-FOO=1").isEmpty)

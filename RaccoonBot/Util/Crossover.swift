@@ -488,6 +488,23 @@ func getInlineEnvs(from: GameOptions, cxAppPath: String? = nil) -> String {
     if isDXMT || unknownBackend {
         value += getDxmtConfigEnv(values: dxmtConfigValues)
     }
+    // A name somebody asked to remove is removed from OUR assignments too.
+    //
+    // `env -u NAME` alone is not enough and it fails in the direction that
+    // looks like success: `env -u A A=1` leaves A set to 1, because the
+    // assignment comes after the option and wins. So a request to unset a
+    // variable this function writes would have produced a launch line saying
+    // both "remove this" and "set this", and the second would have decided.
+    // Measured, not reasoned about -- the first version of this shipped
+    // without the check and would have wasted a run proving nothing.
+    let removed = Set(EnvAssignments.removals(from.envVariables))
+    if !removed.isEmpty {
+        value = value.split(separator: " ").filter { token in
+            guard let name = token.split(separator: "=", maxSplits: 1).first else { return true }
+            return !removed.contains(String(name))
+        }.joined(separator: " ") + " "
+    }
+
     // Last, so that what somebody typed wins.
     //
     // `env` takes the last assignment for a repeated name, so position is the

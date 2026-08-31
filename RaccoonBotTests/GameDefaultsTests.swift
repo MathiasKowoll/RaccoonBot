@@ -92,6 +92,59 @@ struct GameDefaultsTests {
         #expect(rendered.contains("D3DM_MTL4=\(OSVersion >= 27 ? "1" : "0")"))
     }
 
+    // MARK: the legacy backend
+
+    /// The twenty migrated records. `"d3dmetal"` is not one of the six the
+    /// picker offers, and it was reaching the launcher as generation 3 while
+    /// the panel displayed D3Dmetal4.
+    @Test func aLegacyBackendBecomesTheFourthToolkit() {
+        #expect(pickableBackend("d3dmetal") == "d3dmetal4")
+        #expect(pickableBackend(nil) == "auto")
+        #expect(pickableBackend("") == "auto")
+    }
+
+    /// A real choice is never rewritten. Somebody who picked DXVK keeps DXVK.
+    @Test func aBackendThePickerOffersIsLeftAlone() {
+        for offered in cxGraphicsBackend.map(\.id) {
+            #expect(pickableBackend(offered) == offered, "rewrote \(offered)")
+        }
+    }
+
+    /// Ten of the twenty carry Metal 4 saved true. Folding the backend is what
+    /// finally lets that saved choice reach the command line.
+    @Test func aFoldedRecordWithMetalFourSavedReachesTheCommandLine() throws {
+        let json = #"{"cxGraphicsBackend":"d3dmetal","d3dMtl4Enabled":true}"#
+        let data = try JSONDecoder().decode(GameOptionsData.self, from: Data(json.utf8))
+        let options = GameOptions()
+        options.set(data: data)
+        #expect(options.cxGraphicsBackend == "d3dmetal4")
+        let rendered = getInlineEnvs(from: options)
+        #expect(rendered.contains("D3DM_MTL4=\(OSVersion >= 27 ? "1" : "0")"))
+        #expect(rendered.contains("D3DM_ENABLE_METALFX=1"))
+    }
+
+    /// And the other ten, whose Metal 4 was the old default rather than an
+    /// answer: a folded record gets the rule the panel applies to that choice,
+    /// not a stored value nobody chose.
+    @Test func aFoldedRecordIsMadeInternallyConsistent() throws {
+        let json = #"{"cxGraphicsBackend":"d3dmetal","d3dMtl4Enabled":false}"#
+        let data = try JSONDecoder().decode(GameOptionsData.self, from: Data(json.utf8))
+        let options = GameOptions()
+        options.set(data: data)
+        #expect(options.cxGraphicsBackend == "d3dmetal4")
+        #expect(options.d3dMtl4Enabled == (OSVersion >= 27))
+    }
+
+    /// But a record that really did say d3dmetal4 with Metal 4 off keeps it --
+    /// that is an answer, and folding did not happen.
+    @Test func anUnfoldedRecordKeepsItsMetalFourAnswer() throws {
+        let json = #"{"cxGraphicsBackend":"d3dmetal4","d3dMtl4Enabled":false}"#
+        let data = try JSONDecoder().decode(GameOptionsData.self, from: Data(json.utf8))
+        let options = GameOptions()
+        options.set(data: data)
+        #expect(options.d3dMtl4Enabled == false)
+    }
+
     // MARK: seeding
 
     @Test func aTitleWithNothingSavedIsGivenAConfiguration() throws {

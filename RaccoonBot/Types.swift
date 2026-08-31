@@ -19,6 +19,24 @@ let cxGraphicsBackend: DropdownOptions = [
     (id: "auto", label: "Auto")
 ]
 
+/// A backend the picker cannot offer is not a choice, it is a leftover.
+///
+/// `"d3dmetal"` was this application's default for months and migrated in from
+/// Procyon verbatim; twenty saved records on this machine still carry it. It is
+/// not one of the six the picker shows, so a title holding it gave three
+/// different answers to one question: the options sheet folded it to D3Dmetal4
+/// for DISPLAY, `installd3dMetal` read it as generation 3, and getInlineEnvs
+/// dropped a saved Metal 4 choice because it only writes D3DM_MTL4 for the exact
+/// string "d3dmetal4".
+///
+/// Folded on the way in, so the panel, the launch and the disk agree -- rather
+/// than in the sheet, where it corrected only what was on screen.
+func pickableBackend(_ backend: String?) -> String {
+    guard let backend, !backend.isEmpty else { return "auto" }
+    return cxGraphicsBackend.contains(where: { $0.id == backend }) ? backend : "d3dmetal4"
+}
+
+
 let cxVulkanBackend: DropdownOptions = [
     (id: "", label: "Standard"),
     (id: "latest", label: "Latest"),
@@ -255,7 +273,13 @@ class GameOptions: ObservableObject { // this is used as form state
     }
     
     func set(data: GameOptionsData) {
-        self.cxGraphicsBackend = data.cxGraphicsBackend ?? "auto"
+        // Kept for the Metal 4 decision below: a record whose backend had to be
+        // folded never deliberately chose D3DMetal 4, so its stored Metal 4
+        // value is the old default rather than an answer, and the rule the
+        // panel applies to that choice is used instead.
+        let foldedBackend = pickableBackend(data.cxGraphicsBackend)
+        let wasFolded = data.cxGraphicsBackend != nil && data.cxGraphicsBackend != foldedBackend
+        self.cxGraphicsBackend = foldedBackend
         self.wineMSync = data.wineMSync ?? true
         self.mtlHudEnabled = data.mtlHudEnabled ?? false
         self.mtlHudDetail = data.mtlHudDetail ?? MetalHudDetail.fpsOnly.rawValue
@@ -284,7 +308,9 @@ class GameOptions: ObservableObject { // this is used as form state
         // not a default anybody would ask for, and it was the default: the
         // picker falls back to d3dmetal4 for a game with no valid saved
         // backend, so most games were getting D3DM_MTL4=0.
-        self.d3dMtl4Enabled = data.d3dMtl4Enabled ?? (data.cxGraphicsBackend == "d3dmetal4" && OSVersion >= 27)
+        self.d3dMtl4Enabled = wasFolded
+            ? (foldedBackend == "d3dmetal4" && OSVersion >= 27)
+            : (data.d3dMtl4Enabled ?? (foldedBackend == "d3dmetal4" && OSVersion >= 27))
         self.d3dMaxFPS = data.d3dMaxFPS ?? 0
     }
     func importAutoConfig(data: GameOptionsData) {

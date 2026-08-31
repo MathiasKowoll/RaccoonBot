@@ -51,9 +51,8 @@ struct GameOptionsSheet: View {
                         if let saved: GameOptionsData = readUsrDefData(key: key) {
                             gameOptions.set(data: saved)
                         }
-                        if !cxGraphicsBackend.contains(where: { $0.id == gameOptions.cxGraphicsBackend }) {
-                            gameOptions.cxGraphicsBackend = "d3dmetal4"
-                        }
+                        // The fold lives in GameOptions.set(data:) now, so the panel
+                        // and the launch cannot disagree about it.
                     }
             } else {
                 // Reachable if the game is cleared while the sheet is open.

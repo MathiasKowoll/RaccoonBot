@@ -72,21 +72,8 @@ private let WINE_DXVK_RESOURCES_PATHS: [String] = [
     "dxvk/x86_64-windows/d3d11.dll",
 ]
 
-private let WINE_D3DM_RESOURCES_PATHS: [String] = [
-    "external",
-    "wine/x86_64-unix/d3d10.so",
-    "wine/x86_64-unix/d3d11.so",
-    "wine/x86_64-unix/d3d12.so",
-    "wine/x86_64-unix/dxgi.so",
-    "wine/x86_64-unix/nvapi64.so",
-    "wine/x86_64-unix/nvngx-on-metalfx.so",
-    "wine/x86_64-windows/d3d10.dll",
-    "wine/x86_64-windows/d3d11.dll",
-    "wine/x86_64-windows/d3d12.dll",
-    "wine/x86_64-windows/dxgi.dll",
-    "wine/x86_64-windows/nvapi64.dll",
-    "wine/x86_64-windows/nvngx-on-metalfx.dll",
-]
+// WINE_D3DM_RESOURCES_PATHS is gone: see d3dMetalResources(version:).
+
 
 private let dxvkRes: [(res: String, dest: String)] = WINE_DXVK_RESOURCES_PATHS.map { path in
     (res: path, dest: "/lib/" + path)
@@ -376,11 +363,69 @@ func fetchLatestRelease(from path: String) async throws -> String {
     return tag
 }
 
+/// The files a toolkit generation actually carries, relative to its resource
+/// directory, plus `external` as a whole.
+///
+/// Read from the bundle rather than from a written list, because the two
+/// generations do not carry the same names: 3 has `atidxx64.dll` and
+/// `nvngx.dll` where 4 has `d3d10.dll` and `nvngx-on-metalfx.dll`. The list
+/// this replaced named 4's spellings, so installing 3 could not find two of
+/// them and never installed two of its own -- and `copyResource` logs
+/// "Couldn't find source" and carries on, so the install reported success. It
+/// also named six `wine/x86_64-unix/*.so` that neither generation has ever
+/// carried; those directories ship empty. Six errors on every launch, for
+/// years, meaning nothing.
+func d3dMetalResources(version: String) -> [String] {
+    guard let root = Bundle.main.resourceURL?.appendingPathComponent("d3dMetal\(version)") else {
+        return ["external"]
+    }
+    return d3dMetalResources(inGeneration: root)
+}
+
+/// The same, of a directory named outright, so a test can read the generations
+/// in the source tree rather than depend on which bundle it is hosted by.
+func d3dMetalResources(inGeneration generation: URL) -> [String] {
+    var paths = ["external"]
+    let wine = generation.appendingPathComponent("wine")
+    let f = FileManager.default
+    // Each architecture directory read on its own rather than through a
+    // recursive enumerator. Half of what a generation carries are symlinks --
+    // every `wine/x86_64-unix/*.so` points at `external/libd3dshared.dylib` --
+    // and `contentsOfDirectory` lists them where a filter on regular files
+    // drops them. `find -type f` hides them the same way, which is how they
+    // were first mistaken for missing.
+    for arch in (try? f.contentsOfDirectory(atPath: wine.path(percentEncoded: false)))?.sorted() ?? [] {
+        let dir = wine.appendingPathComponent(arch)
+        var isDirectory: ObjCBool = false
+        guard f.fileExists(atPath: dir.path(percentEncoded: false), isDirectory: &isDirectory),
+              isDirectory.boolValue else { continue }
+        for name in (try? f.contentsOfDirectory(atPath: dir.path(percentEncoded: false)))?.sorted() ?? [] {
+            paths.append("wine/\(arch)/\(name)")
+        }
+    }
+    return paths
+}
+
+
 func installd3dMetal(at: URL, version: String) throws -> Void {
     guard let layout = EngineLayout.of(at) else {
         throw UnsupportedEngine(path: at.path(percentEncoded: false))
     }
-    let d3dmRes: [(res: String, dest: String)] = WINE_D3DM_RESOURCES_PATHS.map { path in
+    // Put the engine back before putting a generation in.
+    //
+    // Otherwise switching generations mixes them: 4 installs `d3d10.dll`, 3
+    // does not carry that name, and the file stays behind with 4's bytes while
+    // the engine reports as 3. Restoring first means the only toolkit files in
+    // the engine are the engine's own plus this generation's.
+    let wineHalf = at.appendingPathComponent(SHARED_SUPPORT_COMPONENT)
+        .appendingPathComponent("/\(layout.gptkRoot)/apple_gptk/wine")
+    if let walker = FileManager.default.enumerator(at: wineHalf, includingPropertiesForKeys: nil) {
+        for case let url as URL in walker where url.pathExtension == "orig" {
+            try? restoreOrig(destUrl: url.deletingPathExtension())
+        }
+    }
+
+    let d3dmRes: [(res: String, dest: String)] = d3dMetalResources(version: version).map { path in
         let destPath = path.replacingOccurrences(of: "nvngx-on-metalfx", with: "nvngx")
         return (res: "d3dMetal\(version)/" + path, dest: "/\(layout.gptkRoot)/apple_gptk/" + destPath)
     }

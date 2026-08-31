@@ -45,7 +45,8 @@ struct GameOptionsView: View {
         // second lock on the same door.
         if let current = game {
         let id = current.steamAppID != 0 ? String(describing: current.steamAppID) : String(describing: current.id)
-        let gameOptKey = namespacedKey("GameOptions", id)
+        let gameOptKey = GameDefaults.key(forAppID: current.steamAppID,
+                                          id: String(describing: current.id))
         VStack (alignment: .leading, spacing: 5){
             Text("id:\(id)").font(Font.footnote).foregroundStyle(.procyonBrightGray)
             Form {

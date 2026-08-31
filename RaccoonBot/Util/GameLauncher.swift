@@ -79,7 +79,8 @@ final class GameLauncher {
         Task {
             do {
                 let id = item.steamAppID != 0 ? String(describing: item.steamAppID) : String(describing: item.id)
-                let gameOptKey = namespacedKey("GameOptions", id)
+                let gameOptKey = GameDefaults.key(forAppID: item.steamAppID,
+                                                  id: String(describing: item.id))
                 let gameOptions = GameOptions()
                 // A title with nothing saved is configured here and then read
                 // back, rather than launched from a fresh object. Falling back

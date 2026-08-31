@@ -44,10 +44,15 @@ struct GameOptionsSheet: View {
                     // is open.
                     .task(id: game?.id) {
                         guard let current = game else { return }
-                        let key = namespacedKey("GameOptions",
-                                                current.steamAppID != 0
-                                                ? String(current.steamAppID)
-                                                : String(current.id))
+                        // Opening the configuration is the other first time a
+                        // title can be met, so it is configured here as well as
+                        // at launch. Otherwise the panel would show defaults for
+                        // a title that has no file, somebody would change one
+                        // field, and everything they did not touch would be
+                        // written from whatever the form happened to hold.
+                        let key = GameDefaults.key(forAppID: current.steamAppID,
+                                                   id: String(current.id))
+                        GameDefaults.seedIfAbsent(key: key)
                         if let saved: GameOptionsData = readUsrDefData(key: key) {
                             gameOptions.set(data: saved)
                         }

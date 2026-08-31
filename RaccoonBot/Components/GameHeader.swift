@@ -153,12 +153,18 @@ struct GameHeader: View {
                 // another. Play from the grid and the list were always right: they go
                 // through GameLauncher, which reads the same key this now reads.
                 let launchOptions = GameOptions()
-                if let saved: GameOptionsData = readUsrDefData(
-                        key: namespacedKey("GameOptions",
-                                           game!.steamAppID != 0 ? String(game!.steamAppID) : String(game!.id))) {
+                // Seeded here too. This is the SECOND launch path -- the one on
+                // the detail page -- while the grid and the list go through
+                // GameLauncher. Configuring a title on one path and not the
+                // other leaves exactly the hole the seeding was written to
+                // close, and it would have stayed open.
+                let optionsKey = GameDefaults.key(forAppID: game!.steamAppID, id: String(game!.id))
+                GameDefaults.seedIfAbsent(key: optionsKey)
+                if let saved: GameOptionsData = readUsrDefData(key: optionsKey) {
                     launchOptions.set(data: saved)
                 } else {
-                    console.warn("no saved options for this title; launching with defaults")
+                    console.error("no saved options for \(optionsKey) and none could be written; "
+                                  + "launching on defaults, which may not be what is configured")
                 }
                 if(game!.isNative) {
                     try await launchNativeGame(id: String(game!.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: launchOptions, appExeURL: game!.appExeURL)

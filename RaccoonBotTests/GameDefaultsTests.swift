@@ -63,6 +63,35 @@ struct GameDefaultsTests {
         #expect(restored.mtlHudAlignment == mine.mtlHudAlignment)
     }
 
+    /// No construction may produce a backend the picker cannot show.
+    ///
+    /// `"d3dmetal"` was the default and is not one of the six options, so a
+    /// title carrying it displayed as D3Dmetal4 in the panel, was read as
+    /// generation 3 by the launcher, and had its saved Metal 4 choice dropped
+    /// because the environment only writes D3DM_MTL4 for `"d3dmetal4"`. Panel,
+    /// disk and launch gave three different answers to one question.
+    @Test func nothingProducesABackendThePickerCannotShow() {
+        let offered = Set(cxGraphicsBackend.map(\.id))
+        #expect(offered.contains(GameOptions().cxGraphicsBackend))
+        // and the Reset button, which rebuilds from a bare GameOptions
+        let reset = GameOptions()
+        reset.set(data: GameOptionsData(data: GameOptions()))
+        #expect(offered.contains(reset.cxGraphicsBackend))
+        #expect(offered.contains(GameDefaults.freshOptions().cxGraphicsBackend ?? ""))
+    }
+
+    /// A seeded title must not run D3DMetal 4 with Metal 4 switched off, which
+    /// is the opposite of what the panel produces for the same choice.
+    @Test func aSeededTitleIsInternallyConsistent() {
+        let data = GameDefaults.freshOptions()
+        #expect(data.cxGraphicsBackend == "d3dmetal4")
+        #expect(data.d3dMtl4Enabled == (OSVersion >= 27))
+        let options = GameOptions()
+        options.set(data: data)
+        let rendered = getInlineEnvs(from: options)
+        #expect(rendered.contains("D3DM_MTL4=\(OSVersion >= 27 ? "1" : "0")"))
+    }
+
     // MARK: seeding
 
     @Test func aTitleWithNothingSavedIsGivenAConfiguration() throws {

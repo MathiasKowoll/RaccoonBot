@@ -289,24 +289,7 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
     
 //    try cpyd8d9DLLs(to: bottleURL, enable: options!.dx9PatchEnabled)
     
-    // `steam://run/<id>//` rather than `-applaunch <id>`.
-    //
-    // The two are not equivalent, and the difference only shows on titles that
-    // are a menu rather than a game. KINGDOM HEARTS HD 2.8 is one: its
-    // executable is a shell that asks Steam for whichever title you pick, and
-    // that second request is what -applaunch does not service. Measured, with
-    // everything else held identical -- same flags, same environment, same
-    // engine, same bottle, same shell, one argument changed: with -applaunch
-    // the shell comes up and its child is never created, and a
-    // WINEDEBUG=+process trace has no CreateProcessInternalW for the game at
-    // all. With steam://run it is created and plays. Captured while hung,
-    // the failing case has one shell process where a working one has two.
-    //
-    // Most titles never make the second request, which is why sixty other
-    // games launched by this application have never shown it.
-    //
-    // The trailing `//` is Steam's own form: steam://run/<id>//<arguments>.
-    let gameLaunchCommand = appExeURL != nil ? "\"\(appExeURL!.path(percentEncoded: false))\"" : "\"\(steamExePath)\" \(steamBootOptions) \"steam://run/\(String(id))//\""
+    let gameLaunchCommand = appExeURL != nil ? "\"\(appExeURL!.path(percentEncoded: false))\"" : "\"\(steamExePath)\" \(steamBootOptions) -applaunch \(String(id))"
     let cxAppURL = URL(fileURLWithPath: cxAppPath)
     // D3DMetal is x86 and an ARM bottle never loads it: there Direct3D goes
     // through DXMT. Copying ~60 MB of toolkit into the engine on every launch

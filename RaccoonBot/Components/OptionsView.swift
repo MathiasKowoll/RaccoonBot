@@ -92,14 +92,30 @@ struct OptionsView: View {
             showModal: $libraryPageGlobals.showOptions,
         ) {
             VStack (alignment: .leading){
+                // Shown before the button that uses it, because this is the
+                // value the copy is made with and it decides which bottles the
+                // engine will ever see.
+                HStack(spacing: 6) {
+                    Text("Bottles in").font(.footnote)
+                    Button(URL(fileURLWithPath: appGlobals.bottlesRoot).lastPathComponent) {
+                        if let picked = openFolderSelectorPanel(
+                            initialDirectory: URL(fileURLWithPath: appGlobals.bottlesRoot),
+                            title: "Where RaccoonBot keeps its bottles") {
+                            let path = picked.path(percentEncoded: false)
+                            appGlobals.bottlesRoot = path
+                            persistUsrDefOptionString(key: "bottlesRoot", value: path)
+                        }
+                    }
+                    .help(appGlobals.bottlesRoot)
+                }
                 Button(URL(string: appGlobals.cxAppPath ?? "")?.lastPathComponent ?? "Select a Crossover App...") {
                     shouldShowBottleSelector = false
                     if let url = openFolderSelectorPanel(type: .application) {
                         appGlobals.selectedBottle = ""
                         Task { @MainActor in
-                            let patchedAppURL = await makeCrossoverPatchedCopy(sourceCXPath: url, setProgress: { p,m in progress = p; progressLabel = m  }, setLoading: { state in downloading = state })
+                            let patchedAppURL = await makeCrossoverPatchedCopy(sourceCXPath: url, bottlesRoot: appGlobals.bottlesRoot, setProgress: { p,m in progress = p; progressLabel = m  }, setLoading: { state in downloading = state })
                             progress = 0
-                            await makeX87CrossoverPatchedCopy(sourceCXPath: url, patchedApp: patchedAppURL)
+                            await makeX87CrossoverPatchedCopy(sourceCXPath: url, bottlesRoot: appGlobals.bottlesRoot, patchedApp: patchedAppURL)
                             appGlobals.cxAppPath = patchedAppURL.path(percentEncoded: false)
                             persistUsrDefOptionString(key: "cxAppPath", value: patchedAppURL.relativePath)
                             persistUsrDefOptionString(key: "cxCompleteAppPath", value: patchedAppURL.path(percentEncoded: false))

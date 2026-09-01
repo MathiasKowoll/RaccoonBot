@@ -1132,6 +1132,17 @@ final class AppGlobals: ObservableObject {
     @Published var selectedArmBottle: String = ""
     @Published var userID: String? = nil
     @Published var cxAppPath: String?
+
+    /// Where this application keeps its bottles, and the value that becomes
+    /// MacGameVideoFix's `--bottle-path` when it makes the engine copy.
+    ///
+    /// It was decided by a default nobody set and written into the engine's
+    /// CrossOver.conf without ever being shown. That key is the isolation: an
+    /// engine without it does not run out of bottles, it falls through to
+    /// stock CrossOver's root and operates on somebody else's -- measured,
+    /// seven of them on this machine against one of ours. A value with that
+    /// consequence should be a choice on screen, not a constant in a patcher.
+    @Published var bottlesRoot: String = ""
     @Published var windowsSteamFolder: URL?
     
     /// The bottles this application is configured with -- the one set anything
@@ -1145,6 +1156,9 @@ final class AppGlobals: ObservableObject {
         self.selectedBottle = readUsrDefOptionString(key: "selectedBottle") ?? ""
         self.selectedArmBottle = readUsrDefOptionString(key: "selectedArmBottle") ?? ""
         self.cxAppPath = readUsrDefOptionString(key: "cxAppPath")
+        // Falls back to where they have always lived, so an existing install
+        // keeps working and simply starts showing what it was already doing.
+        self.bottlesRoot = readUsrDefOptionString(key: "bottlesRoot") ?? DEFAULT_BOTTLES_ROOT
     }
 }
 

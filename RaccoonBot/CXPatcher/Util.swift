@@ -40,7 +40,7 @@ nonisolated let DEFAULT_CXP_BOTTLES_FOLDER = "CXPBottles"
 //private let DEFAULT_CXP_BOTTLES_ROOTPATH = "/Users/${USER}/Application Support/Procyon/"
 //private let DEFAULT_CXP_BOTTLES_FOLDER = "Bottles"
 //private let DEFAULT_CXP_BOTTLES_PATH = DEFAULT_CXP_BOTTLES_ROOTPATH + DEFAULT_CXP_BOTTLES_FOLDER
-private let DEFAULT_CXP_BOTTLES_PATH = PROCYON_SUPPORT_FOLDER_URL.appendingPathComponent(DEFAULT_CXP_BOTTLES_FOLDER).path(percentEncoded: false)
+let DEFAULT_BOTTLES_ROOT = PROCYON_SUPPORT_FOLDER_URL.appendingPathComponent(DEFAULT_CXP_BOTTLES_FOLDER).path(percentEncoded: false)
 private let CROSSOVER_MAIN_CONFIGURATION = "/etc/CrossOver.conf"
 private let WINE_RESOURCES_ROOT = "Crossover"
 let SHARED_SUPPORT_COMPONENT = "Contents/SharedSupport/CrossOver"
@@ -128,7 +128,7 @@ struct Opts {
     var overrideBottlePath: Bool = true
     var copyGptk = false
     var patchGStreamer = true
-    var cxbottlesPath = DEFAULT_CXP_BOTTLES_PATH
+    var cxbottlesPath = DEFAULT_BOTTLES_ROOT
     var selectedPrefix: String = ""
     var patchMVK: PatchMVK = PatchMVK.none
     var autoUpdateDisable = true
@@ -296,12 +296,13 @@ func removeSignature(destURL: URL) throws {
 /// x86 in an ARM bottle through FEX (lib/wine/aarch64-unix/libwow64fex.so),
 /// where the same knob is one supported environment variable -- so there the
 /// second 1.9 GB copy buys nothing and is not built.
-func makeX87CrossoverPatchedCopy (sourceCXPath: URL, patchedApp: URL) async -> Void {
+func makeX87CrossoverPatchedCopy (sourceCXPath: URL, bottlesRoot: String, patchedApp: URL) async -> Void {
     guard EngineLayout.of(sourceCXPath) == .cx26 else {
         console.log("x87 variant skipped: not CrossOver 26 (FEX handles it there)")
         return
     }
-    await makeCrossoverPatchedCopy(sourceCXPath: sourceCXPath, setProgress: { _, _ in }, setLoading: { _ in }, isX87: true)
+    await makeCrossoverPatchedCopy(sourceCXPath: sourceCXPath, bottlesRoot: bottlesRoot,
+                                   setProgress: { _, _ in }, setLoading: { _ in }, isX87: true)
 }
 
 func signAndFixup(destPath: String) throws {
@@ -450,7 +451,7 @@ func activateApp(_ gameName: String) -> Void {
 }
 
 @discardableResult
-func makeCrossoverPatchedCopy(sourceCXPath: URL, setProgress: @escaping (Double, String) -> Void, setLoading: @escaping (Bool) -> Void, isX87: Bool = false) async -> URL {
+func makeCrossoverPatchedCopy(sourceCXPath: URL, bottlesRoot: String, setProgress: @escaping (Double, String) -> Void, setLoading: @escaping (Bool) -> Void, isX87: Bool = false) async -> URL {
     let f = FileManager.default
     let name = isX87 ? PATCHED_CX_X87_APPNAME : PATCHED_CX_APPNAME
     let destUrl = f.homeDirectoryForCurrentUser.appendingPathComponent("Applications").appendingPathComponent(name)
@@ -527,7 +528,12 @@ func makeCrossoverPatchedCopy(sourceCXPath: URL, setProgress: @escaping (Double,
                 setLoading(true)
                 dxmtDownloader.download()
             }
-            let opts = Opts()
+            // The bottle root arrives from the menu rather than being decided
+            // here. It becomes MacGameVideoFix's `--bottle-path` when the copy
+            // moves there, and that flag is required with no default for the
+            // same reason: guessing it wrong is silent.
+            var opts = Opts()
+            opts.cxbottlesPath = bottlesRoot
             // MARK: Step 3 add env variables to crossover configuration
             addGlobals(appURL: destUrl, opts: opts)
             // MARK: Step 4 disable auto update

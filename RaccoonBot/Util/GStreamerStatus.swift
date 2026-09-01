@@ -109,12 +109,7 @@ nonisolated struct GStreamerStatus: Sendable {
 
     /// The series, read from the library's compatibility version.
     /// The plist lies about this on some builds; the binary does not.
-    /// The GStreamer series a core library belongs to, e.g. 24 or 28.
-    static func series(ofCoreAt path: String) -> Int? {
-        guard let text = compatibilityLine(path) else { return nil }
-        return text / 100
-    }
-
+ 
     private static func compatibilityLine(_ lib: String) -> Int? {
         guard FileManager.default.fileExists(atPath: lib) else { return nil }
         let p = Process()

@@ -19,18 +19,9 @@ struct OptionsView: View {
     /// nobody reads to the bottom of.
     @State private var configuringStore: Store = .steam
     @State private var storeBottle: String = ""
-    @State private var gstBusy = false
-    @State private var gstMessage: String?
 
-    /// Bottles that can actually serve a game marked to run on ARM: ARM
-    /// architecture AND an engine that ships FEX. An ARM bottle on CrossOver 26
-    /// runs ARM-native Windows binaries only, so listing it here would offer
-    /// the one bottle that cannot run the game.
-    /// Offer the version the engines on this machine can actually use.
-    ///
-    /// Prescriptive rather than defensive: it says which one and why, and it
-    /// holds someone at an older series only while an older engine is still
-    /// installed. Drop that engine and the answer moves on by itself.
+
+
     /// What the fix row says. The counting and the wording live in
     /// `FixSummary`, where they can be tested without a view.
     private func fixSummary(_ targets: [PatchAll.Target]) -> Text {
@@ -41,44 +32,10 @@ struct OptionsView: View {
                                         unverified: needs.filter { $0 == .unverified }.count))
     }
 
-    private func installGStreamer() async {
-        gstBusy = true
-        defer { gstBusy = false }
-        let installer = GStreamerInstall()
-        do {
-            let available = try await installer.publishedVersions()
-            let series = installedEngineSeries()
-            guard let version = GStreamerInstall.chooseVersion(available: available,
-                                                               engineSeries: series) else {
-                gstMessage = "Could not work out which GStreamer these engines need"
-                return
-            }
-            gstMessage = "Downloading GStreamer \(version) — macOS will ask for your password to install it"
-            try await installer.downloadAndOpen(version: version)
-            gstMessage = "GStreamer \(version) downloaded. Finish the install, then reopen this window."
-        } catch {
-            gstMessage = error.localizedDescription
-        }
-    }
-
-/// The GStreamer series each installed CrossOver runs, read from its own
-    /// core rather than assumed from its version number.
-    private func installedEngineSeries() -> [Int] {
-        var series: Set<Int> = []
-        let f = FileManager.default
-        for root in ["/Applications", f.homeDirectoryForCurrentUser.appendingPathComponent("Applications").path(percentEncoded: false)] {
-            for name in (try? f.contentsOfDirectory(atPath: root)) ?? [] where name.hasSuffix(".app") {
-                let app = root + "/" + name
-                for sub in ["lib64", "lib/x86_64"] {
-                    let lib = "\(app)/Contents/SharedSupport/CrossOver/\(sub)/libgstreamer-1.0.0.dylib"
-                    guard f.fileExists(atPath: lib) else { continue }
-                    if let s = GStreamerStatus.series(ofCoreAt: lib) { series.insert(s) }
-                }
-            }
-        }
-        return Array(series)
-    }
-
+    /// Bottles that can actually serve a game marked to run on ARM: ARM
+    /// architecture AND an engine that ships FEX. An ARM bottle on CrossOver 26
+    /// runs ARM-native Windows binaries only, so listing it here would offer
+    /// the one bottle that cannot run the game.
     private var armBottles: [BottleInfo] {
         bottles.compactMap { bottleInfo($0) }.filter { $0.isARM && $0.canRunX86 }
     }
@@ -241,27 +198,17 @@ struct OptionsView: View {
                     }
                     Group {
                         if let gst = gstStatus {
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack(alignment: .top, spacing: 6) {
-                                    Image(systemName: gst.isOK ? "checkmark.circle" : "exclamationmark.triangle")
-                                        .foregroundStyle(gst.isOK ? .green : .orange)
-                                    Text(gst.summary).font(.footnote)
-                                        .foregroundStyle(gst.isOK ? .secondary : .primary)
-                                    Spacer()
-                                    if case .missing = gst.framework {
-                                        Button(gstBusy ? "Downloading…" : "Install GStreamer…") {
-                                            Task { await installGStreamer() }
-                                        }.disabled(gstBusy)
-                                    }
-                                }
-                                if let gstMessage {
-                                    Text(gstMessage).font(.footnote).foregroundStyle(.secondary)
-                                }
+                            HStack(alignment: .top, spacing: 6) {
+                                Image(systemName: gst.isOK ? "checkmark.circle" : "exclamationmark.triangle")
+                                    .foregroundStyle(gst.isOK ? .green : .orange)
+                                Text(gst.summary).font(.footnote)
+                                    .foregroundStyle(gst.isOK ? .secondary : .primary)
+                                Spacer()
                             }
                         } else {
                             HStack(spacing: 6) {
                                 ProgressView().controlSize(.small)
-                                Text("Checking GStreamer…").font(.footnote).foregroundStyle(.secondary)
+                                Text("Checking the engine's decoders…").font(.footnote).foregroundStyle(.secondary)
                             }
                         }
                     }

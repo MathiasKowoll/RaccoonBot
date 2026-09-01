@@ -11,6 +11,10 @@ import Kingfisher
 
 struct LibraryPage: View {
     @StateObject var libraryPageGlobals = LibraryPageGlobals()
+    /// One controller reader for the page. Shared, because two readers of the
+    /// same pad would both act on every press: the grid keeps it while the
+    /// library is showing, and hands it to whichever sheet is on top.
+    @StateObject private var gamepad = GamepadInput()
     @EnvironmentObject var appGlobals: AppGlobals
     @State private var isLoading = false
     /// One library reload at a time.
@@ -161,6 +165,7 @@ struct LibraryPage: View {
                 mntObserver = nil
             }
             .environmentObject(libraryPageGlobals)
+            .environmentObject(gamepad)
         }
     }
     

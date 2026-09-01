@@ -10,6 +10,7 @@ import SwiftUI
 struct GameOptionsView: View {
     @Binding var game: Game?
     @EnvironmentObject var gameOptions: GameOptions
+    @EnvironmentObject var session: OptionsSession
     /// Needed to tell the user whether an ARM bottle has been chosen at all.
     /// Provided by the sheet that presents this view.
     @EnvironmentObject var appGlobals: AppGlobals
@@ -17,6 +18,12 @@ struct GameOptionsView: View {
     @StateObject private var fix = MGVFCoordinator()
     @State private var confirmingInstall = false
     @State private var autoconfigError: String?
+
+    /// The controller, shared with the grid underneath and taken over while
+    /// this panel is up; the control it is on; and the way out.
+    @EnvironmentObject private var gamepad: GamepadInput
+    @State private var focus = OptionFocus()
+    @Environment(\.dismiss) private var dismiss
     @State var isLoading = false
 
     /// The folder the game is installed in, from its metadata.
@@ -47,6 +54,7 @@ struct GameOptionsView: View {
         let id = current.steamAppID != 0 ? String(describing: current.steamAppID) : String(describing: current.id)
         let gameOptKey = GameDefaults.key(forAppID: current.steamAppID,
                                           id: String(describing: current.id))
+    ScrollViewReader { proxy in
         VStack (alignment: .leading, spacing: 5){
             Text("id:\(id)").font(Font.footnote).foregroundStyle(.procyonBrightGray)
             Form {
@@ -71,6 +79,7 @@ struct GameOptionsView: View {
                                             gameOptions.d3dMtl4Enabled =
                                                 backend == "d3dmetal4" && OSVersion >= 27
                                         }
+                                        .optionFocus(.backend, current: focus.current, shown: gamepad.connected)
                                 }
                                 Divider()
                                 TextField("Game arguments", text: $gameOptions.gameArguments)
@@ -98,6 +107,7 @@ struct GameOptionsView: View {
                                     Divider()
                                     Text("32Bits options")
                                     Toggle("Reduced x87 precision", isOn: $gameOptions.x87PatchEnabled)
+                                        .optionFocus(.x87, current: focus.current, shown: gamepad.connected)
                                     // "Use DX9" is gone: it promised one thing and did the
                                     // opposite.
                                     //
@@ -119,15 +129,22 @@ struct GameOptionsView: View {
                             Spacer()
                             VStack(alignment: .trailing) {
                                 Toggle("Metal HUD", isOn: $gameOptions.mtlHudEnabled)
+                                    .optionFocus(.mtlHud, current: focus.current, shown: gamepad.connected)
                                 Toggle("Advertise AVX", isOn: $gameOptions.advertiseAVX)
+                                    .optionFocus(.advertiseAVX, current: focus.current, shown: gamepad.connected)
                                 if !current.isNative {
                                     Toggle("MSync", isOn: $gameOptions.wineMSync)
+                                        .optionFocus(.msync, current: focus.current, shown: gamepad.connected)
                                     Toggle("Enable SDL", isOn: $gameOptions.enableSDL)
+                                        .optionFocus(.sdl, current: focus.current, shown: gamepad.connected)
                                     Toggle("Disable Hidraw", isOn: $gameOptions.disableHidraw)
+                                        .optionFocus(.hidraw, current: focus.current, shown: gamepad.connected)
                                     Divider()
                                     Text("Vulkan options")
                                     Toggle("Enable UE4 Hack", isOn: $gameOptions.ue4Hack)
+                                        .optionFocus(.ue4Hack, current: focus.current, shown: gamepad.connected)
                                     Toggle("MTL arg. buffers", isOn: $gameOptions.mvkArgBuff)
+                                        .optionFocus(.mvkArgBuff, current: focus.current, shown: gamepad.connected)
                                     DropDown(options: cxVulkanBackend, label: "VK lib", value: $gameOptions.vulkanLib)
                                     .pickerStyle(.menu)
                                 }
@@ -145,6 +162,7 @@ struct GameOptionsView: View {
                                     step: 1.0
                                 )
                                 .help(localizedString(forKey: "preferredMaxFrameRateHelp"))
+                                    .optionFocus(.dxmtMaxFPS, current: focus.current, shown: gamepad.connected)
                             }
                             
                             Toggle("metalFXSpatial", isOn: $gameOptions.dxmtMetalFXSpatial)
@@ -154,6 +172,7 @@ struct GameOptionsView: View {
                                         $gameOptions.dxmtMetalSpatialUpscaleFactor.wrappedValue = 1.0
                                     }
                                 }
+                                .optionFocus(.dxmtMetalFX, current: focus.current, shown: gamepad.connected)
                             
                             if (gameOptions.dxmtMetalFXSpatial) {
                                 VStack {
@@ -164,6 +183,7 @@ struct GameOptionsView: View {
                                         step: 0.125
                                     )
                                     .help(localizedString(forKey: "metalFXSpatialHelp"))
+                                        .optionFocus(.dxmtUpscale, current: focus.current, shown: gamepad.connected)
                                 }
                             }
                         }
@@ -182,6 +202,7 @@ struct GameOptionsView: View {
                                     }
                                 }
                                 .pickerStyle(.segmented)
+                                    .optionFocus(.hudDetail, current: focus.current, shown: gamepad.connected)
                                 Text((MetalHudDetail(rawValue: gameOptions.mtlHudDetail) ?? .fpsOnly).explanation)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -191,9 +212,11 @@ struct GameOptionsView: View {
                                         Text(corner.label).tag(corner.rawValue)
                                     }
                                 }
+                                    .optionFocus(.hudAlignment, current: focus.current, shown: gamepad.connected)
                                 VStack {
                                     Text("Opacity \(Int(gameOptions.mtlHudOpacity * 100))%")
                                     Slider(value: $gameOptions.mtlHudOpacity, in: 0.1...1.0)
+                                        .optionFocus(.hudOpacity, current: focus.current, shown: gamepad.connected)
                                 }
                             }
                         }
@@ -203,6 +226,7 @@ struct GameOptionsView: View {
                                 .help(localizedString(forKey: "metal4Backend"))
                                 .disabled(OSVersion < 27)
                                 .opacity(OSVersion < 27 ? 0.5 : 1.0)
+                                .optionFocus(.d3dMtl4, current: focus.current, shown: gamepad.connected)
                             VStack{
                                 Text(localizedString(forKey: "preferredMaxFrameRate", value: d3dMaxFPS))
                                 Slider(
@@ -211,42 +235,43 @@ struct GameOptionsView: View {
                                     step: 1.0
                                 )
                                 .help(localizedString(forKey: "preferredMaxFrameRateHelp"))
+                                    .optionFocus(.d3dMaxFPS, current: focus.current, shown: gamepad.connected)
                             }
                         }
                     }
                     HStack {
-                        Button("Save settings") {
+                        // Save commits now and keeps editing; closing the panel commits
+                        // too, so this is for somebody who wants the file right before
+                        // running Auto configure, not a step that can be forgotten. Both
+                        // buttons say whether there is anything to do, which is the only
+                        // "unsaved changes" indicator: the state, on the thing that acts.
+                        Button(session.isDirty(gameOptions) ? "Save settings" : "Saved") {
                             console.log("saving")
-                            persistUsrDefData(key: gameOptKey, data: GameOptionsData(data: gameOptions))
-                        }.buttonStyle(.borderedProminent)
-                        //                        Button("Undo") {
-                        //                            console.log("resetting")
-                        //                            if let data: GameOptionsData = readUsrDefData(key: gameOptKey) {
-                        //                                self.gameOptions.set(data: data)
-                        //                            }
-                        //                        }
+                            session.save(gameOptions)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!session.isDirty(gameOptions))
+                            .optionFocus(.save, current: focus.current, shown: gamepad.connected)
+                        // Undo puts the form back to the file: the escape hatch before
+                        // closing, and a state that cannot be wrong. Reset, beside it,
+                        // goes to factory defaults -- a different and much larger step,
+                        // left as it was.
+                        Button("Undo") {
+                            console.log("undoing")
+                            session.undo(into: gameOptions)
+                        }
+                        .disabled(!session.isDirty(gameOptions))
+                            .optionFocus(.undo, current: focus.current, shown: gamepad.connected)
                         Button("Reset") {
                             console.log("resetting")
                             gameOptions.set(data: GameOptionsData(data: GameOptions()))
                         }
+                            .optionFocus(.reset, current: focus.current, shown: gamepad.connected)
                         Spacer()
                         ProminentButton("Auto configure", systemImage: "wand.and.sparkles", isLoading: isLoading) {
-                            Task {
-                                isLoading = true
-                                do {
-                                    try await autoconfig()
-                                } catch {
-                                    autoconfigError = error.localizedDescription
-                                }
-                                isLoading = false
-                                // One button: it configures, and if the title
-                                // still needs its fix it asks to put it on.
-                                // The asking is not ceremony -- this is the
-                                // step that renames a file in the user's game
-                                // folder, and it says which one before it does.
-                                if fix.canInstall { confirmingInstall = true }
-                            }
+                            Task { await runAutoconfigure() }
                         }
+                            .optionFocus(.autoconfigure, current: focus.current, shown: gamepad.connected)
                     }.padding(.top)
 
                     if fix.entry != nil || fix.state != .noFix {
@@ -307,12 +332,147 @@ struct GameOptionsView: View {
                                    bottles: appGlobals.configuredBottles,
                                    hasGame: game != nil)
                 }
+        .onChange(of: focus.current) { _, control in
+            guard let control else { return }
+            withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(control, anchor: .center) }
+        }
+        // The list of reachable controls follows the panel: a toggle that
+        // hides a section changes what down means.
+        .onChange(of: panelState(current)) { _, state in focus.update(for: state) }
+        .onAppear { takeGamepad(current) }
+        .onDisappear { releaseGamepad() }
+    }
             } else {
             EmptyView()
         }
     }
     
     @MainActor
+
+    // MARK: - The controller
+
+    /// What the panel is showing, so the reachable list is the visible one.
+    private func panelState(_ current: Game) -> OptionPanelState {
+        OptionPanelState(isNative: current.isNative,
+                         backend: gameOptions.cxGraphicsBackend,
+                         hudEnabled: gameOptions.mtlHudEnabled,
+                         metalFXOn: gameOptions.dxmtMetalFXSpatial,
+                         osVersion: Int(OSVersion),
+                         armShown: showArmSupport)
+    }
+
+    /// Take the pad from the grid. Given back in `releaseGamepad`; the grid
+    /// re-wires itself when the sheet goes, so nothing is left with nobody
+    /// reading it.
+    private func takeGamepad(_ current: Game) {
+        focus.update(for: panelState(current))
+        gamepad.onMove = { direction in
+            focus.update(for: panelState(current))
+            focus.selectFirstIfNeeded()
+            switch direction {
+            case .up, .down:
+                focus.move(direction)
+            case .left, .right:
+                // Sideways is an adjustment, not a move: a slider goes one
+                // step, a picker one entry. Nothing to the side to move to.
+                guard let control = focus.current else { return }
+                _ = apply(direction == .right ? .right : .left, to: control)
+            }
+        }
+        gamepad.onPress = { press in
+            switch press {
+            case .back:
+                // Closing saves, through the sheet's one closing path. There
+                // is no "keep changes?" here on purpose: Undo, before B, is
+                // how to not keep them.
+                dismiss()
+            case .select:
+                guard let control = focus.current else { focus.selectFirstIfNeeded(); return }
+                if case .activate(let button) = apply(.select, to: control) { activate(button) }
+            case .options:
+                break
+            }
+        }
+    }
+
+    private func releaseGamepad() {
+        gamepad.onMove = nil
+        gamepad.onPress = nil
+        focus.clear()
+    }
+
+    /// What a press does to the form. Toggles flip on A; pickers cycle on A
+    /// or sideways; sliders step sideways; buttons are handed back to be run.
+    private func apply(_ adjust: OptionFocus.Adjust, to control: OptionControl) -> OptionFocus.Outcome {
+        let forward = adjust != .left
+        func flip(_ path: ReferenceWritableKeyPath<GameOptions, Bool>) -> OptionFocus.Outcome {
+            guard adjust == .select else { return .nothing }
+            gameOptions[keyPath: path].toggle(); return .changed
+        }
+        func step(_ path: ReferenceWritableKeyPath<GameOptions, Double>,
+                  by size: Double, in range: ClosedRange<Double>) -> OptionFocus.Outcome {
+            guard adjust != .select else { return .nothing }
+            gameOptions[keyPath: path] = OptionAdjust.nudge(gameOptions[keyPath: path], by: size,
+                                                             in: range, forward: forward)
+            return .changed
+        }
+        switch control {
+        case .backend:
+            gameOptions.cxGraphicsBackend = OptionAdjust.cycle(gameOptions.cxGraphicsBackend,
+                                                                in: OptionAdjust.backends, forward: forward)
+            return .changed
+        case .x87:          return flip(\.x87PatchEnabled)
+        case .mtlHud:       return flip(\.mtlHudEnabled)
+        case .advertiseAVX: return flip(\.advertiseAVX)
+        case .msync:        return flip(\.wineMSync)
+        case .sdl:          return flip(\.enableSDL)
+        case .hidraw:       return flip(\.disableHidraw)
+        case .ue4Hack:      return flip(\.ue4Hack)
+        case .mvkArgBuff:   return flip(\.mvkArgBuff)
+        case .dxmtMetalFX:  return flip(\.dxmtMetalFXSpatial)
+        case .d3dMtl4:      return flip(\.d3dMtl4Enabled)
+        case .dxmtMaxFPS:   return step(\.dxmtPreferredMaxFrameRate, by: OptionAdjust.fpsStep, in: 19...240)
+        case .d3dMaxFPS:    return step(\.d3dMaxFPS, by: OptionAdjust.fpsStep, in: 19...240)
+        case .dxmtUpscale:  return step(\.dxmtMetalSpatialUpscaleFactor, by: OptionAdjust.upscaleStep, in: 1.0...2.0)
+        case .hudOpacity:   return step(\.mtlHudOpacity, by: OptionAdjust.opacityStep, in: 0.1...1.0)
+        case .hudDetail:
+            gameOptions.mtlHudDetail = OptionAdjust.cycle(gameOptions.mtlHudDetail,
+                                                          in: MetalHudDetail.allCases.map(\.rawValue), forward: forward)
+            return .changed
+        case .hudAlignment:
+            gameOptions.mtlHudAlignment = OptionAdjust.cycle(gameOptions.mtlHudAlignment,
+                                                             in: MetalHudAlignment.allCases.map(\.rawValue), forward: forward)
+            return .changed
+        case .save, .undo, .reset, .autoconfigure:
+            return adjust == .select ? .activate(control) : .nothing
+        }
+    }
+
+    /// The buttons, run from the pad exactly as from a click.
+    private func activate(_ control: OptionControl) {
+        switch control {
+        case .save:          session.save(gameOptions)
+        case .undo:          session.undo(into: gameOptions)
+        case .reset:         gameOptions.set(data: GameOptionsData(data: GameOptions()))
+        case .autoconfigure: Task { await runAutoconfigure() }
+        default: break
+        }
+    }
+
+    /// One place, for the button and for the pad. It configures, and if the
+    /// title still needs its fix it asks to put it on -- the asking is not
+    /// ceremony: that step renames a file in the user's game folder.
+    private func runAutoconfigure() async {
+        isLoading = true
+        do {
+            try await autoconfig()
+        } catch {
+            autoconfigError = error.localizedDescription
+        }
+        isLoading = false
+        if fix.canInstall { confirmingInstall = true }
+    }
+
     private func autoconfig() async throws {
         // Per game, as the fixes application already works: the catalogue is
         // consulted for THIS title, so the button reports what it needs rather

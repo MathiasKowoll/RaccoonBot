@@ -163,7 +163,10 @@ enum MetalHudAlignment: String, CaseIterable {
     }
 }
 
-struct GameOptionsData: Codable { // this is used for reading saved properties
+/// Equatable so "has anything changed" is a comparison and not a flag somebody
+/// has to remember to set on every control. Synthesized: every field is an
+/// optional value type, and a new field joins the comparison by existing.
+struct GameOptionsData: Codable, Equatable { // this is used for reading saved properties
     var cxGraphicsBackend: String?
     var wineMSync: Bool?
     var mtlHudEnabled: Bool?

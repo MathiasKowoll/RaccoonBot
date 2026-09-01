@@ -70,7 +70,7 @@ struct GamesList: View {
     /// All three are additions. Nothing below them changes how the mouse
     /// behaves: the cards are the same buttons they were, and this only draws
     /// a ring on one of them and calls the same handlers a click calls.
-    @StateObject private var gamepad = GamepadInput()
+    @EnvironmentObject private var gamepad: GamepadInput
     @State private var focus = GridFocus()
     @State private var gridWidth: CGFloat = 0
     @State private var installChoice: OwnedGame?
@@ -148,20 +148,20 @@ struct GamesList: View {
         syncFocusShape()
         syncSuspension()
         gamepad.onMove = { direction in
-            // A sheet is open and is driven by the mouse for now; moving the
-            // grid behind it would change what B closes back onto.
+            // While the options sheet is up, the pad is the sheet's: it takes
+            // the handlers over when it appears and hands them back when it
+            // goes. The fix warning has nothing to navigate, so B closes it.
             guard optionsGame == nil, !warnAboutFix else { return }
             syncFocusShape()
             focus.selectFirstIfNeeded()
             focus.move(direction)
         }
         gamepad.onPress = { press in
-            if optionsGame != nil || warnAboutFix {
-                // The one thing a pad can do to a sheet it cannot navigate:
-                // close it, so opening one is not a dead end.
-                if press == .back { optionsGame = nil; warnAboutFix = false }
+            if warnAboutFix {
+                if press == .back { warnAboutFix = false }
                 return
             }
+            guard optionsGame == nil else { return }
             syncFocusShape()
             guard let index = focus.index,
                   index < libraryPageGlobals.filteredGames.count else {
@@ -281,6 +281,8 @@ struct GamesList: View {
         .onChange(of: gridWidth) { _, _ in syncFocusShape() }
         .onChange(of: libraryPageGlobals.playingID) { _, _ in syncSuspension() }
         .onChange(of: libraryPageGlobals.isLaunchingGame) { _, _ in syncSuspension() }
+        // The sheet took the pad; take it back when the sheet goes.
+        .onChange(of: optionsGame == nil) { _, closed in if closed { wireGamepad() } }
         // Per-title options, through the same sheet the detail page uses.
         .sheet(isPresented: Binding(get: { optionsGame != nil },
                                     set: { if !$0 { optionsGame = nil } })) {

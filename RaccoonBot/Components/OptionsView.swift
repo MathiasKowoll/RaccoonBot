@@ -120,9 +120,28 @@ struct OptionsView: View {
                         }
                         appGlobals.selectedBottle = ""
                         Task { @MainActor in
-                            let patchedAppURL = await makeCrossoverPatchedCopy(sourceCXPath: url, bottlesRoot: appGlobals.bottlesRoot, setProgress: { p,m in progress = p; progressLabel = m  }, setLoading: { state in downloading = state })
+                            // MacGameVideoFix makes the copy now, with the
+                            // script this application carries. What comes out
+                            // declares itself in mgvf-origin.json; the patcher
+                            // this replaced left 26.3p0.1.x and nothing else,
+                            // which is how a copy's maker can be told apart.
+                            downloading = true
+                            let patchedAppURL: URL
+                            do {
+                                patchedAppURL = try await EngineMaker.make(
+                                    from: url,
+                                    bottlesRoot: appGlobals.bottlesRoot,
+                                    replacing: true,
+                                    progress: { p, m in Task { @MainActor in progress = p; progressLabel = m } })
+                            } catch {
+                                downloading = false
+                                progress = 0
+                                progressLabel = error.localizedDescription
+                                console.error(error.localizedDescription)
+                                return
+                            }
+                            downloading = false
                             progress = 0
-                            await makeX87CrossoverPatchedCopy(sourceCXPath: url, bottlesRoot: appGlobals.bottlesRoot, patchedApp: patchedAppURL)
                             appGlobals.cxAppPath = patchedAppURL.path(percentEncoded: false)
                             persistUsrDefOptionString(key: "cxAppPath", value: patchedAppURL.relativePath)
                             persistUsrDefOptionString(key: "cxCompleteAppPath", value: patchedAppURL.path(percentEncoded: false))

@@ -72,9 +72,36 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
 usage() { sed -n '3,12p' "$0" >&2; exit 1; }
-[ $# -ge 1 ] || usage
 
-BOTTLE="${1%/}"
+# Two callers, two meanings for the first argument, and structure decides rather
+# than precedence.
+#
+# By hand this takes a bottle. The app passes every installer the GAME FOLDER it
+# found, because every other fix here goes beside the executable -- so if this
+# one simply preferred $1 it would be handed a game folder and treat it as a
+# bottle, and if it simply preferred the environment it would ignore a bottle
+# somebody typed. Neither rule is right for both callers.
+#
+# So look: a bottle has a cxbottle.conf and a drive_c. If $1 is one, use it. If
+# it is not and MGVF_BOTTLE names one, use that -- which is what the app sets,
+# from the bottle a person chose in the wizard. If neither, refuse and say so,
+# because guessing which bottle somebody meant is how a fix lands in a bottle
+# they never picked.
+is_bottle() { [ -n "$1" ] && [ -f "$1/cxbottle.conf" ] && [ -d "$1/drive_c" ]; }
+
+BOTTLE=""
+if is_bottle "${1:-}"; then
+  BOTTLE="${1%/}"
+elif is_bottle "${MGVF_BOTTLE:-}"; then
+  BOTTLE="${MGVF_BOTTLE%/}"
+else
+  echo "error: no bottle to work on." >&2
+  echo "       Pass one, e.g. ~/Library/Application Support/CrossOver/Bottles/Steam," >&2
+  echo "       or set MGVF_BOTTLE. A bottle is a folder with cxbottle.conf and drive_c." >&2
+  [ -n "${1:-}" ] && echo "       '$1' is not one." >&2
+  [ -n "${MGVF_BOTTLE:-}" ] && echo "       MGVF_BOTTLE='$MGVF_BOTTLE' is not one either." >&2
+  exit 1
+fi
 ACTION="${2:-install}"
 # A read-only caller sets MGVF_STATUS_ONLY=1. The default above is the
 # DESTRUCTIVE branch, so without this the read-only property of a survey rests
@@ -104,6 +131,11 @@ DLLS="d3d9.dll qasf.dll quartz.dll winegstreamer.dll"
 # requirement to bring the bottle down -- which for a launcher means quitting
 # Steam and ending the prefix before it can even tell a user whether their game
 # needs the fix.
+# bottles.sh carries crossover_for_bottle. Sourced BEFORE this file's own
+# helpers so that anything defined here still wins -- this script is shipped
+# standalone as well, so it must work whether or not that file is beside it.
+[ -f "$HERE/bottles.sh" ] && . "$HERE/bottles.sh"
+
 wine_in_bottle() {
   local bottle="$1" cx="$2"
   shift 2
@@ -112,6 +144,30 @@ wine_in_bottle() {
 }
 
 find_crossover() {
+  # Ask the BOTTLE which engine belongs to it, before falling back to names.
+  #
+  # The fallback below searches by name, and its names went stale: it looks for
+  # Crossover_patched.app, which this project stopped making, and for
+  # "$HOME/Applications/CrossOver"*.app -- a glob that never matches a copy named
+  # Crossover_MGVF.app, because sh compares globs case-sensitively even where the
+  # filesystem does not. So it fell through to /Applications/CrossOver.app and ran
+  # reg.exe under stock CrossOver against a bottle a patched engine had built.
+  #
+  # Wine then does what it always does when a bottle meets an unfamiliar engine:
+  # it updates it. Measured on this machine on 2026-08-31 -- 1,475 files rewritten
+  # under drive_c/windows, which undid three of the four DLLs this installer had
+  # just placed and left the override naming all four. The install reported
+  # success. Nothing failed loudly, which is the whole problem.
+  #
+  # crossover_for_bottle answers from the bottle: first the engine whose own
+  # CX_BOTTLE_PATH holds it, then the version. Its comment already described this
+  # exact failure; it simply was not the function being called.
+  if command -v crossover_for_bottle >/dev/null 2>&1 && [ -n "${BOTTLE:-}" ]; then
+    local byBottle
+    if byBottle="$(crossover_for_bottle "$BOTTLE" 2>/dev/null)" && [ -n "$byBottle" ]; then
+      printf '%s' "$byBottle"; return 0
+    fi
+  fi
   local c
   for c in "$HOME/Applications/Crossover_patched.app" \
            "$HOME/Applications/CrossOver"*.app \
@@ -192,7 +248,21 @@ src_for() {
 
 status() {
   local n=0 d key=0 cx
-  for d in $DLLS; do [ -f "$SYS/$d.mgvf-stock" ] && n=$((n+1)); done
+  # Count what is PLACED, not what was DISPLACED.
+  #
+  # This counted *.mgvf-stock -- the originals moved aside -- and that is only a
+  # proxy for "we installed here". A bottle with no d3d9.dll of its own displaces
+  # nothing, so a perfectly good install left nothing to count and the answer came
+  # back "absent" with all four of our files sitting in system32. The app maps
+  # absent to "not applied" and offers to install again, so the person installs
+  # twice and is told nothing happened either time.
+  #
+  # The honest question is whether OUR file is there, and that is answerable by
+  # comparing it with the one we would install. Same fault as generation 4's
+  # d3d10: state inferred from displacement is blind to what merely arrived.
+  for d in $DLLS; do
+    [ -f "$SYS/$d" ] && [ -f "$HERE/ng3-$d" ] && cmp -s "$SYS/$d" "$HERE/ng3-$d" && n=$((n+1))
+  done
 
   # Ask the bottle. If it cannot answer -- no CrossOver that matches its engine,
   # or a prefix that will not run reg.exe -- fall back to reading user.reg,
@@ -232,15 +302,22 @@ case "$ACTION" in
           rm -f "$SYS/$d"
         fi
       done
-      if cx="$(find_crossover)" && reachable "$BOTTLE" "$cx"; then
-        wine_in_bottle "$BOTTLE" "$cx" --cx-app reg.exe delete "$KEY" /f \
-          >/dev/null 2>&1 && echo "removed the per-application overrides"
+      # The last line is what a caller reads, so it must not say "restored"
+      # when the registry key is still there. It was doing exactly that: the
+      # explanation went to stderr and stdout ended with the word meaning done.
+      # Same fault as --status counting displacements -- a true thing said where
+      # nobody looks, and a false one where they do.
+      if cx="$(find_crossover)" && reachable "$BOTTLE" "$cx" \
+         && wine_in_bottle "$BOTTLE" "$cx" --cx-app reg.exe delete "$KEY" /f >/dev/null 2>&1; then
+        echo "removed the per-application overrides"
+        echo "restored"
       else
         echo "warning: the bottle could not be asked; the overrides are still" >&2
         echo "         in its registry. The DLLs have been put back, so nothing" >&2
-        echo "         of ours is loaded, but the key remains." >&2
+        echo "         of ours is loaded, but the key remains. Ask again when the" >&2
+        echo "         bottle is reachable; --status will say broken until then." >&2
+        echo "restored-except-registry"
       fi
-      echo "restored"
       exit 0 ;;
   install)
       ;;

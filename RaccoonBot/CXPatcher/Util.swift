@@ -32,7 +32,6 @@ nonisolated(unsafe) let PROCYON_SUPPORT_FOLDER_URL: URL = {
     return FileManager.default.fileExists(atPath: inherited.path(percentEncoded: false)) ? inherited : ours
 }()
 
-let PATCHED_CX_APPNAME = "Crossover_patched.app"
 private let DEFAULT_CXP_BOTTLES_ROOTPATH = "/Users/${USER}/"
 nonisolated let DEFAULT_CXP_BOTTLES_FOLDER = "CXPBottles"
 //private let DEFAULT_CXP_BOTTLES_ROOTPATH = "/Users/${USER}/Application Support/Procyon/"

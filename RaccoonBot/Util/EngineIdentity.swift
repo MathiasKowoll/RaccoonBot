@@ -7,12 +7,18 @@ import Foundation
 /// is the exact shape of the fault it repairs. So all three are read, and a
 /// field that cannot be read stays nil rather than being guessed.
 struct EngineIdentity: Equatable {
-    /// The bundle's own name: "Crossover_patched.app".
+    /// The bundle's own name: "Crossover_MGVF.app".
     ///
     /// The only one of the three that tells a patched copy from a stock one.
     /// Both report CFBundleVersion 26.3.0.39832 -- measured on this machine,
     /// not assumed -- so a payload matched on version alone would install into
     /// whichever CrossOver it was pointed at.
+    ///
+    /// The name is the field to read, and reading the wrong one has a cost
+    /// beyond a mismatched payload: an engine that does not own a bottle will
+    /// still open it, and wine then updates that bottle from the engine that
+    /// opened it. One such update rewrote 1,475 files under `drive_c/windows`
+    /// and reverted a fix that stays recorded as installed.
     let app: String
 
     /// CFBundleVersion: "26.3.0.39832".

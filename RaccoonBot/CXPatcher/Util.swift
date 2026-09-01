@@ -161,9 +161,18 @@ private func disable(dest: String) {
     }
 }
 
-func copyResource(name: String, destUrl: URL) throws {
+/// `resources` exists so this can be exercised against the source tree.
+///
+/// In a test host `Bundle.main` is not the application -- measured: asking it
+/// for a toolkit generation returns nothing -- so anything reaching for
+/// resources through it can only be tested by shape, never by behaviour. That
+/// is the gap that left the .orig contract agreed by both sides and exercised
+/// by neither.
+func copyResource(name: String, destUrl: URL, resources: URL? = nil) throws {
     let f = FileManager.default
-    if let resUrl = Bundle.main.url(forResource: name, withExtension: nil) {
+    let located = resources.map { $0.appendingPathComponent(name) }
+        .flatMap { f.fileExists(atPath: $0.path(percentEncoded: false)) ? $0 : nil }
+    if let resUrl = located ?? Bundle.main.url(forResource: name, withExtension: nil) {
         if(f.fileExists(atPath: destUrl.path())) {
             let orig = destUrl.appendingPathExtension("orig")
             if(!f.fileExists(atPath: orig.path())) {
@@ -376,8 +385,9 @@ func fetchLatestRelease(from path: String) async throws -> String {
 /// also named six `wine/x86_64-unix/*.so` that neither generation has ever
 /// carried; those directories ship empty. Six errors on every launch, for
 /// years, meaning nothing.
-func d3dMetalResources(version: String) -> [String] {
-    guard let root = Bundle.main.resourceURL?.appendingPathComponent("d3dMetal\(version)") else {
+func d3dMetalResources(version: String, resources: URL? = nil) -> [String] {
+    guard let root = (resources ?? Bundle.main.resourceURL)?
+        .appendingPathComponent("d3dMetal\(version)") else {
         return ["external"]
     }
     return d3dMetalResources(inGeneration: root)
@@ -408,7 +418,7 @@ func d3dMetalResources(inGeneration generation: URL) -> [String] {
 }
 
 
-func installd3dMetal(at: URL, version: String) throws -> Void {
+func installd3dMetal(at: URL, version: String, resources: URL? = nil) throws -> Void {
     guard let layout = EngineLayout.of(at) else {
         throw UnsupportedEngine(path: at.path(percentEncoded: false))
     }
@@ -426,19 +436,34 @@ func installd3dMetal(at: URL, version: String) throws -> Void {
         }
     }
 
-    let d3dmRes: [(res: String, dest: String)] = d3dMetalResources(version: version).map { path in
+    // A leftover this does NOT fix, recorded rather than guessed at.
+    //
+    // Generation 4 ships d3d10, which CrossOver does not, so installing 4
+    // creates it with no .orig -- and restoring cannot remove it, because
+    // restoring gives back what was displaced and cannot give back an absence.
+    // An engine reporting as generation 3 can hold that one file of 4.
+    //
+    // The obvious fix is wrong and was measured to be wrong: deleting files
+    // that have no .orig and whose names belong to the other generation also
+    // deletes CrossOver's OWN atidxx64 and nvngx, because after a restore a
+    // stock file has no backup either and the filesystem cannot tell the two
+    // apart. That version removed two files the engine shipped with. Doing it
+    // safely needs a record of what we placed, written when we place it --
+    // which is a change worth making deliberately rather than at the end of a
+    // long day.
+    let d3dmRes: [(res: String, dest: String)] = d3dMetalResources(version: version, resources: resources).map { path in
         let destPath = path.replacingOccurrences(of: "nvngx-on-metalfx", with: "nvngx")
         return (res: "d3dMetal\(version)/" + path, dest: "/\(layout.gptkRoot)/apple_gptk/" + destPath)
     }
     
-    let resources = d3dmRes
+    let toCopy = d3dmRes
         .map { item in
             (res: item.res, dest: at.appendingPathComponent(SHARED_SUPPORT_COMPONENT).appendingPathComponent(item.dest))
         }
     
-    for (res, dest) in resources {
+    for (res, dest) in toCopy {
         console.log("Copying \(res) to \(dest.path())")
-        try copyResource(name: res, destUrl: dest)
+        try copyResource(name: res, destUrl: dest, resources: resources)
     }
 }
 

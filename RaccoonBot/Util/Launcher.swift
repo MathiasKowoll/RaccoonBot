@@ -277,9 +277,6 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
         console.error(refusal)
         return
     }
-    let x87cxAppURL = f.homeDirectoryForCurrentUser.appendingPathComponent("Applications", isDirectory: true).appendingPathComponent(PATCHED_CX_X87_APPNAME)
-    // El bundle x87 sólo existe en 26; en 27 la precisión x87 es una variable.
-    let useX87Bundle = options!.x87PatchEnabled && EngineLayout.of(URL(fileURLWithPath: cxAppPath)) == .cx26
     let steamBootOptions = "-nochatui -nofriendsui -silent -no-browser -no-cef-sandbox -skipinitialbootstrap"
     // CX_BOTTLE_PATH names the root this bottle lives under, so `--bottle` can
     // only resolve to this one.
@@ -292,7 +289,7 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
     // to carry the redirection in its own configuration -- an accident to
     // depend on, not a design.
     let bottleRoot = URL(string: selectedBottle)?.deletingLastPathComponent().path(percentEncoded: false) ?? ""
-    let wineEnvs = "CX_BOTTLE_PATH=\"\(bottleRoot)\" CX_ROOT=\"\(useX87Bundle ? x87cxAppURL.path() : cxAppPath)/Contents/SharedSupport/CrossOver\" WINEPREFIX=\"\(URL(string: selectedBottle)?.path ?? "")\" WINEDEBUG=-all WINEMSYNC=\(options!.wineMSync ? "1" : "0")"
+    let wineEnvs = "CX_BOTTLE_PATH=\"\(bottleRoot)\" CX_ROOT=\"\(cxAppPath)/Contents/SharedSupport/CrossOver\" WINEPREFIX=\"\(URL(string: selectedBottle)?.path ?? "")\" WINEDEBUG=-all WINEMSYNC=\(options!.wineMSync ? "1" : "0")"
     
 //    try cpyd8d9DLLs(to: bottleURL, enable: options!.dx9PatchEnabled)
     
@@ -329,16 +326,20 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
         }
     }
     
-    if useX87Bundle {
-        if(!f.fileExists(atPath: x87cxAppURL.path())) {
-            console.error("Couldn't find \(x87cxAppURL.path())")
-            return
-        }
-        let workdirCommand = appExeURL != nil ? "cd \"\(appExeURL!.deletingLastPathComponent().path(percentEncoded: false))\" && " : ""
-        command = "\(workdirCommand)env \(EnvAssignments.removalArguments(options!.envVariables))\(getInlineEnvs(from: options!, cxAppPath: cxAppPath) + wineEnvs) \(x87cxAppURL.path())Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/wine \(gameLaunchCommand) \(arguments)"
-    } else {
+    // The x87 bundle is gone (2026-09-01). It was a second engine selected by
+    // the "reduced x87 precision" toggle, and what actually distinguished it
+    // was not precision: d9vk, ntdll and win32u lived only there, because the
+    // resource table filtered them out of the normal copy. So the toggle meant
+    // "use the engine that has d9vk", two unrelated things behind one switch.
+    //
+    // Removed because no current title needs it, confirmed with Mathias, and
+    // because it was the last path that derived an engine from a NAME rather
+    // than from the configured path -- which would have broken the moment
+    // MacGameVideoFix started making the copy and calling it something else.
+    //
+    // Reduced precision itself stays: on 27 it is FEX_X87REDUCEDPRECISION and
+    // on 26 ROSETTA_X87_PATH, both environment, neither needing a bundle.
         command = "env \(EnvAssignments.removalArguments(options!.envVariables))\(getInlineEnvs(from: options!, cxAppPath: cxAppPath) + wineEnvs) \(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \(gameLaunchCommand) \(arguments)"
-    }
     
     #if DEBUG
     console.log(command)

@@ -33,8 +33,6 @@ nonisolated(unsafe) let PROCYON_SUPPORT_FOLDER_URL: URL = {
 }()
 
 let PATCHED_CX_APPNAME = "Crossover_patched.app"
-// Sólo se construye para CrossOver 26. Ver makeX87CrossoverPatchedCopy.
-let PATCHED_CX_X87_APPNAME = "Crossover_patched_x87.app"
 private let DEFAULT_CXP_BOTTLES_ROOTPATH = "/Users/${USER}/"
 nonisolated let DEFAULT_CXP_BOTTLES_FOLDER = "CXPBottles"
 //private let DEFAULT_CXP_BOTTLES_ROOTPATH = "/Users/${USER}/Application Support/Procyon/"
@@ -297,22 +295,7 @@ func removeSignature(destURL: URL) throws {
     try safeShell(command)
 }
 
-/// The x87 variant of the patched engine -- a second copy whose signature is
-/// stripped so rosettaX87 can inject into it.
-///
-/// CrossOver 26 ONLY. On 26 an x86_64 bottle runs through Rosetta, and that
-/// injection is the only way to get reduced x87 precision. CrossOver 27 runs
-/// x86 in an ARM bottle through FEX (lib/wine/aarch64-unix/libwow64fex.so),
-/// where the same knob is one supported environment variable -- so there the
-/// second 1.9 GB copy buys nothing and is not built.
-func makeX87CrossoverPatchedCopy (sourceCXPath: URL, bottlesRoot: String, patchedApp: URL) async -> Void {
-    guard EngineLayout.of(sourceCXPath) == .cx26 else {
-        console.log("x87 variant skipped: not CrossOver 26 (FEX handles it there)")
-        return
-    }
-    await makeCrossoverPatchedCopy(sourceCXPath: sourceCXPath, bottlesRoot: bottlesRoot,
-                                   setProgress: { _, _ in }, setLoading: { _ in }, isX87: true)
-}
+// makeX87CrossoverPatchedCopy is gone: see the note in Launcher.swift.
 
 func signAndFixup(destPath: String) throws {
     try safeShell("/usr/bin/codesign --force --deep --sign - \"\(destPath)\"")
@@ -487,146 +470,18 @@ func activateApp(_ gameName: String) -> Void {
     app?.activate()
 }
 
-@discardableResult
-func makeCrossoverPatchedCopy(sourceCXPath: URL, bottlesRoot: String, setProgress: @escaping (Double, String) -> Void, setLoading: @escaping (Bool) -> Void, isX87: Bool = false) async -> URL {
-    let f = FileManager.default
-    let name = isX87 ? PATCHED_CX_X87_APPNAME : PATCHED_CX_APPNAME
-    let destUrl = f.homeDirectoryForCurrentUser.appendingPathComponent("Applications").appendingPathComponent(name)
-    let resources = allResources
-        .map { item in
-            (res: item.res, dest: destUrl.appendingPathComponent(SHARED_SUPPORT_COMPONENT + item.dest))
-        }
-    do {
-        // Make sure destination app doesn't exist and if it does, delete it
-        if (f.fileExists(atPath: destUrl.path())) {
-            try f.removeItem(at: destUrl)
-        }
-        // MARK: Step 1 copy the app in the user's application folder
-        try f.copyItem(at: sourceCXPath, to: destUrl)
-        
-        if(f.fileExists(atPath: destUrl.path())) {
-            // MARK: Step 1 copy resources
-            for (res, dest) in resources {
-                // ntdll, d3d9 and win32u go only into the x87 variant.
-                if(isX87) {
-                    console.log("Copying \(res) to \(dest.path())")
-                    try copyResource(name: res, destUrl: dest)
-                } else if (!res.contains(/ntdll|d3d9|win32u/)){
-                    console.log("Copying \(res) to \(dest.path())")
-                    try copyResource(name: res, destUrl: dest)
-                }
-            }
-            // MARK: Step 2 download DXMT
-            //
-            // GStreamer is deliberately NOT installed into the engine here.
-            //
-            // What this used to do: download a prebuilt GStreamer.framework
-            // from a third-party repository, copy it in, and then delete the
-            // ~85 GStreamer and GLib dylibs CrossOver ships -- each removal
-            // with `try?`, so every failure is silent, and a future CrossOver
-            // that adds one dylib missing from that hand-written list brings
-            // back the two-cores dyld crash with nothing to explain it. It
-            // also wrote to `lib64/`, a directory CrossOver 27 does not have.
-            //
-            // Instead we stage the two plugins CrossOver genuinely lacks --
-            // libgstlibav for VC-1, WMV, WMA and software VP9, libgstmatroska
-            // for WebM -- into a directory of their own, with the engine's own
-            // GStreamer core symlinked beside them so exactly one core and one
-            // type registry exist in the process, and point the bottle at it
-            // through GST_PLUGIN_PATH. Nothing inside the engine is replaced
-            // or removed, and the staging is built against this very bundle.
-            let (url: dxmtURL, versionTag: dxmtVersion) = try await getDXMTDownloadURL()
-            try await withCheckedThrowingContinuation { continuation in
-                let dxmtDownloader = TarDownloader(
-                    fromUrl: dxmtURL,
-                    // What has to be on disk for a cached download to count.
-                    // The archive unpacks into a directory named for its tag.
-                    expecting: dxmtVersion,
-                    onProgress: { progress in
-                        setProgress(progress, "Downloading DXMT")
-                    },
-                    onComplete: { srcURL in
-                        do {
-                            try installDXMT(srcURL: srcURL, destUrl: destUrl, versionTag: dxmtVersion)
-                            continuation.resume()
-                        } catch {
-                            console.error(String(reflecting: error))
-                            continuation.resume(throwing: error)
-                        }
-                        setLoading(false)
-                    },
-                    onError: { error in
-                        console.error("Error while downloading DXMT")
-                        setProgress(0, "Error while downloading DXMT")
-                        console.error(String(reflecting: error))
-                        continuation.resume(throwing: error)
-                    }
-                )
-                setLoading(true)
-                dxmtDownloader.download()
-            }
-            // The bottle root arrives from the menu rather than being decided
-            // here. It becomes MacGameVideoFix's `--bottle-path` when the copy
-            // moves there, and that flag is required with no default for the
-            // same reason: guessing it wrong is silent.
-            var opts = Opts()
-            opts.cxbottlesPath = bottlesRoot
-            // MARK: Step 3 add env variables to crossover configuration
-            addGlobals(appURL: destUrl, opts: opts)
-            // MARK: Step 4 disable auto update
-            if(opts.autoUpdateDisable) {
-                disableAutoUpdate(url: destUrl)
-            }
-            markAsPatched(url: destUrl)
-            // MARK: Step 5 put the decoders CrossOver does not ship inside it
-            //
-            // Before signing, because the files have to be inside the bundle
-            // when its signature is made. Moving anything already there aside
-            // as .orig -- the same treatment every other resource here gets,
-            // so the engine can always be put back.
-            //
-            // Out of our own bundle, not out of the user's GStreamer. The
-            // framework route is kept underneath because it still works and
-            // is tested, but it is the fallback now rather than the source:
-            // on a machine without the framework it copied nothing and said
-            // the patch had succeeded, and on a machine with a different
-            // 1.24.x it copied the wrong build, which loads rather than
-            // refuses and only shows itself later as a cutscene playing
-            // black. What we carry is twelve files checked against the
-            // hashes in CODEC-LICENCES.md before any of them is written.
-            //
-            // A failure here is reported and not fatal: an engine with no
-            // libav still runs every title whose video it can already decode,
-            // and refusing to finish the patch would take those away too.
-            setProgress(1, "Installing video decoders")
-            do {
-                let installed = try BundledCodecs.install(intoEngineAt: destUrl.path(percentEncoded: false))
-                console.log("decoders in \(installed.pluginDirectory)")
-            } catch {
-                console.warn("Bundled decoders not installed: \(error.localizedDescription)")
-                do {
-                    let installed = try EngineCodecs.install(intoEngineAt: destUrl.path(percentEncoded: false))
-                    console.log("decoders in \(installed.pluginDirectory), from the user's framework")
-                } catch {
-                    console.warn("No decoders installed: \(error.localizedDescription)")
-                }
-            }
-
-            // MARK: Step 6 sign
-            // MARK: Step 7 fix app after patching
-            if !isX87 {
-                try signAndFixup(destPath: destUrl.path())
-            } else {
-                try removeSignature(destURL: destUrl)
-            }
-        } else {
-            console.error("Couldn't find Crossover app in \(destUrl.path())")
-        }
-    } catch {
-        console.error(String(reflecting: error))
-    }
-    return destUrl
-}
+// makeCrossoverPatchedCopy is gone, and with it the x87 variant.
+//
+// MacGameVideoFix makes the engine now -- one application owning the engine
+// means one thing to validate rather than two, which was the whole reason.
+// See Util/EngineMaker.swift for what replaced it.
+//
+// The x87 bundle went with it. It was a second engine chosen by the "reduced
+// x87 precision" toggle, and what distinguished it was not precision: d9vk,
+// ntdll and win32u lived only there because the resource table filtered them
+// out of the normal copy. No current title needs it. Reduced precision itself
+// survives as what it always should have been -- an environment variable, in
+// getInlineEnvs, with no second engine behind it.
 
 func darwinUserCacheDir() -> URL? {
     var buf = [CChar](repeating: 0, count: 1024)

@@ -32,15 +32,10 @@ struct BottlesRootTests {
         #expect(root.contains("%20") == false)
     }
 
-    /// And the bottles this application is configured with sit under it, which
-    /// is what makes the two settings one story rather than two.
-    @Test func theConfiguredBottlesLiveUnderTheRoot() throws {
-        let globals = AppGlobals()
-        guard !globals.selectedBottle.isEmpty else { return }
-        let bottle = try #require(BottleReference(globals.selectedBottle))
-        var root = globals.bottlesRoot
-        while root.count > 1 && root.hasSuffix("/") { root.removeLast() }
-        #expect(bottle.root == root,
-                "the selected bottle sits under \(bottle.root) but the root says \(root)")
-    }
+    // A case that asserted THIS machine's configuration was here and has
+    // been removed. It compared the saved bottle against the saved root, which
+    // is a fact about one install rather than about the code -- the same
+    // antipattern as a test that needs a particular engine on disk. It would
+    // fail for somebody who moved their bottles, which is the thing the
+    // setting exists to let them do.
 }

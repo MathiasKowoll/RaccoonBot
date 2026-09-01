@@ -98,11 +98,22 @@ struct GameOptionsView: View {
                                     Divider()
                                     Text("32Bits options")
                                     Toggle("Reduced x87 precision", isOn: $gameOptions.x87PatchEnabled)
-                                    Toggle("Use DX9", isOn: $gameOptions.dx9PatchEnabled).onChange(of: gameOptions.dx9PatchEnabled) { oldValue, newValue in
-                                        if(newValue == true) {
-                                            gameOptions.cxGraphicsBackend = "wine"
-                                        }
-                                    }  // WINEDLLOVERRIDES=d3d9=n,b;d3d8=n,b has been removed
+                                    // "Use DX9" is gone: it promised one thing and did the
+                                    // opposite.
+                                    //
+                                    // Its only live effect was to set the backend to
+                                    // "wine" -- wined3d -- which is the opposite of what a
+                                    // Direct3D 9 title wants, since those are the ones that
+                                    // need d9vk. The DLL copy it was named for has one call
+                                    // site and it is commented out, and the override it
+                                    // once wrote was removed long ago, as the comment that
+                                    // used to sit here said. A switch whose only working
+                                    // part chose a renderer nobody asked for.
+                                    //
+                                    // The stored field stays so saved records still decode.
+                                    // Four titles here carry it set and their backends are
+                                    // untouched by this; a test holds that the two stay
+                                    // uncoupled.
                                 }
                             }
                             Spacer()

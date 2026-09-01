@@ -436,7 +436,19 @@ func installd3dMetal(at: URL, version: String, resources: URL? = nil) throws -> 
         }
     }
 
-    // A leftover this does NOT fix, recorded rather than guessed at.
+    // Two things recorded here rather than guessed at.
+    //
+    // A synthetic reproduction of an MGVF backup set -- same shapes, same
+    // symlinks -- made copyResource fail with "an item with the same name
+    // already exists" on wine/x86_64-unix/d3d11.so, where the same code
+    // against a real MGVF-made engine succeeded. `fileExists` follows a
+    // symlink, so a link whose target is momentarily absent reads as missing,
+    // the move-aside is skipped, and the copy then hits the link that is still
+    // there. Not chased to the bottom and not reproduced against a real
+    // engine, so it is a thread rather than a defect -- but it is the kind
+    // that only shows when external is being replaced underneath.
+    //
+    // A leftover this does NOT fix, measured against a real engine.
     //
     // Generation 4 ships d3d10, which CrossOver does not, so installing 4
     // creates it with no .orig -- and restoring cannot remove it, because

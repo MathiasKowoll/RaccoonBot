@@ -270,6 +270,13 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
     LaunchGeneration.shared.launched()
     console.warn("attempting to run steam.exe on game id \(id)")
     let arguments = options != nil ? " " + options!.gameArguments : ""
+    // A guard for an engine configured before the block existed, or chosen
+    // some other way. Refusing at the picker alone would let a machine that
+    // already points at a 27 keep launching on it.
+    if let refusal = EngineLayout.refusal(for: URL(fileURLWithPath: cxAppPath)) {
+        console.error(refusal)
+        return
+    }
     let x87cxAppURL = f.homeDirectoryForCurrentUser.appendingPathComponent("Applications", isDirectory: true).appendingPathComponent(PATCHED_CX_X87_APPNAME)
     // El bundle x87 sólo existe en 26; en 27 la precisión x87 es una variable.
     let useX87Bundle = options!.x87PatchEnabled && EngineLayout.of(URL(fileURLWithPath: cxAppPath)) == .cx26

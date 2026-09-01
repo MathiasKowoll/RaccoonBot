@@ -70,6 +70,32 @@ enum EngineLayout {
     /// Read from the bundle's own CFBundleVersion. A patched copy keeps the
     /// version of the CrossOver it was copied from, which is exactly what we
     /// want: the copy has the layout of its source.
+    /// Generations this application will not use, whatever it can do with them.
+    ///
+    /// CrossOver 27 is blocked until it settles (decided 2026-09-01). This is
+    /// not a capability check and must not be read as one: the layout type
+    /// below already knows 27 keeps its libraries under `lib/<arch>` where 26
+    /// keeps one `lib64`, and the codec and toolkit paths follow it. It is a
+    /// judgement about stability, and it lives in one place so that the
+    /// patcher, the launcher and the engine picker cannot come to different
+    /// answers about the same engine.
+    ///
+    /// Lifting it is deleting one entry from this set.
+    static let blocked: Set<EngineLayout> = [.cx27]
+
+    /// Why this engine may not be used, or nil.
+    ///
+    /// An engine whose generation cannot be read is refused too. Not knowing
+    /// is not permission: the version is how everything else about an engine
+    /// is decided, and proceeding without it means guessing the layout.
+    static func refusal(for appURL: URL) -> String? {
+        guard let layout = of(appURL) else {
+            return "\(appURL.lastPathComponent) does not say which CrossOver it is, so it cannot be used."
+        }
+        guard blocked.contains(layout) else { return nil }
+        return "CrossOver 27 is not in use yet. Choose a CrossOver 26 instead."
+    }
+
     static func of(_ appURL: URL) -> EngineLayout? {
         let plist = appURL.appendingPathComponent("Contents/Info.plist")
         guard let d = NSDictionary(contentsOf: plist),

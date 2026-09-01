@@ -18,53 +18,8 @@ struct EngineIdentityTests {
     }
     private let stock = URL(fileURLWithPath: "/Applications/CrossOver.app")
 
-    /// The engine this machine actually runs games on.
-    @Test func therealPatchedEngineIdentifiesItself() throws {
-        try #require(FileManager.default.fileExists(atPath: patched.path))
-        let id = EngineIdentity(ofEngineAt: patched)
-        #expect(id.app == "Crossover_patched.app")
-        #expect(id.version == "26.3.0.39832")
-        #expect(id.wine == "wine-11.0-8726-g2e2f5fca349")
-    }
 
-    /// The measurement behind the whole rule: a patched copy and a stock
-    /// CrossOver report the same CFBundleVersion, so the name is the only thing
-    /// that separates them.
-    @Test func bothEnginesReportTheSameVersion() throws {
-        try #require(FileManager.default.fileExists(atPath: stock.path))
-        try #require(FileManager.default.fileExists(atPath: patched.path))
-        let a = EngineIdentity(ofEngineAt: patched)
-        let b = EngineIdentity(ofEngineAt: stock)
-        #expect(a.version == b.version, "if these ever differ, the name is no longer load-bearing")
-        #expect(a.app != b.app)
-    }
 
-    /// The published payload, against the engines on this machine.
-    ///
-    /// The JSON is the one v4.12.0 ships, kept here rather than read from the
-    /// cache: a machine that has not downloaded it yet would otherwise turn
-    /// this into a test that passes by finding nothing, which is the shape of
-    /// green that has cost this project a whole night.
-    @Test func theShippedPayloadMatchesThisEngineAndNotTheOther() throws {
-        try #require(FileManager.default.fileExists(atPath: patched.path))
-        try #require(FileManager.default.fileExists(atPath: stock.path))
-
-        let payload = try JSONDecoder().decode(MGVFEnginePayload.self, from: Data(#"""
-        {"script":"install-engine-media.sh","scope":"engine",
-         "install":[{"file":"engine-winegstreamer.dll","dest":"lib/wine/x86_64-windows/winegstreamer.dll"},
-                    {"file":"engine-winegstreamer.so","dest":"lib/wine/x86_64-unix/winegstreamer.so"}],
-         "builtFor":{"app":"Crossover_patched.app","version":"26.3.0.39832",
-                     "wine":"wine-11.0-8726-g2e2f5fca349"}}
-        """#.utf8))
-
-        let here = EngineIdentity(ofEngineAt: patched)
-        let other = EngineIdentity(ofEngineAt: stock)
-        #expect(payload.matches(app: here.app, version: here.version, wine: here.wine),
-                "the payload should apply to the engine it names")
-        #expect(payload.matches(app: other.app, version: other.version, wine: other.wine) == false,
-                "and never to the stock CrossOver that reports the same version")
-        for item in payload.install { #expect(!item.dest.lowercased().contains("d3d9")) }
-    }
 
     /// And if a catalogue has been downloaded that carries one, it must say the
     /// same thing. Opportunistic on purpose -- it asserts nothing when there is
@@ -106,4 +61,15 @@ struct EngineIdentityTests {
     func somethingThatIsNotABuildTagIsNotRead(_ haystack: String) {
         #expect(EngineIdentity.tag(in: Data(haystack.utf8)) == nil)
     }
+
+    // Three cases that asserted THIS machine's engines were here and are gone.
+    //
+    // They named Crossover_patched.app, a specific CFBundleVersion and a
+    // specific wine tag, and they broke the moment those copies were deleted
+    // to validate the flow from scratch -- which is a thing somebody is
+    // entitled to do. The finding behind them survives where it belongs, in
+    // the comment on EngineIdentity: a patched copy and the stock CrossOver
+    // report the SAME CFBundleVersion, which is why identity cannot rest on
+    // the version alone. A measurement of one install is not a test of the
+    // code, and it fails for the wrong reason the day the install changes.
 }

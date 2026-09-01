@@ -111,6 +111,13 @@ struct OptionsView: View {
                 Button(URL(string: appGlobals.cxAppPath ?? "")?.lastPathComponent ?? "Select a Crossover App...") {
                     shouldShowBottleSelector = false
                     if let url = openFolderSelectorPanel(type: .application) {
+                        // Refused before anything is copied, rather than after
+                        // an hour of patching. One rule, in EngineLayout.
+                        if let refusal = EngineLayout.refusal(for: url) {
+                            console.error(refusal)
+                            progressLabel = refusal
+                            return
+                        }
                         appGlobals.selectedBottle = ""
                         Task { @MainActor in
                             let patchedAppURL = await makeCrossoverPatchedCopy(sourceCXPath: url, bottlesRoot: appGlobals.bottlesRoot, setProgress: { p,m in progress = p; progressLabel = m  }, setLoading: { state in downloading = state })

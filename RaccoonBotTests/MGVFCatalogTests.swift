@@ -15,6 +15,11 @@ private final class MemoryStore: MGVFDecisionStore {
     func setAppliedFingerprint(_ fingerprint: String?, for folder: String) {
         if let fingerprint { fingerprints[folder] = fingerprint } else { fingerprints.removeValue(forKey: folder) }
     }
+    var stamps: [String: String] = [:]
+    func bottleStamp(for folder: String) -> String? { stamps[folder] }
+    func setBottleStamp(_ stamp: String?, for folder: String) {
+        if let stamp { stamps[folder] = stamp } else { stamps.removeValue(forKey: folder) }
+    }
     var pairs: [String: String] = [:]
     var dismissed: Set<String> = []
     func pairedTitle(for folder: String) -> String? { pairs[folder] }
@@ -343,6 +348,11 @@ struct MGVFSchemaThreeTests {
 }
 
 private final class SharedMemoryStore: MGVFDecisionStore {
+    var stamps: [String: String] = [:]
+    func bottleStamp(for folder: String) -> String? { stamps[folder] }
+    func setBottleStamp(_ stamp: String?, for folder: String) {
+        if let stamp { stamps[folder] = stamp } else { stamps.removeValue(forKey: folder) }
+    }
     var fingerprints: [String: String] = [:]
     func appliedFingerprint(for folder: String) -> String? { fingerprints[folder] }
     func setAppliedFingerprint(_ fingerprint: String?, for folder: String) {
@@ -449,3 +459,89 @@ struct PatchAllTargetTests {
         #expect(PatchAll.targets(from: [m], needsPatch: { _ in true }).isEmpty)
     }
 }
+
+/// Whether a recorded install can still be vouched for.
+///
+/// The record says what this application did. Wine can undo it without us: an
+/// update rewrites a bottle's own system files, and a fix that put DLLs in
+/// `system32` goes with them while the record stays. That overstates, and an
+/// overstatement reads as fine, so nobody looks.
+struct BottleStampRecordTests {
+
+    private func bottle(stamp: String?) throws -> BottleReference {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("stamp-cat-\(UUID().uuidString)")
+            .appendingPathComponent("Steam")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        if let stamp {
+            try stamp.write(to: dir.appendingPathComponent(BottleStamp.fileName),
+                            atomically: true, encoding: .utf8)
+        }
+        return try #require(BottleReference(dir.path(percentEncoded: false)))
+    }
+
+    private func write(_ stamp: String, into reference: BottleReference) throws {
+        let dir = try #require(reference.directory)
+        try stamp.write(to: dir.appendingPathComponent(BottleStamp.fileName),
+                        atomically: true, encoding: .utf8)
+    }
+
+    private func catalog(_ store: MemoryStore) -> MGVFCatalog {
+        MGVFCatalog(manifest: manifest([game("install-ng3-fix.sh", exe: "ng3.exe")]),
+                    directory: URL(fileURLWithPath: "/tmp"),
+                    store: store)
+    }
+
+    /// Nothing recorded is not "nothing changed". A title patched by a build
+    /// that wrote no stamp is one we cannot speak about, and inventing an alarm
+    /// for it would flag the whole library the first time this ships.
+    @Test func withNothingRecordedNothingIsClaimed() throws {
+        let c = catalog(MemoryStore())
+        #expect(c.bottlesChanged(folder: "/games/ng3", bottles: [try bottle(stamp: "111")]) == false)
+    }
+
+    @Test func aStampThatHasNotMovedIsNotAChange() throws {
+        let store = MemoryStore()
+        let c = catalog(store)
+        let b = try bottle(stamp: "1784108640")
+        c.recordApplied(folder: "/games/ng3", game: game("install-ng3-fix.sh"), bottles: [b])
+        #expect(c.bottlesChanged(folder: "/games/ng3", bottles: [b]) == false)
+    }
+
+    /// The case this exists for: 2026-08-31 08:19, when the number changed and
+    /// three of four DLLs went back to the engine's own.
+    @Test func aStampThatMovedIsAChange() throws {
+        let store = MemoryStore()
+        let c = catalog(store)
+        let b = try bottle(stamp: "1784108640")
+        c.recordApplied(folder: "/games/ng3", game: game("install-ng3-fix.sh"), bottles: [b])
+        try write("1784200000", into: b)
+        #expect(c.bottlesChanged(folder: "/games/ng3", bottles: [b]) == true)
+    }
+
+    /// Both or neither: a stamp outliving the fingerprint would be a record of
+    /// a bottle for a fix nobody claims any more.
+    @Test func forgettingTheFixForgetsTheStamp() throws {
+        let store = MemoryStore()
+        let c = catalog(store)
+        let b = try bottle(stamp: "111")
+        c.recordApplied(folder: "/games/ng3", game: game("install-ng3-fix.sh"), bottles: [b])
+        #expect(store.stamps["/games/ng3"] != nil)
+        c.forgetApplied(folder: "/games/ng3")
+        #expect(store.stamps["/games/ng3"] == nil)
+        #expect(store.fingerprints["/games/ng3"] == nil)
+        try write("222", into: b)
+        #expect(c.bottlesChanged(folder: "/games/ng3", bottles: [b]) == false)
+    }
+
+    /// With no bottle configured there is nothing the stamp could be about,
+    /// and "every title changed" is the wrong thing to say about it.
+    @Test func noBottleConfiguredIsNotAChange() throws {
+        let store = MemoryStore()
+        let c = catalog(store)
+        c.recordApplied(folder: "/games/ng3", game: game("install-ng3-fix.sh"),
+                        bottles: [try bottle(stamp: "111")])
+        #expect(c.bottlesChanged(folder: "/games/ng3", bottles: []) == false)
+    }
+}
+

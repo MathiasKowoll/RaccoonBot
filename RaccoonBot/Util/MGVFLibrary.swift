@@ -180,6 +180,23 @@ final class MGVFLibrary: ObservableObject {
         case none
         case missing
         case outdated
+        /// A fix we recorded installing, into a bottle that has been updated
+        /// since. Not "gone" -- an update reverts a bottle's own system files
+        /// and may or may not have taken this fix with it. Only the installer
+        /// can say which, and this is what says it is worth asking.
+        case unverified
+    }
+
+    /// The bottles anything that writes into a bottle is allowed to touch.
+    ///
+    /// Read here rather than handed in, because the two callers that most need
+    /// the answer -- a row being drawn and a game about to launch -- have no
+    /// bottle to hand. These are the same defaults `AppGlobals` initialises
+    /// from and `OptionsView` persists on change, parsed by the one accessor
+    /// that is allowed to parse them.
+    private var configuredBottles: [BottleReference] {
+        ConfiguredBottles.configured(selected: readUsrDefOptionString(key: "selectedBottle") ?? "",
+                                     arm: readUsrDefOptionString(key: "selectedArmBottle") ?? "")
     }
 
     func need(folder: String?) -> FixNeed {
@@ -187,7 +204,11 @@ final class MGVFLibrary: ObservableObject {
         if catalog.isDismissed(folder) { return .none }
         if entry.installsIntoBottle {
             guard catalog.hasApplied(folder: folder) else { return .missing }
-            return catalog.isOutdated(folder: folder, game: entry) ? .outdated : .none
+            if catalog.isOutdated(folder: folder, game: entry) { return .outdated }
+            // Asked last, because a fix we know to be the wrong version is
+            // worth saying so about whether or not the bottle also moved.
+            if catalog.bottlesChanged(folder: folder, bottles: configuredBottles) { return .unverified }
+            return .none
         }
         var url = URL(fileURLWithPath: folder)
         if !entry.carrierDir.isEmpty { url.appendPathComponent(entry.carrierDir) }
@@ -214,7 +235,12 @@ final class MGVFLibrary: ObservableObject {
         // not while drawing a row, where it does not.
         if entry.installsIntoBottle {
             guard catalog.hasApplied(folder: folder) else { return true }
-            return catalog.isOutdated(folder: folder, game: entry)
+            if catalog.isOutdated(folder: folder, game: entry) { return true }
+            // An updated bottle makes this a title worth offering, not a title
+            // known to need anything. Offering costs one `--status` in the
+            // coordinator that handles it, which answers properly; a fix that
+            // is still there comes back installed and is skipped.
+            return catalog.bottlesChanged(folder: folder, bottles: configuredBottles)
         }
         var url = URL(fileURLWithPath: folder)
         if !entry.carrierDir.isEmpty { url.appendPathComponent(entry.carrierDir) }

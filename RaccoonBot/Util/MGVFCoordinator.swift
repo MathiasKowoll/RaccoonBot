@@ -249,7 +249,7 @@ final class MGVFCoordinator: ObservableObject {
             // What was applied, so a later bundle can be compared against it.
             // Only on success: recording a fix that failed to install would
             // claim this folder is current when nothing was written.
-            if outcome.succeeded { catalog.recordApplied(folder: folder, game: entry) }
+            if outcome.succeeded { catalog.recordApplied(folder: folder, game: entry, bottles: bottles) }
             await refresh()
         } catch {
             lastError = error.localizedDescription
@@ -294,7 +294,7 @@ final class MGVFCoordinator: ObservableObject {
             if let failed = installed.failure {
                 lastError = MGVFRunner.redacted(failed.stderr).trimmingCharacters(in: .whitespacesAndNewlines)
             } else {
-                catalog.recordApplied(folder: folder, game: entry)
+                catalog.recordApplied(folder: folder, game: entry, bottles: bottles)
             }
             await refresh()
         } catch {

@@ -68,6 +68,12 @@ protocol MGVFDecisionStore: AnyObject {
     /// it. Nil for a folder patched by a build that did not record one.
     func appliedFingerprint(for folder: String) -> String?
     func setAppliedFingerprint(_ fingerprint: String?, for folder: String)
+    /// What the bottles looked like when this folder was patched, if we wrote
+    /// it. Nil for a folder patched by a build that did not record one -- which
+    /// is not the same as "the bottles have not changed", and must not be read
+    /// as it.
+    func bottleStamp(for folder: String) -> String?
+    func setBottleStamp(_ stamp: String?, for folder: String)
 }
 
 final class MGVFUserDefaultsStore: MGVFDecisionStore {
@@ -75,6 +81,7 @@ final class MGVFUserDefaultsStore: MGVFDecisionStore {
     private let pairKey = "mgvf.pairedTitles"
     private let dismissKey = "mgvf.dismissedFolders"
     private let appliedKey = "mgvf.appliedFingerprints"
+    private let stampKey = "mgvf.bottleStamps"
 
     init(defaults: UserDefaults = .standard) { self.defaults = defaults }
 
@@ -103,6 +110,18 @@ final class MGVFUserDefaultsStore: MGVFDecisionStore {
         var a = applied
         if let fingerprint { a[folder] = fingerprint } else { a.removeValue(forKey: folder) }
         applied = a
+    }
+
+    private var stamps: [String: String] {
+        get { defaults.dictionary(forKey: stampKey) as? [String: String] ?? [:] }
+        set { defaults.set(newValue, forKey: stampKey) }
+    }
+
+    func bottleStamp(for folder: String) -> String? { stamps[folder] }
+    func setBottleStamp(_ stamp: String?, for folder: String) {
+        var s = stamps
+        if let stamp { s[folder] = stamp } else { s.removeValue(forKey: folder) }
+        stamps = s
     }
 
     func isDismissed(_ folder: String) -> Bool { dismissed.contains(folder) }
@@ -196,9 +215,28 @@ final class MGVFCatalog: @unchecked Sendable {
         return value
     }
 
-    /// Record which fix a folder now has. Called after applying one.
-    func recordApplied(folder: String, game: MGVFGame) {
+    /// Record which fix a folder now has, and what the bottles looked like.
+    ///
+    /// Called after applying one. The stamp is written for every fix rather
+    /// than only for bottle-scoped ones, because it costs one file read and
+    /// because which fixes a bottle update can reach is a fact about wine, not
+    /// about us -- a later reader should be able to ask the question without
+    /// first having to decide it was worth recording.
+    func recordApplied(folder: String, game: MGVFGame, bottles: [BottleReference]) {
         store.setAppliedFingerprint(currentFingerprint(for: game), for: folder)
+        store.setBottleStamp(BottleStamp.current(for: bottles), for: folder)
+    }
+
+    /// Have the bottles been updated since this folder was patched?
+    ///
+    /// False when no stamp was recorded, on the same principle as
+    /// `isOutdated`: a folder patched by a build that did not write one is a
+    /// folder we cannot speak about, and "we did not look" is not "it changed".
+    /// False also when no bottle is configured, because then there is nothing
+    /// the stamp could be about.
+    func bottlesChanged(folder: String, bottles: [BottleReference]) -> Bool {
+        guard !bottles.isEmpty, let recorded = store.bottleStamp(for: folder) else { return false }
+        return recorded != BottleStamp.current(for: bottles)
     }
 
     /// Is the fix on this folder one the bundle no longer carries?
@@ -212,7 +250,12 @@ final class MGVFCatalog: @unchecked Sendable {
         return applied != currentFingerprint(for: game)
     }
 
-    func forgetApplied(folder: String) { store.setAppliedFingerprint(nil, for: folder) }
+    func forgetApplied(folder: String) {
+        store.setAppliedFingerprint(nil, for: folder)
+        // Both or neither. A stamp left behind after the fingerprint is gone
+        // would be a record of a bottle for a fix that is no longer claimed.
+        store.setBottleStamp(nil, for: folder)
+    }
 
     /// Did this application install a fix here, and does it still say so?
     ///

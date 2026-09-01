@@ -199,18 +199,38 @@ struct OptionsView: View {
                         HStack(alignment: .top, spacing: 6) {
                             Image(systemName: targets.isEmpty ? "checkmark.circle" : "wand.and.sparkles")
                                 .foregroundStyle(targets.isEmpty ? .green : .orange)
-                            // Two different facts, said separately. A title with
+                            // Three different facts, said separately. A title with
                             // an older fix is patched; saying it "needs its video
                             // fix" reads as though nothing is installed, and after
                             // the payload moved to the bundled 5.0.2 that was five
                             // titles being described as broken when they were not.
+                            //
+                            // The third runs the other way and is the worse one: a
+                            // fix we recorded installing, into a bottle wine has
+                            // updated since. It may well still be there. Saying
+                            // nothing about it would be claiming that it is.
+                            //
+                            // Every count is measured. The version of this that
+                            // wrote `outdated = targets.count - missing` was right
+                            // only while there were exactly two answers.
                             Text({
-                                let missing = targets.filter { fixLibrary.need(folder: $0.folder) == .missing }.count
-                                let outdated = targets.count - missing
                                 if targets.isEmpty { return "Every installed title that needs a fix has one." }
-                                if missing == 0 { return "^[\(outdated) installed title](inflect: true) has an older video fix." }
-                                if outdated == 0 { return "^[\(missing) installed title](inflect: true) needs its video fix." }
-                                return "^[\(missing) installed title](inflect: true) needs its video fix; \(outdated) more have an older one."
+                                let needs = targets.map { fixLibrary.need(folder: $0.folder) }
+                                let missing = needs.filter { $0 == .missing }.count
+                                let outdated = needs.filter { $0 == .outdated }.count
+                                let unverified = needs.filter { $0 == .unverified }.count
+                                var said: [String] = []
+                                if missing > 0 {
+                                    said.append("^[\(missing) installed title](inflect: true) needs its video fix")
+                                }
+                                if outdated > 0 {
+                                    said.append("^[\(outdated) title](inflect: true) has an older one")
+                                }
+                                if unverified > 0 {
+                                    said.append("^[\(unverified) title](inflect: true) is in a bottle that has been updated since it was patched")
+                                }
+                                guard !said.isEmpty else { return "Every installed title that needs a fix has one." }
+                                return said.joined(separator: "; ") + "."
                             }())
                                 .font(.footnote)
                             Spacer()

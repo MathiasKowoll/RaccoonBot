@@ -10,6 +10,11 @@ import Foundation
 @testable import RaccoonBot
 
 private final class Store: MGVFDecisionStore {
+    var stamps: [String: String] = [:]
+    func bottleStamp(for folder: String) -> String? { stamps[folder] }
+    func setBottleStamp(_ stamp: String?, for folder: String) {
+        if let stamp { stamps[folder] = stamp } else { stamps.removeValue(forKey: folder) }
+    }
     var titles: [String: String] = [:]
     var dismissed: Set<String> = []
     var fingerprints: [String: String] = [:]

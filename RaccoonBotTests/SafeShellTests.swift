@@ -52,6 +52,11 @@ struct SafeShellTests {
 /// Asking somebody to open a terminal and set a variable before they can tell
 /// you what went wrong is asking too much -- of them, and of anyone giving
 /// support.
+/// Serialised: these cases write and read the same defaults keys, and
+/// swift-testing runs cases in parallel. Together they raced and one failed
+/// about one run in three while passing whenever run alone -- which reads as
+/// a mystery rather than as a race, and cost two investigations today.
+@Suite(.serialized)
 struct DebugSwitchTests {
 
     private var key: String { namespacedKey("debugLogging", "app") }

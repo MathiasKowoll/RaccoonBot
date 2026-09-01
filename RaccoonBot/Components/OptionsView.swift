@@ -199,9 +199,19 @@ struct OptionsView: View {
                         HStack(alignment: .top, spacing: 6) {
                             Image(systemName: targets.isEmpty ? "checkmark.circle" : "wand.and.sparkles")
                                 .foregroundStyle(targets.isEmpty ? .green : .orange)
-                            Text(targets.isEmpty
-                                 ? "Every installed title that needs a fix has one."
-                                 : "^[\(targets.count) installed title](inflect: true) needs its video fix.")
+                            // Two different facts, said separately. A title with
+                            // an older fix is patched; saying it "needs its video
+                            // fix" reads as though nothing is installed, and after
+                            // the payload moved to the bundled 5.0.2 that was five
+                            // titles being described as broken when they were not.
+                            Text({
+                                let missing = targets.filter { fixLibrary.need(folder: $0.folder) == .missing }.count
+                                let outdated = targets.count - missing
+                                if targets.isEmpty { return "Every installed title that needs a fix has one." }
+                                if missing == 0 { return "^[\(outdated) installed title](inflect: true) has an older video fix." }
+                                if outdated == 0 { return "^[\(missing) installed title](inflect: true) needs its video fix." }
+                                return "^[\(missing) installed title](inflect: true) needs its video fix; \(outdated) more have an older one."
+                            }())
                                 .font(.footnote)
                             Spacer()
                             if !targets.isEmpty {

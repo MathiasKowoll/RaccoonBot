@@ -168,6 +168,34 @@ final class MGVFLibrary: ObservableObject {
     /// direction -- files in place while the registry override is missing -- and
     /// that case is caught by the real check in the game's options, which is
     /// also the only place that can do anything about it.
+    /// Why a title wants attention, which is not one question.
+    ///
+    /// "Needs its video fix" and "has an older one" are different facts and
+    /// were being reported as the same. After the payload moved from 4.12.x to
+    /// the bundled 5.0.2, every title whose fix had changed in between became
+    /// outdated -- correctly -- and the screen said five titles needed a fix
+    /// they already had. A row that overstates is the same defect as one that
+    /// understates: the person acts on what it says.
+    enum FixNeed: Equatable {
+        case none
+        case missing
+        case outdated
+    }
+
+    func need(folder: String?) -> FixNeed {
+        guard let folder, let catalog, let entry = catalog.entry(forFolder: folder) else { return .none }
+        if catalog.isDismissed(folder) { return .none }
+        if entry.installsIntoBottle {
+            guard catalog.hasApplied(folder: folder) else { return .missing }
+            return catalog.isOutdated(folder: folder, game: entry) ? .outdated : .none
+        }
+        var url = URL(fileURLWithPath: folder)
+        if !entry.carrierDir.isEmpty { url.appendPathComponent(entry.carrierDir) }
+        let keptAside = url.appendingPathComponent(entry.keptAs).path(percentEncoded: false)
+        if !FileManager.default.fileExists(atPath: keptAside) { return .missing }
+        return catalog.isOutdated(folder: folder, game: entry) ? .outdated : .none
+    }
+
     func needsPatch(folder: String?) -> Bool {
         guard let folder, let catalog, let entry = catalog.entry(forFolder: folder) else { return false }
         if catalog.isDismissed(folder) { return false }

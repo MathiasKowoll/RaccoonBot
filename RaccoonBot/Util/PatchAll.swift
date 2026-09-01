@@ -75,7 +75,7 @@ final class PatchAll: ObservableObject {
         // Asked once, before touching anything. Applying a fix renames files in
         // a game folder, and doing that to a running game is how a library ends
         // up half-patched.
-        if let reason = MGVFCoordinator.reasonNotToWrite() {
+        if let reason = MGVFCoordinator.refusal() {
             refusedReason = reason
             return
         }
@@ -107,14 +107,57 @@ final class PatchAll: ObservableObject {
                 continue
             }
 
+            // A refusal partway through a sweep is usually the sweep's own
+            // doing. Three of the installers write their per-application
+            // overrides by running reg.exe through wine, which leaves a
+            // wineserver and its services up for a few seconds afterwards --
+            // and the guard cannot tell those from a game. One run patched six
+            // titles and reported the remaining nine as refused, with nothing
+            // running but what it had started itself. So let the bottle settle
+            // and offer the title once more.
+            if coordinator.blocked != nil, await Self.waitForQuiet() {
+                if coordinator.canUpdate {
+                    await coordinator.update()
+                } else if coordinator.canInstall {
+                    await coordinator.install()
+                }
+            }
+
             if let blocked = coordinator.blocked {
+                // Still busy after waiting it out, so it is not our own
+                // furniture: something is genuinely open, and every title left
+                // would say the same thing. Nine identical failures read as
+                // nine separate problems, so stop and say where we reached.
                 failures.append(Failure(title: target.title, reason: blocked))
-            } else if let error = coordinator.lastError {
+                refusedReason = blocked
+                return
+            }
+            if let error = coordinator.lastError {
                 failures.append(Failure(title: target.title, reason: error))
             } else {
                 patched.append(target.title)
             }
             done += 1
         }
+    }
+
+    /// Wait for the bottle to go quiet, up to a point.
+    ///
+    /// A wineserver an installer started goes away on its own once its last
+    /// process has, which is seconds. Waiting much longer would mean waiting
+    /// out somebody's actual game, and that is not this button's business --
+    /// so it gives up, and the caller says so rather than guessing.
+    private static func waitForQuiet(upTo seconds: Int = 20) async -> Bool {
+        for _ in 0..<seconds {
+            try? await Task.sleep(for: .seconds(1))
+            // Off the main actor. Asking spawns pgrep twice and waits for
+            // both, and asking twenty times from the thread that draws the
+            // progress would stall the window this sweep is reporting into.
+            let quiet = await Task.detached(priority: .utility) {
+                MGVFCoordinator.reasonNotToWrite() == nil
+            }.value
+            if quiet { return true }
+        }
+        return false
     }
 }

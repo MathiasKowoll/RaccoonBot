@@ -236,7 +236,7 @@ final class MGVFCoordinator: ObservableObject {
     /// Apply the fix. Refuses rather than forces.
     func install() async {
         guard let folder, let catalog, let entry else { return }
-        if let reason = Self.reasonNotToWrite() { blocked = reason; return }
+        if let reason = Self.refusal() { blocked = reason; return }
         blocked = nil; lastError = nil; busy = true
         defer { busy = false }
         do {
@@ -269,7 +269,7 @@ final class MGVFCoordinator: ObservableObject {
     /// remembered; taking one off in order to put a better one on is not.
     func update() async {
         guard let folder, let catalog, let entry else { return }
-        if let reason = Self.reasonNotToWrite() { blocked = reason; return }
+        if let reason = Self.refusal() { blocked = reason; return }
         blocked = nil; lastError = nil; busy = true
         defer { busy = false }
         do {
@@ -310,7 +310,7 @@ final class MGVFCoordinator: ObservableObject {
     /// recorded so the title is not offered again on every launch.
     func remove() async {
         guard let folder, let catalog, let entry else { return }
-        if let reason = Self.reasonNotToWrite() { blocked = reason; return }
+        if let reason = Self.refusal() { blocked = reason; return }
         blocked = nil; lastError = nil; busy = true
         defer { busy = false }
         do {
@@ -346,31 +346,152 @@ final class MGVFCoordinator: ObservableObject {
     /// `because` names the consequence, because the two callers have different
     /// ones: applying a fix renames a file inside a game folder, restaging the
     /// codecs deletes the directory a running bottle has dylibs mapped from.
-    static func reasonNotToWrite(because: String = "the fix renames a file it may have open") -> String? {
-        if pgrepMatches("[.]exe") {
-            return "A Windows game is running. Close it first — \(because)."
+    /// Every case here still refuses. What changed is that the sentence names
+    /// what was found instead of asserting what it means. The old one asked
+    /// "does any command line contain `.exe`" and reported the answer as "a
+    /// Windows game is running" -- a claim about a program's purpose made from
+    /// evidence that only ever showed a suffix. Wine's own services carry that
+    /// suffix, and a sweep creates them itself: three installers write their
+    /// per-application overrides through `reg.exe`, so a run once patched six
+    /// titles and reported the remaining nine as a running game, with no game
+    /// anywhere on the machine.
+    ///
+    /// Asking runs pgrep twice and waits for it, so this is `nonisolated`: on
+    /// the main actor those two waits are two stalls of the window, and the
+    /// sweep asks once a second while it waits for a bottle to settle. It also
+    /// writes nothing -- a question that logs cannot be asked from a thread
+    /// where `console` is not safe, and `refusal(because:)` below is where the
+    /// three callers that act on the answer record it.
+    nonisolated static func reasonNotToWrite(because: String = "the fix renames a file it may have open") -> String? {
+        reason(for: whatIsRunning(), because: because)
+    }
+
+    /// The sentence for a state, kept apart from measuring one.
+    ///
+    /// Separate because a caller that measures and then asks again has asked
+    /// about two different instants: a process can arrive or leave in between,
+    /// and the two answers then disagree for a reason nobody can see. That is
+    /// not hypothetical -- a test written that way failed about one run in two.
+    nonisolated static func reason(for running: Running,
+                                   because: String = "the fix renames a file it may have open") -> String? {
+        if running.unknown {
+            return "Could not check what is running, so nothing was written."
         }
-        if pgrepMatches("wineserver") {
-            return "Steam or CrossOver is still running. Close it first — \(because)."
+
+        let named = running.games
+        if !named.isEmpty {
+            return "\(list(named)) \(named.count == 1 ? "is" : "are") running. "
+                 + "Close it first — \(because)."
         }
+
+        if !running.executables.isEmpty || running.server {
+            let what = running.executables.isEmpty ? "wineserver" : list(running.executables)
+            return "The bottle is still open — \(what) still running. "
+                 + "Give it a moment, or close CrossOver — \(because)."
+        }
+
         return nil
     }
 
-    /// True when at least one process matches. A failure to ask is not a
-    /// licence to write: it returns true, so the refusal stands.
-    private static func pgrepMatches(_ pattern: String) -> Bool {
+    /// The same answer, recorded. On the main actor, where `console` is only
+    /// ever touched from, and beside the callers that are about to act on it.
+    /// Until this existed a refusal left no trace at all, which is why a run
+    /// that reported nine of them could not be diagnosed afterwards.
+    static func refusal(because: String = "the fix renames a file it may have open") -> String? {
+        guard let reason = reasonNotToWrite(because: because) else { return nil }
+        console.warn("MGVF refused to write: \(reason)")
+        return reason
+    }
+
+    /// What is alive right now, named rather than counted.
+    nonisolated struct Running {
+        /// Windows executables, by their own name.
+        let executables: Set<String>
+        /// A wineserver, with or without anything under it.
+        let server: Bool
+        /// pgrep could not be asked at all, which is not the same answer as
+        /// finding nothing and must not be reported as one.
+        let unknown: Bool
+
+        /// The processes wine puts up for its own sake. Not one of them is a
+        /// game, and every one of them can be this application's own doing.
+        static let furniture: Set<String> = [
+            "services.exe", "winedevice.exe", "plugplay.exe", "rpcss.exe",
+            "svchost.exe", "conhost.exe", "explorer.exe", "start.exe",
+            "wineboot.exe", "winemenubuilder.exe", "reg.exe", "regedit.exe",
+            "rundll32.exe", "tabtip.exe", "cmd.exe",
+        ]
+
+        /// Everything that is not furniture. Steam and a game land here alike,
+        /// which is why the sentence names them rather than calling them a
+        /// game: the only thing measured is that they are running.
+        var games: Set<String> { executables.subtracting(Self.furniture) }
+    }
+
+    /// Ask for each thing once, and keep the names.
+    ///
+    /// A failure to ask is carried as `unknown` rather than folded into a
+    /// match, so the refusal can say which of the two happened. It refuses
+    /// either way: not being able to look is not a licence to write.
+    nonisolated static func whatIsRunning() -> Running {
+        guard let executables = pgrepNames("[.]exe") else {
+            return Running(executables: [], server: false, unknown: true)
+        }
+        guard let servers = pgrepNames("wineserver") else {
+            return Running(executables: executables, server: false, unknown: true)
+        }
+        return Running(executables: executables, server: !servers.isEmpty, unknown: false)
+    }
+
+    /// The names of the processes matching a pattern, or nil when pgrep could
+    /// not be run. An empty set means asked and found nothing, which is why
+    /// this is optional rather than just a set.
+    nonisolated private static func pgrepNames(_ pattern: String) -> Set<String>? {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
-        p.arguments = ["-f", pattern]
-        p.standardOutput = FileHandle.nullDevice
+        p.arguments = ["-f", "-l", pattern]
+        let pipe = Pipe()
+        p.standardOutput = pipe
         p.standardError = FileHandle.nullDevice
         do {
             try p.run()
+            // Read before waiting. The output is a few lines, but a pipe that
+            // fills while nobody reads it deadlocks, and the habit is free.
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
             p.waitUntilExit()
-            return p.terminationStatus == 0
+            // 0 found something, 1 found nothing. Anything else is pgrep
+            // itself failing, and that is the unknown answer, not "nothing".
+            guard p.terminationStatus == 0 || p.terminationStatus == 1 else { return nil }
+            var names: Set<String> = []
+            for line in String(decoding: data, as: UTF8.self).split(separator: "\n") {
+                // "pid  command line". Wine writes the executable as a Windows
+                // path in the middle of the line, so take the token that looks
+                // like one; for wineserver, which has no .exe, take the command.
+                let command = line.split(separator: " ").dropFirst()
+                if let exe = command.first(where: { $0.lowercased().hasSuffix(".exe") }) {
+                    names.insert(lastComponent(of: String(exe)))
+                } else if let first = command.first {
+                    names.insert(lastComponent(of: String(first)))
+                }
+            }
+            return names
         } catch {
-            return true
+            return nil
         }
+    }
+
+    /// Last component of a path written with either separator, because wine
+    /// reports both: a unix path for its loader, `C:\\windows\\...` for what it runs.
+    nonisolated private static func lastComponent(of path: String) -> String {
+        path.split(whereSeparator: { $0 == "/" || $0 == "\\" }).last.map(String.init) ?? path
+    }
+
+    /// Names in a sentence, in a fixed order so the same state reads the same
+    /// way twice, and capped so a bottle full of services is still a sentence.
+    nonisolated private static func list(_ names: Set<String>) -> String {
+        let sorted = names.sorted()
+        guard sorted.count > 3 else { return sorted.joined(separator: ", ") }
+        return sorted.prefix(3).joined(separator: ", ") + " and \(sorted.count - 3) more"
     }
 
     // MARK: - Wording

@@ -43,6 +43,24 @@ private func writeRegistry(in dir: URL, appID: Int, running: Int) throws {
     try text.write(to: dir.appendingPathComponent("user.reg"), atomically: true, encoding: .utf8)
 }
 
+/// Wait for something to become true, or give up saying so.
+///
+/// The question these ask is always "has the watcher noticed yet" and never
+/// "how long did it take". A fixed sleep answers the second and then asserts
+/// the first, so it passes alone and fails on a busy machine -- which reads as
+/// a mystery rather than as load. Waiting on the condition is both quicker in
+/// the ordinary case and not a race in the bad one: this took the test from
+/// 1.9 seconds to 0.4.
+private func eventually(within deadline: Duration = .seconds(10),
+                        _ condition: @Sendable () -> Bool) async -> Bool {
+    let end = ContinuousClock.now.advanced(by: deadline)
+    while ContinuousClock.now < end {
+        if condition() { return true }
+        try? await Task.sleep(for: .milliseconds(20))
+    }
+    return condition()
+}
+
 @Suite("Steam's own account of a game session")
 struct SteamAppStateTests {
 
@@ -83,6 +101,8 @@ struct SteamAppStateTests {
                                     appID: 485510,
                                     every: 20_000_000) { _ in fired.set() }
         }
+        // Fixed, deliberately: there is no polling your way to "it never
+        // fired". The only way to believe that is to wait, then look.
         try await Task.sleep(nanoseconds: 400_000_000)
         task.cancel()
         #expect(fired.didFire == false)
@@ -96,11 +116,13 @@ struct SteamAppStateTests {
                                     appID: 485510,
                                     every: 20_000_000) { _ in fired.set() }
         }
+        // Long enough that the watcher, polling every 20ms, has read the 1 at
+        // least once: without that there is no transition for it to see.
         try await Task.sleep(nanoseconds: 400_000_000)
         try writeRegistry(in: dir, appID: 485510, running: 0)
-        try await Task.sleep(nanoseconds: 1_500_000_000)
+        let didFire = await eventually { fired.didFire }
         task.cancel()
-        #expect(fired.didFire == true)
+        #expect(didFire == true)
     }
 
     /// Against the real thing: proves the key path matches what wine actually

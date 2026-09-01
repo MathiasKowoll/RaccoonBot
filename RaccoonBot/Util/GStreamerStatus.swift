@@ -170,26 +170,37 @@ nonisolated struct GStreamerStatus: Sendable {
 
     /// The installed framework, when it is not the version the decoders are
     /// meant to come from. Nil when it is, or when there is none.
+    ///
+    /// No longer part of anything the panel says, and deliberately so: since
+    /// 0.2.0 the decoders travel inside this application, so which GStreamer
+    /// somebody has installed does not affect what a patch imports. Kept
+    /// because it is still a true reading of the machine and 1.24.13 remains
+    /// the provenance of these binaries -- but it drives nothing, and a reader
+    /// who finds it should not conclude that it does.
     var frameworkMismatch: String? {
         guard case .present(let version) = framework, version != Self.expectedVersion else { return nil }
         return version
     }
 
+    /// What the panel says about this engine's decoders.
+    ///
+    /// It used to say which GStreamer would be imported into the engine at the
+    /// next patch, and which version was wanted. That stopped being true in
+    /// 0.2.0: the twelve libraries travel inside this application and
+    /// `make-engine-copy.sh` installs them from its own Resources. Nothing
+    /// RaccoonBot runs reads `/Library/Frameworks/GStreamer.framework` --
+    /// measured, by following every script it invokes.
+    ///
+    /// So the installed framework is no longer part of the answer, and saying
+    /// its version here invited somebody to go and change a thing that changes
+    /// nothing. What is left is the question the panel is actually for: does
+    /// this engine have the decoders, and what happens if it does not.
     var summary: String {
         if isUsable {
-            if let other = frameworkMismatch {
-                return "This CrossOver carries libav. GStreamer \(other) is installed; \(Self.expectedVersion) is the version these decoders are taken from, so patching again would import that one."
-            }
             return "This CrossOver carries libav — the decoders for VC-1, WMV, WMA and software VP9"
         }
-        switch framework {
-        case .missing:
-            return "This CrossOver has no libav, and GStreamer \(Self.expectedVersion) is not installed to take it from — titles needing VC-1, WMV or WMA will be silent"
-        case .present(let version) where version != Self.expectedVersion:
-            return "This CrossOver has no libav. GStreamer \(version) is installed, but \(Self.expectedVersion) is the version these decoders are taken from"
-        case .present:
-            return "This CrossOver has no libav yet — patch it again and GStreamer \(Self.expectedVersion) will be imported into it"
-        }
+        return "This CrossOver has no libav — VC-1, WMV, WMA and software VP9 will be silent "
+             + "or black until it is patched again, which installs the decoders this application carries"
     }
 
     /// The decoders being in the engine is what makes a video play. The

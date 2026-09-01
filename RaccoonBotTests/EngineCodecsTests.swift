@@ -164,11 +164,33 @@ struct GStreamerRequirementTests {
         #expect(GStreamerStatus.expectedVersion == "1.24.13")
     }
 
-    @Test func anotherVersionIsNamedRatherThanAccepted() {
+    /// The reading survives; naming it to the user does not.
+    ///
+    /// Since 0.2.0 the decoders travel inside this application, so which
+    /// GStreamer is installed does not change what a patch imports. A summary
+    /// that named a version was inviting somebody to go and change a thing
+    /// that changes nothing.
+    @Test func anotherVersionIsStillReadButNoLongerToldToTheUser() {
         let s = status(framework: .present(version: "1.28.4"), decoders: [])
         #expect(s.frameworkMismatch == "1.28.4")
-        #expect(s.summary.contains("1.28.4"))
-        #expect(s.summary.contains("1.24.13"), "the summary has to say which one is wanted")
+        #expect(!s.summary.contains("1.28.4"))
+        #expect(!s.summary.contains("1.24.13"))
+    }
+
+    /// No version anywhere in the sentence, whatever the machine has. Written
+    /// as a sweep rather than as three cases, because the fault it guards
+    /// against is a branch somebody adds later that names one again.
+    @Test func noSummaryNamesAGStreamerVersion() {
+        let frameworks: [GStreamerStatus.Framework] = [
+            .missing, .present(version: "1.24.13"), .present(version: "1.28.4"),
+        ]
+        for framework in frameworks {
+            for decoders in [[], ["libgstlibav"]] {
+                let text = status(framework: framework, decoders: decoders).summary
+                #expect(!text.contains("1.24"), "named a version: \(text)")
+                #expect(!text.contains("GStreamer"), "named GStreamer: \(text)")
+            }
+        }
     }
 
     @Test func theRightVersionIsNotFlagged() {
@@ -188,10 +210,14 @@ struct GStreamerRequirementTests {
         #expect(!none.isOK)
     }
 
-    @Test func withNoFrameworkAtAllItSaysWhatIsMissing() {
+    /// An engine without the decoders still has to say what that costs. What
+    /// changed is where they come from: this application carries them, so the
+    /// answer is "patch it again" and not "go and install something".
+    @Test func anEngineWithoutDecodersSaysWhatItCosts() {
         let s = status(framework: .missing, decoders: [])
         #expect(!s.isOK)
-        #expect(s.summary.contains("1.24.13"))
         #expect(s.summary.contains("silent"))
+        #expect(s.summary.contains("patched again"))
+        #expect(s.summary.contains("this application carries"))
     }
 }

@@ -98,7 +98,7 @@ struct ToolsView: View {
                             console.saveLogs()
                             let url = Console.logURL
                             if FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) {
-                                savedLogResult = "^[\(lines) line](inflect: true) saved."
+                                savedLogResult = lines == 1 ? "1 line saved." : "\(lines) lines saved."
                                 // Straight to it, because the next thing anyone
                                 // wants is the file.
                                 NSWorkspace.shared.activateFileViewerSelecting([url])

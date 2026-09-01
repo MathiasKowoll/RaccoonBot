@@ -31,6 +31,16 @@ struct OptionsView: View {
     /// Prescriptive rather than defensive: it says which one and why, and it
     /// holds someone at an older series only while an older engine is still
     /// installed. Drop that engine and the answer moves on by itself.
+    /// What the fix row says. The counting and the wording live in
+    /// `FixSummary`, where they can be tested without a view.
+    private func fixSummary(_ targets: [PatchAll.Target]) -> Text {
+        guard !targets.isEmpty else { return Text(FixSummary.allWell) }
+        let needs = targets.map { fixLibrary.need(folder: $0.folder) }
+        return Text(FixSummary.sentence(missing: needs.filter { $0 == .missing }.count,
+                                        outdated: needs.filter { $0 == .outdated }.count,
+                                        unverified: needs.filter { $0 == .unverified }.count))
+    }
+
     private func installGStreamer() async {
         gstBusy = true
         defer { gstBusy = false }
@@ -199,39 +209,7 @@ struct OptionsView: View {
                         HStack(alignment: .top, spacing: 6) {
                             Image(systemName: targets.isEmpty ? "checkmark.circle" : "wand.and.sparkles")
                                 .foregroundStyle(targets.isEmpty ? .green : .orange)
-                            // Three different facts, said separately. A title with
-                            // an older fix is patched; saying it "needs its video
-                            // fix" reads as though nothing is installed, and after
-                            // the payload moved to the bundled 5.0.2 that was five
-                            // titles being described as broken when they were not.
-                            //
-                            // The third runs the other way and is the worse one: a
-                            // fix we recorded installing, into a bottle wine has
-                            // updated since. It may well still be there. Saying
-                            // nothing about it would be claiming that it is.
-                            //
-                            // Every count is measured. The version of this that
-                            // wrote `outdated = targets.count - missing` was right
-                            // only while there were exactly two answers.
-                            Text({
-                                if targets.isEmpty { return "Every installed title that needs a fix has one." }
-                                let needs = targets.map { fixLibrary.need(folder: $0.folder) }
-                                let missing = needs.filter { $0 == .missing }.count
-                                let outdated = needs.filter { $0 == .outdated }.count
-                                let unverified = needs.filter { $0 == .unverified }.count
-                                var said: [String] = []
-                                if missing > 0 {
-                                    said.append("^[\(missing) installed title](inflect: true) needs its video fix")
-                                }
-                                if outdated > 0 {
-                                    said.append("^[\(outdated) title](inflect: true) has an older one")
-                                }
-                                if unverified > 0 {
-                                    said.append("^[\(unverified) title](inflect: true) is in a bottle that has been updated since it was patched")
-                                }
-                                guard !said.isEmpty else { return "Every installed title that needs a fix has one." }
-                                return said.joined(separator: "; ") + "."
-                            }())
+                            fixSummary(targets)
                                 .font(.footnote)
                             Spacer()
                             if !targets.isEmpty {
@@ -251,7 +229,7 @@ struct OptionsView: View {
                             Text(refused).font(.footnote).foregroundStyle(.orange)
                         }
                         if !patchAll.patched.isEmpty && !patchAll.running {
-                            Text("^[Patched \(patchAll.patched.count) title](inflect: true).")
+                            Text(FixSummary.patched(patchAll.patched.count) + ".")
                                 .font(.footnote).foregroundStyle(.secondary)
                         }
                         // Named, not counted. "3 failed" tells you nothing you

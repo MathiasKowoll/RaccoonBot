@@ -76,6 +76,7 @@
 			);
 			explicitFolders = (
 				Libs/codecs,
+				Libs/mgvf,
 				Libs/d3dMetal3,
 				Libs/d3dMetal4,
 				Libs/d9vk,

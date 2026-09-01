@@ -303,6 +303,7 @@ enum MGVFBundleError: LocalizedError {
     case noRelease(String)
     case noAsset(String)
     case checksumMismatch(expected: String, got: String)
+    case notBundled
     case extractionFailed(String)
     case manifestUnreadable(String)
     case unsupportedSchema(Int)
@@ -313,6 +314,9 @@ enum MGVFBundleError: LocalizedError {
             return "Could not find the fixes release: \(why)"
         case .noAsset(let tag):
             return "Release \(tag) has no fixes bundle attached"
+        case .notBundled:
+            return "This build does not carry MacGameVideoFix. It should be inside the application; "
+                 + "there is no download to fall back to, by design."
         case .checksumMismatch(let expected, let got):
             return "The download did not match its checksum (expected \(expected.prefix(12))…, got \(got.prefix(12))…)"
         case .extractionFailed(let why):
@@ -379,21 +383,47 @@ final class MGVFBundle: @unchecked Sendable {
     /// fixes it downloaded last week. It only throws when there is nothing at
     /// all to fall back on.
     @discardableResult
+    /// The fixes MacGameVideoFix ships, carried inside this application.
+    ///
+    /// One download, not two: RaccoonBot contains MGVF and runs it. Before
+    /// this, the bundle was fetched from GitHub releases and unpacked under
+    /// Application Support, where ten versions had accumulated -- 153 MB of
+    /// them, with nothing recording which was in use. A fix that misbehaved
+    /// could only be traced by reading directory dates.
+    ///
+    /// There is no download path left, not even disabled, so it cannot be
+    /// switched back on by a flag somebody sets while debugging. The failure
+    /// this avoids is not downloading; it is two sources that can silently
+    /// disagree, and one source cannot.
+    ///
+    /// A payload left under Application Support by an older build is ignored
+    /// rather than merged, and said so by name, because the newest tag lying
+    /// on disk is not evidence of anything once the truth ships inside.
     func ensureAvailable() async throws -> URL {
-        do {
-            let release = try await latestRelease()
-            let target = directory(for: release.tag)
-            if FileManager.default.fileExists(atPath: target.appendingPathComponent("manifest.json").path(percentEncoded: false)) {
-                return target
-            }
-            return try await download(release)
-        } catch {
-            if let fallback = cached() {
-                console.warn("Using the cached fixes bundle: \(error.localizedDescription)")
-                return fallback
-            }
-            throw error
+        guard let embedded = Self.embeddedDirectory else {
+            throw MGVFBundleError.notBundled
         }
+        if let stale = Self.staleDownloads(), !stale.isEmpty {
+            console.warn("ignoring \(stale.count) downloaded fixes payload(s) under Application Support; "
+                         + "the embedded copy is what runs")
+        }
+        return embedded
+    }
+
+    /// Where the embedded MacGameVideoFix keeps its installers and manifest.
+    static var embeddedDirectory: URL? {
+        guard let app = Bundle.main.resourceURL?
+            .appendingPathComponent("mgvf/MacGameVideoFix.app/Contents/Resources")
+        else { return nil }
+        return FileManager.default.fileExists(
+            atPath: app.appendingPathComponent("manifest.json").path(percentEncoded: false)) ? app : nil
+    }
+
+    /// Payloads a previous build downloaded. Reported, never used.
+    static func staleDownloads() -> [String]? {
+        let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Procyon/mgvf", isDirectory: true)
+        return try? FileManager.default.contentsOfDirectory(atPath: root.path(percentEncoded: false))
     }
 
     /// Read the manifest out of an unpacked bundle.

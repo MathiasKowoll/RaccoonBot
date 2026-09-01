@@ -7,9 +7,30 @@
 
 import SwiftUI
 
+/// How wide a card may be.
+///
+/// The maximum was 325, which meant a wider window got MORE cards rather than
+/// bigger ones -- and past a certain count the Play button on each card is the
+/// first thing to become unreadable. Cards now grow with the window, and only
+/// take another column when there is room for one at a comfortable size.
+let cardMinWidth: CGFloat = 280
+let cardMaxWidth: CGFloat = 420
+let cardSpacing: CGFloat = 10
+
 let columns = [
-    GridItem(.adaptive(minimum: 250, maximum: 325), spacing: 10),
+    GridItem(.adaptive(minimum: cardMinWidth, maximum: cardMaxWidth), spacing: cardSpacing),
 ]
+
+/// How many of those fit across `width`, by the same arithmetic the adaptive
+/// grid uses: as many as fit at the minimum, then they share what is left.
+///
+/// Derived rather than declared, because a controller has to know the row
+/// width to move up and down, and a second copy of these numbers would drift
+/// from the grid the first time somebody changed one of them.
+nonisolated func gridColumnCount(forWidth width: CGFloat) -> Int {
+    guard width > 0 else { return 1 }
+    return max(1, Int((width + cardSpacing) / (cardMinWidth + cardSpacing)))
+}
 
 /// Every capsule in the toolbar is this tall.
 ///
@@ -43,6 +64,15 @@ struct GamesList: View {
     @State private var warnAboutFix = false
     @State private var fixWarningGame: Game?
     @State private var optionsGame: Game?
+
+    /// The pad, the selection, and the width the selection is arranged in.
+    ///
+    /// All three are additions. Nothing below them changes how the mouse
+    /// behaves: the cards are the same buttons they were, and this only draws
+    /// a ring on one of them and calls the same handlers a click calls.
+    @StateObject private var gamepad = GamepadInput()
+    @State private var focus = GridFocus()
+    @State private var gridWidth: CGFloat = 0
     @State private var installChoice: OwnedGame?
     @StateObject private var fixes = MGVFLibrary.shared
     
@@ -52,6 +82,101 @@ struct GamesList: View {
     ///
     /// A not-installed row has no Game yet -- its record is fetched on demand,
     /// one request for the title actually being opened.
+
+    // MARK: - The grid, and the two ways of moving around it
+
+    /// The installed cards. One definition, used by both tabs that show them,
+    /// so the selection cannot be wired into one and not the other.
+    @ViewBuilder
+    private var installedGrid: some View {
+        LazyVGrid(columns: columns, spacing: cardSpacing) {
+            ForEach(Array(libraryPageGlobals.filteredGames.enumerated()), id: \.element.id) { index, item in
+                GameThumbnail(item: item,
+                              isResizable: appWindowResizable,
+                              isSelected: gamepad.connected && focus.index == index)
+                    .id(item.id)
+            }
+        }
+        .padding(.horizontal)
+        // The width the cards are actually laid out in, read rather than
+        // assumed: the column count follows the window, and so must the
+        // meaning of "up" and "down".
+        .background(GeometryReader { geometry in
+            Color.clear
+                .onAppear { gridWidth = geometry.size.width }
+                .onChange(of: geometry.size.width) { _, new in gridWidth = new }
+        })
+    }
+
+    /// A scroller that follows the selection.
+    @ViewBuilder
+    private func scrolling<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        // Built once here rather than inside the scroller: ScrollView holds on
+        // to what it is given, and a non-escaping builder cannot be held.
+        let inner = content()
+        return ScrollViewReader { proxy in
+            ScrollView { inner }
+                .onChange(of: focus.index) { _, new in
+                    guard let new, new < libraryPageGlobals.filteredGames.count else { return }
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        proxy.scrollTo(libraryPageGlobals.filteredGames[new].id, anchor: .center)
+                    }
+                }
+        }
+    }
+
+    /// Tell the selection what shape the grid is now.
+    private func syncFocusShape() {
+        focus.update(count: libraryPageGlobals.filteredGames.count,
+                     columns: gridColumnCount(forWidth: gridWidth))
+    }
+
+    /// When the pad is not ours to read.
+    ///
+    /// While a game is running it belongs to the game, and while one is
+    /// starting it belongs to nobody -- moving the selection behind a game
+    /// that is coming up is how the next press lands on whatever ended up
+    /// under it. `playingID` is the tracker's answer, which knows that a
+    /// launcher exiting is not a game finishing.
+    private func syncSuspension() {
+        gamepad.suspended = libraryPageGlobals.playingID != nil || libraryPageGlobals.isLaunchingGame
+    }
+
+    /// What the pad does. Nothing here replaces a click: these are the same
+    /// handlers the mouse reaches, called from a different device.
+    private func wireGamepad() {
+        syncFocusShape()
+        syncSuspension()
+        gamepad.onMove = { direction in
+            // A sheet is open and is driven by the mouse for now; moving the
+            // grid behind it would change what B closes back onto.
+            guard optionsGame == nil, !warnAboutFix else { return }
+            syncFocusShape()
+            focus.selectFirstIfNeeded()
+            focus.move(direction)
+        }
+        gamepad.onPress = { press in
+            if optionsGame != nil || warnAboutFix {
+                // The one thing a pad can do to a sheet it cannot navigate:
+                // close it, so opening one is not a dead end.
+                if press == .back { optionsGame = nil; warnAboutFix = false }
+                return
+            }
+            syncFocusShape()
+            guard let index = focus.index,
+                  index < libraryPageGlobals.filteredGames.count else {
+                focus.selectFirstIfNeeded()
+                return
+            }
+            let game = libraryPageGlobals.filteredGames[index]
+            switch press {
+            case .select:  play(game)
+            case .options: optionsGame = game
+            case .back:    focus.clear()
+            }
+        }
+    }
+
     private func openRow(_ row: LibraryRow) {
         if let game = libraryPageGlobals.allGames.first(where: { $0.id == row.id }) {
             libraryPageGlobals.selectedGame = game
@@ -102,6 +227,11 @@ struct GamesList: View {
     /// gate included, so this cannot start an unpatched title by omission.
     private func play(_ row: LibraryRow) {
         guard let game = libraryPageGlobals.allGames.first(where: { $0.id == row.id }) else { return }
+        play(game)
+    }
+
+    /// The one launch this view knows, used by the list, and by the pad.
+    private func play(_ game: Game) {
         let folder = getMeta(libraryPageGlobals.gamesMeta, byID: game.id)?
             .gameURL?.path(percentEncoded: false)
         switch GameLauncher.shared.play(game,
@@ -135,31 +265,22 @@ struct GamesList: View {
             } else {
                 switch libraryPageGlobals.tab {
                 case .installed:
-                    ScrollView {
-                        LazyVGrid(columns: columns, spacing: 10) {
-                            ForEach(libraryPageGlobals.filteredGames) { item in
-                                GameThumbnail(item: item, isResizable: appWindowResizable)
-                            }
-                        }
-                        .padding(.horizontal)
-                        .padding(.bottom, dockClearance)
-                    }
+                    scrolling { installedGrid.padding(.bottom, dockClearance) }
                 case .notInstalled:
                     OwnedGamesList()
                 case .all:
-                    ScrollView {
-                        LazyVGrid(columns: columns, spacing: 10) {
-                            ForEach(libraryPageGlobals.filteredGames) { item in
-                                GameThumbnail(item: item, isResizable: appWindowResizable)
-                            }
-                        }
-                        .padding(.horizontal)
-                        OwnedGamesGrid()
-                            .padding(.bottom, dockClearance)
+                    scrolling {
+                        installedGrid
+                        OwnedGamesGrid().padding(.bottom, dockClearance)
                     }
                 }
             }
         }
+        .onAppear { wireGamepad() }
+        .onChange(of: libraryPageGlobals.filteredGames.count) { _, _ in syncFocusShape() }
+        .onChange(of: gridWidth) { _, _ in syncFocusShape() }
+        .onChange(of: libraryPageGlobals.playingID) { _, _ in syncSuspension() }
+        .onChange(of: libraryPageGlobals.isLaunchingGame) { _, _ in syncSuspension() }
         // Per-title options, through the same sheet the detail page uses.
         .sheet(isPresented: Binding(get: { optionsGame != nil },
                                     set: { if !$0 { optionsGame = nil } })) {

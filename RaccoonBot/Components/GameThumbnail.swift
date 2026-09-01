@@ -11,6 +11,15 @@ import Kingfisher
 struct GameThumbnail: View {
     var item: Game
     var isResizable: Bool = false
+
+    /// The controller is on this card.
+    ///
+    /// Defaulted so that every existing caller -- the mouse ones -- is
+    /// unchanged: this is an addition to how the grid is used, not a
+    /// replacement. Clicking works exactly as it did whether or not a pad is
+    /// connected, and a pad selection is drawn on top of that rather than
+    /// instead of it.
+    var isSelected: Bool = false
     @EnvironmentObject var appGlobals: AppGlobals
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
     @State private var tObserver: TerminationObserver?
@@ -172,6 +181,19 @@ struct GameThumbnail: View {
         }
         .buttonStyle(.plain)
         .frame(height: isResizable ? nil : 214)
+        // Drawn on top of the card, and sized with scaleEffect rather than by
+        // changing the frame: a selection that changed the layout would reflow
+        // the whole grid on every press, which is both distracting and the
+        // thing that makes the buttons on the neighbouring cards jump.
+        .overlay(
+            RoundedRectangle(cornerRadius: 30)
+                .strokeBorder(.white, lineWidth: 3)
+                .opacity(isSelected ? 1 : 0)
+        )
+        .scaleEffect(isSelected ? 1.04 : 1)
+        .shadow(color: .black.opacity(isSelected ? 0.45 : 0), radius: 14, y: 6)
+        .zIndex(isSelected ? 1 : 0)
+        .animation(.easeOut(duration: 0.12), value: isSelected)
     }
     
     @MainActor

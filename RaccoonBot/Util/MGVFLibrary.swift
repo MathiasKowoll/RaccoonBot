@@ -25,6 +25,31 @@ final class MGVFLibrary: ObservableObject {
     /// Bumped when the catalogue arrives, so views redraw once it is known.
     @Published private(set) var generation = 0
 
+    /// What is actually loaded, so "which fixes ran" is answerable without
+    /// archaeology.
+    ///
+    /// Today ten unpacked versions sit under Application Support, 153 MB of
+    /// them, and nothing said which one was in use -- so a fix that misbehaved
+    /// could only be traced by reading directory dates. The version is read
+    /// out of the manifest that was actually loaded, never from a tag we asked
+    /// for, because those diverge exactly when it matters.
+    @Published private(set) var loaded: LoadedFixes?
+
+    struct LoadedFixes: Equatable {
+        let version: String
+        let directory: URL
+
+        /// True when the payload came from inside this application rather than
+        /// from a download. Derived by asking where it is, so it keeps telling
+        /// the truth when the payload moves into the bundle.
+        var isBundled: Bool {
+            guard let resources = Bundle.main.resourceURL?.path(percentEncoded: false) else { return false }
+            return directory.path(percentEncoded: false).hasPrefix(resources)
+        }
+
+        var describedSource: String { isBundled ? "bundled" : "downloaded" }
+    }
+
     private var catalog: MGVFCatalog?
     private var loading = false
 
@@ -39,6 +64,8 @@ final class MGVFLibrary: ObservableObject {
             let directory = try await MGVFBundle.shared.ensureAvailable()
             let manifest = try MGVFBundle.shared.manifest(at: directory)
             catalog = MGVFCatalog(manifest: manifest, directory: directory)
+            loaded = LoadedFixes(version: manifest.version, directory: directory)
+            console.log("fixes \(manifest.version) loaded, \(loaded!.describedSource)")
             noteNewTitles()
             generation += 1
         } catch {

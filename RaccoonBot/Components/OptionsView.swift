@@ -140,6 +140,20 @@ struct OptionsView: View {
                     let targets = PatchAll.targets(from: libraryPageGlobals.gamesMeta,
                                                    needsPatch: { fixLibrary.needsPatch(folder: $0) })
                     VStack(alignment: .leading, spacing: 4) {
+                        // Which fixes are running, where a person can see it.
+                        //
+                        // Ten unpacked versions sit under Application Support
+                        // on this machine, 153 MB of them, and nothing said
+                        // which was in use -- so a fix that misbehaved could
+                        // only be traced by reading directory dates. Version
+                        // and source both, because those are the two questions
+                        // asked afterwards and neither is answerable from a
+                        // launch line.
+                        if let loaded = fixLibrary.loaded {
+                            Text("Fixes \(loaded.version) · \(loaded.describedSource)")
+                                .font(.footnote)
+                                .foregroundStyle(.procyonBrightGray)
+                        }
                         HStack(alignment: .top, spacing: 6) {
                             Image(systemName: targets.isEmpty ? "checkmark.circle" : "wand.and.sparkles")
                                 .foregroundStyle(targets.isEmpty ? .green : .orange)

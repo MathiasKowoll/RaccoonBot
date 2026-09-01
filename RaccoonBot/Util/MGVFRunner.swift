@@ -215,6 +215,27 @@ final class MGVFRunner: @unchecked Sendable {
         // some others do not read it. So it is a second lock and never the only
         // one -- the verb still carries --status on its own.
         if !verb.writes { environment["MGVF_STATUS_ONLY"] = "1" }
+        // Which engine the installers should run reg.exe with.
+        //
+        // Four of nineteen fixes write a DLL override, and writing one means
+        // running reg.exe inside the bottle. Until MGVF 5.0.4 the scripts chose
+        // that engine by searching a list of names, and the names had gone
+        // stale, so they ran under stock CrossOver against a bottle a patched
+        // engine had built. Wine updates a bottle it does not recognise: on
+        // 2026-08-31 that rewrote 1,475 files under drive_c/windows and undid
+        // three of the four DLLs an installer had just placed.
+        //
+        // 5.0.4 asks the bottle instead, which is right without us. 5.0.5 lets
+        // the caller say, which is better still: this application BUILT the
+        // engine, so it knows rather than infers.
+        //
+        // Set only when it can be stood behind. The contract is that a wrong
+        // value is an ERROR and not a fallback -- deliberately, because a
+        // caller that names an engine and is silently ignored believes it
+        // chose. That makes naming one a promise: a stale cxAppPath would turn
+        // every install into a refusal, where leaving it unset lets the script
+        // ask the bottle, which is the answer we would have wanted anyway.
+        if let engine = Self.engineDirectory { environment["MGVF_CX"] = engine }
         process.environment = environment
 
         let out = Pipe(), err = Pipe()
@@ -266,6 +287,36 @@ final class MGVFRunner: @unchecked Sendable {
     }
 
     // MARK: - Reading the answer
+
+    /// The configured engine as the installers want it: the CrossOver
+    /// directory holding `bin/wine`, not the `.app` around it.
+    ///
+    /// Nil rather than a guess when the setting is empty, or names something
+    /// that is not there any more. See the call site for why naming a bad one
+    /// is worse than naming none.
+    static var engineDirectory: String? {
+        guard let app = readUsrDefOptionString(key: "cxAppPath"),
+              !app.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        return engineDirectory(forApp: app)
+    }
+
+    /// The same, for a named bundle, so it can be exercised without settings.
+    static func engineDirectory(forApp app: String) -> String? {
+        let directory = URL(fileURLWithPath: app)
+            .appendingPathComponent("Contents")
+            .appendingPathComponent("SharedSupport")
+            .appendingPathComponent("CrossOver")
+        let wine = directory.appendingPathComponent("bin").appendingPathComponent("wine")
+        guard FileManager.default.isExecutableFile(atPath: wine.path(percentEncoded: false)) else {
+            return nil
+        }
+        // Without the trailing slash URL adds for a directory that exists. The
+        // script strips one itself, so this would work either way -- which is
+        // the reason to do it here rather than rely on it: the next reader of
+        // that variable may not strip anything.
+        let path = directory.path(percentEncoded: false)
+        return path.hasSuffix("/") ? String(path.dropLast()) : path
+    }
 
     /// Find the state word, by WORD, anywhere in either stream.
     ///

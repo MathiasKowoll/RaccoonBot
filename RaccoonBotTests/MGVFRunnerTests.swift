@@ -230,3 +230,50 @@ struct MGVFRunnerProcessTests {
         #expect(MGVFRunner.Verb.install.writes == true)
     }
 }
+
+/// Which engine the installers are told to use.
+///
+/// Four of nineteen fixes write a DLL override, which means running reg.exe
+/// inside the bottle. Getting that engine wrong does not fail loudly: wine
+/// updates a bottle it does not recognise, and on 2026-08-31 one such update
+/// rewrote 1,475 files and undid three of the four DLLs an installer had just
+/// placed. MGVF 5.0.5 lets the caller name the engine, and treats a wrong name
+/// as an error rather than falling back -- so naming one is a promise.
+struct EngineDirectoryTests {
+
+    private func bundle(withWine: Bool) throws -> String {
+        let app = FileManager.default.temporaryDirectory
+            .appendingPathComponent("engine-\(UUID().uuidString)")
+            .appendingPathComponent("Crossover_MGVF.app")
+        let bin = app.appendingPathComponent("Contents/SharedSupport/CrossOver/bin")
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+        if withWine {
+            let wine = bin.appendingPathComponent("wine")
+            try "#!/bin/sh\n".write(to: wine, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755],
+                                                  ofItemAtPath: wine.path(percentEncoded: false))
+        }
+        return app.path(percentEncoded: false)
+    }
+
+    /// The scripts want the CrossOver directory, not the .app around it.
+    @Test func itNamesTheDirectoryHoldingWineRatherThanTheBundle() throws {
+        let app = try bundle(withWine: true)
+        let answer = try #require(MGVFRunner.engineDirectory(forApp: app))
+        #expect(answer == app + "/Contents/SharedSupport/CrossOver")
+        #expect(!answer.hasSuffix(".app"))
+    }
+
+    /// A bundle that is there but has no wine in it is not an engine. Naming it
+    /// would make every install refuse, where naming nothing lets the script
+    /// ask the bottle -- which is the answer we wanted anyway.
+    @Test func aBundleWithNoWineIsNotNamed() throws {
+        #expect(MGVFRunner.engineDirectory(forApp: try bundle(withWine: false)) == nil)
+    }
+
+    /// The setting can name something that has since been deleted.
+    @Test func aPathThatIsNotThereIsNotNamed() {
+        #expect(MGVFRunner.engineDirectory(forApp: "/tmp/no-such-engine-\(UUID().uuidString)") == nil)
+        #expect(MGVFRunner.engineDirectory(forApp: "") == nil)
+    }
+}

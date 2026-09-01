@@ -13,11 +13,16 @@ struct BundledCodecsTests {
     /// copies into Resources. Reading it here rather than out of a built
     /// bundle means these tests check the files that will ship, not a copy
     /// of them made by the same step under test.
+    ///
+    /// This is the embedded MacGameVideoFix's own Resources -- flat, and the
+    /// only copy of the twelve there is. There used to be a second one in a
+    /// `codecs` folder of ours, and the two were byte-identical, but only this
+    /// one was ever read: `make-engine-copy.sh` step [5/6] copies out of here.
     private var payload: URL {
         URL(fileURLWithPath: #filePath)          // .../RaccoonBotTests/BundledCodecsTests.swift
             .deletingLastPathComponent()          // .../RaccoonBotTests
             .deletingLastPathComponent()          // .../RaccoonBot (repo)
-            .appendingPathComponent("RaccoonBot/Libs/codecs")
+            .appendingPathComponent("RaccoonBot/Libs/mgvf/MacGameVideoFix.app/Contents/Resources")
     }
 
     /// An engine shaped like a real one, with only the directory that
@@ -76,6 +81,45 @@ struct BundledCodecsTests {
     @Test func everyFileWeCarryIsTheFileTheTableNames() throws {
         let checked = try BundledCodecs.verified(inDirectory: payload)
         #expect(checked.count == 12)
+    }
+
+    /// Which layout actually ships, read off the disk rather than assumed.
+    /// If somebody re-nests the plugins under `gstreamer-1.0/` this says so,
+    /// and `location(of:)` is the thing that then has to still be right.
+    @Test func theCopyThatShipsIsFlat() throws {
+        let f = FileManager.default
+        #expect(!f.fileExists(atPath: payload.appendingPathComponent("gstreamer-1.0")
+                                            .path(percentEncoded: false)))
+        for item in BundledCodecs.items {
+            let at = BundledCodecs.location(of: item, under: payload)
+            #expect(at == payload.appendingPathComponent(item.name), "\(item.name) was looked for at \(at.path)")
+            #expect(f.fileExists(atPath: at.path(percentEncoded: false)), "\(item.name) is not in the payload")
+        }
+    }
+
+    /// The other layout: upstream's tree keeps the three plugins in a
+    /// subfolder. `make-engine-copy.sh` reads both, so this must too, or a
+    /// payload taken straight from winevideo would be called incomplete.
+    @Test func aNestedPayloadIsFoundInItsSubfolder() throws {
+        let f = FileManager.default
+        let root = f.temporaryDirectory.appendingPathComponent("nested-\(UUID().uuidString)", isDirectory: true)
+        try f.createDirectory(at: root.appendingPathComponent("gstreamer-1.0"), withIntermediateDirectories: true)
+        defer { try? f.removeItem(at: root) }
+        for item in BundledCodecs.items {
+            try f.copyItem(at: payload.appendingPathComponent(item.name),
+                           to: item.isPlugin
+                               ? root.appendingPathComponent("gstreamer-1.0").appendingPathComponent(item.name)
+                               : root.appendingPathComponent(item.name))
+        }
+        #expect(try BundledCodecs.verified(inDirectory: root).count == 12)
+    }
+
+    /// The constant and the build agreeing. `resourceDirectory` is a path into
+    /// another application several levels down; nothing but running against a
+    /// real bundle says it still points at anything.
+    @Test func theBuiltApplicationCarriesThePayloadWhereWeLookForIt() throws {
+        let shipped = try #require(BundledCodecs.directory(), "the built bundle has no payload at \(BundledCodecs.resourceDirectory)")
+        #expect(try BundledCodecs.verified(inDirectory: shipped).count == 12)
     }
 
     @Test func aFileThatIsNotThereIsNamedInTheFailure() throws {

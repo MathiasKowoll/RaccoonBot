@@ -2,7 +2,7 @@
 //  BundledCodecs.swift
 //  RaccoonBot
 //
-//  The decoders this application carries and installs itself.
+//  The decoders this application carries, and what says they are the right ones.
 //
 //  Before this, the plugins came out of whatever GStreamer the user had
 //  installed under /Library/Frameworks. That route has two faults and both
@@ -13,10 +13,19 @@
 //
 //  So we carry them. Twelve files, taken verbatim from CrossOver-winevideo-0.5
 //  and pinned by hash, which makes this application a redistributor of other
-//  people's LGPL and BSD binaries. `codecs/CODEC-LICENCES.md` travels in the
-//  bundle beside them for exactly that reason: the notices and the offer of
-//  corresponding source are part of shipping these, not paperwork to produce
-//  if somebody asks.
+//  people's LGPL and BSD binaries. `CODEC-LICENCES.md` travels in the same
+//  folder for exactly that reason: the notices and the offer of corresponding
+//  source are part of shipping these, not paperwork to produce if somebody
+//  asks.
+//
+//  WHERE THEY LIVE, AND WHY IT MOVED. They used to sit in a `codecs` folder of
+//  our own as well as inside the embedded MacGameVideoFix, byte for byte the
+//  same twelve files twice. Only MGVF's copy ever reached an engine --
+//  `make-engine-copy.sh` step [5/6] reads its own Resources -- so the payload
+//  this file verified was the one nobody used, and the one that ran was
+//  unverified. The duplicate is gone. This now reads the copy that ships to
+//  the engine, which is the only copy whose contents can be wrong in a way
+//  that matters.
 //
 
 import CryptoKit
@@ -24,8 +33,9 @@ import Foundation
 
 nonisolated enum BundledCodecs {
 
-    /// The folder inside our own Resources, copied in whole by the build.
-    static let resourceDirectory = "codecs"
+    /// The embedded MacGameVideoFix's own Resources, relative to ours. The
+    /// twelve are flat in there, beside the scripts and the DLLs.
+    static let resourceDirectory = "mgvf/MacGameVideoFix.app/Contents/Resources"
 
     /// The notices that have to travel with the binaries.
     static let licenceFile = "CODEC-LICENCES.md"
@@ -95,17 +105,29 @@ nonisolated enum BundledCodecs {
         }
     }
 
-    /// Our own folder, wherever the bundle put it.
+    /// The payload folder, wherever the bundle put it. Named as a path rather
+    /// than asked for by resource name, because it is several levels down
+    /// inside another application.
     static func directory(in bundle: Bundle = .main) -> URL? {
-        bundle.url(forResource: resourceDirectory, withExtension: nil)
+        guard let root = bundle.resourceURL?.appendingPathComponent(resourceDirectory) else { return nil }
+        return FileManager.default.fileExists(atPath: root.path(percentEncoded: false)) ? root : nil
     }
 
-    /// Where a file of ours sits inside our folder. Plugins keep the
-    /// `gstreamer-1.0` subfolder they arrived in.
+    /// Where a file of ours sits inside a payload folder.
+    ///
+    /// Two layouts, because the twelve are kept two ways. Upstream in the
+    /// winevideo tree the three plugins sit under `gstreamer-1.0/` with their
+    /// support libraries one level out; inside MacGameVideoFix everything is
+    /// flat in Resources. `make-engine-copy.sh` step [5/6] reads both the same
+    /// way -- take the subfolder if it is there, otherwise flat -- and this is
+    /// that rule, so the two cannot disagree about where a file was found.
     static func location(of item: Item, under root: URL) -> URL {
-        item.isPlugin
-            ? root.appendingPathComponent("gstreamer-1.0").appendingPathComponent(item.name)
-            : root.appendingPathComponent(item.name)
+        guard item.isPlugin else { return root.appendingPathComponent(item.name) }
+        let nested = root.appendingPathComponent("gstreamer-1.0")
+        guard FileManager.default.fileExists(atPath: nested.path(percentEncoded: false)) else {
+            return root.appendingPathComponent(item.name)
+        }
+        return nested.appendingPathComponent(item.name)
     }
 
     /// Read a file all the way through and say what it is.

@@ -75,7 +75,6 @@
 				38E53BC32F68707F00C9FF59 /* Exceptions for "Procyon" folder in "Copy Bundle Resources" phase from "Procyon" target */,
 			);
 			explicitFolders = (
-				Libs/codecs,
 				Libs/mgvf,
 				Libs/d3dMetal3,
 				Libs/d3dMetal4,

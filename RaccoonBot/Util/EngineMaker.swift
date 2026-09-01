@@ -44,6 +44,21 @@ nonisolated enum EngineMaker {
         return url
     }
 
+    /// The twelve decoders the script will copy in step [5/6], read and
+    /// confirmed against the table in `BundledCodecs` before it starts.
+    ///
+    /// The script copies them without looking, which is reasonable of a shell
+    /// script and leaves nobody checking. A payload wrong in one file is not a
+    /// visible failure: the copy succeeds, the engine is signed, and the fault
+    /// arrives later as a cutscene that plays black -- the same quiet ending
+    /// carrying our own codecs was meant to close. Checked here rather than
+    /// inside the script because this is where a wrong answer can still stop
+    /// an hour of copying from starting.
+    static func checkCodecs() throws {
+        guard let payload = MGVFBundle.embeddedDirectory else { throw Failure.scriptMissing }
+        _ = try BundledCodecs.verified(inDirectory: payload)
+    }
+
     /// Make the copy, and answer where it landed.
     ///
     /// `--bottle-path` is passed always and never defaulted, because that key
@@ -62,6 +77,9 @@ nonisolated enum EngineMaker {
                      progress: @escaping @Sendable (Double, String) -> Void) async throws -> URL {
         guard let script else { throw Failure.scriptMissing }
         guard !bottlesRoot.trimmingCharacters(in: .whitespaces).isEmpty else { throw Failure.noBottlesRoot }
+        // Before the copy, not after: a gigabyte is copied and signed either
+        // way, and a payload that is wrong is worth an hour of nobody's time.
+        try checkCodecs()
 
         var arguments = [script.path(percentEncoded: false),
                          "--from", source.path(percentEncoded: false),

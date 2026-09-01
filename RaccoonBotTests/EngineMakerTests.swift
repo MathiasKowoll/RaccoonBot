@@ -18,6 +18,14 @@ struct EngineMakerTests {
         #expect(FileManager.default.fileExists(atPath: embedded.path(percentEncoded: false)))
     }
 
+    /// Step [5/6] copies the twelve decoders without looking at them, so this
+    /// looks at them first. Run here against the real embedded payload: the
+    /// point of the check is that the files the script will copy are the ones
+    /// `BundledCodecs` names, and a stand-in would not answer that.
+    @Test func theDecodersAreCheckedBeforeAnEngineIsMade() throws {
+        try EngineMaker.checkCodecs()
+    }
+
     /// Refused before the script is asked. The bottle root is the isolation --
     /// an engine without CX_BOTTLE_PATH falls through to stock CrossOver's root
     /// and works on somebody else's bottles -- so an empty one must never

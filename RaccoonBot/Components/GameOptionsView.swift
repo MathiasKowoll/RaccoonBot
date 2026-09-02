@@ -22,6 +22,7 @@ struct GameOptionsView: View {
     /// The controller, shared with the grid underneath and taken over while
     /// this panel is up; the control it is on; and the way out.
     @EnvironmentObject private var gamepad: GamepadInput
+    @State private var padToken: UUID?
     @State private var focus = OptionFocus()
     @Environment(\.dismiss) private var dismiss
     @State var isLoading = false
@@ -79,7 +80,7 @@ struct GameOptionsView: View {
                                             gameOptions.d3dMtl4Enabled =
                                                 backend == "d3dmetal4" && OSVersion >= 27
                                         }
-                                        .optionFocus(.backend, current: focus.current, shown: gamepad.connected)
+                                        .optionFocus(.backend, current: focus.current, shown: gamepad.showsFocus)
                                 }
                                 Divider()
                                 TextField("Game arguments", text: $gameOptions.gameArguments)
@@ -107,7 +108,7 @@ struct GameOptionsView: View {
                                     Divider()
                                     Text("32Bits options")
                                     Toggle("Reduced x87 precision", isOn: $gameOptions.x87PatchEnabled)
-                                        .optionFocus(.x87, current: focus.current, shown: gamepad.connected)
+                                        .optionFocus(.x87, current: focus.current, shown: gamepad.showsFocus)
                                     // "Use DX9" is gone: it promised one thing and did the
                                     // opposite.
                                     //
@@ -129,22 +130,22 @@ struct GameOptionsView: View {
                             Spacer()
                             VStack(alignment: .trailing) {
                                 Toggle("Metal HUD", isOn: $gameOptions.mtlHudEnabled)
-                                    .optionFocus(.mtlHud, current: focus.current, shown: gamepad.connected)
+                                    .optionFocus(.mtlHud, current: focus.current, shown: gamepad.showsFocus)
                                 Toggle("Advertise AVX", isOn: $gameOptions.advertiseAVX)
-                                    .optionFocus(.advertiseAVX, current: focus.current, shown: gamepad.connected)
+                                    .optionFocus(.advertiseAVX, current: focus.current, shown: gamepad.showsFocus)
                                 if !current.isNative {
                                     Toggle("MSync", isOn: $gameOptions.wineMSync)
-                                        .optionFocus(.msync, current: focus.current, shown: gamepad.connected)
+                                        .optionFocus(.msync, current: focus.current, shown: gamepad.showsFocus)
                                     Toggle("Enable SDL", isOn: $gameOptions.enableSDL)
-                                        .optionFocus(.sdl, current: focus.current, shown: gamepad.connected)
+                                        .optionFocus(.sdl, current: focus.current, shown: gamepad.showsFocus)
                                     Toggle("Disable Hidraw", isOn: $gameOptions.disableHidraw)
-                                        .optionFocus(.hidraw, current: focus.current, shown: gamepad.connected)
+                                        .optionFocus(.hidraw, current: focus.current, shown: gamepad.showsFocus)
                                     Divider()
                                     Text("Vulkan options")
                                     Toggle("Enable UE4 Hack", isOn: $gameOptions.ue4Hack)
-                                        .optionFocus(.ue4Hack, current: focus.current, shown: gamepad.connected)
+                                        .optionFocus(.ue4Hack, current: focus.current, shown: gamepad.showsFocus)
                                     Toggle("MTL arg. buffers", isOn: $gameOptions.mvkArgBuff)
-                                        .optionFocus(.mvkArgBuff, current: focus.current, shown: gamepad.connected)
+                                        .optionFocus(.mvkArgBuff, current: focus.current, shown: gamepad.showsFocus)
                                     DropDown(options: cxVulkanBackend, label: "VK lib", value: $gameOptions.vulkanLib)
                                     .pickerStyle(.menu)
                                 }
@@ -162,7 +163,7 @@ struct GameOptionsView: View {
                                     step: 1.0
                                 )
                                 .help(localizedString(forKey: "preferredMaxFrameRateHelp"))
-                                    .optionFocus(.dxmtMaxFPS, current: focus.current, shown: gamepad.connected)
+                                    .optionFocus(.dxmtMaxFPS, current: focus.current, shown: gamepad.showsFocus)
                             }
                             
                             Toggle("metalFXSpatial", isOn: $gameOptions.dxmtMetalFXSpatial)
@@ -172,7 +173,7 @@ struct GameOptionsView: View {
                                         $gameOptions.dxmtMetalSpatialUpscaleFactor.wrappedValue = 1.0
                                     }
                                 }
-                                .optionFocus(.dxmtMetalFX, current: focus.current, shown: gamepad.connected)
+                                .optionFocus(.dxmtMetalFX, current: focus.current, shown: gamepad.showsFocus)
                             
                             if (gameOptions.dxmtMetalFXSpatial) {
                                 VStack {
@@ -183,7 +184,7 @@ struct GameOptionsView: View {
                                         step: 0.125
                                     )
                                     .help(localizedString(forKey: "metalFXSpatialHelp"))
-                                        .optionFocus(.dxmtUpscale, current: focus.current, shown: gamepad.connected)
+                                        .optionFocus(.dxmtUpscale, current: focus.current, shown: gamepad.showsFocus)
                                 }
                             }
                         }
@@ -202,7 +203,7 @@ struct GameOptionsView: View {
                                     }
                                 }
                                 .pickerStyle(.segmented)
-                                    .optionFocus(.hudDetail, current: focus.current, shown: gamepad.connected)
+                                    .optionFocus(.hudDetail, current: focus.current, shown: gamepad.showsFocus)
                                 Text((MetalHudDetail(rawValue: gameOptions.mtlHudDetail) ?? .fpsOnly).explanation)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -212,11 +213,11 @@ struct GameOptionsView: View {
                                         Text(corner.label).tag(corner.rawValue)
                                     }
                                 }
-                                    .optionFocus(.hudAlignment, current: focus.current, shown: gamepad.connected)
+                                    .optionFocus(.hudAlignment, current: focus.current, shown: gamepad.showsFocus)
                                 VStack {
                                     Text("Opacity \(Int(gameOptions.mtlHudOpacity * 100))%")
                                     Slider(value: $gameOptions.mtlHudOpacity, in: 0.1...1.0)
-                                        .optionFocus(.hudOpacity, current: focus.current, shown: gamepad.connected)
+                                        .optionFocus(.hudOpacity, current: focus.current, shown: gamepad.showsFocus)
                                 }
                             }
                         }
@@ -226,7 +227,7 @@ struct GameOptionsView: View {
                                 .help(localizedString(forKey: "metal4Backend"))
                                 .disabled(OSVersion < 27)
                                 .opacity(OSVersion < 27 ? 0.5 : 1.0)
-                                .optionFocus(.d3dMtl4, current: focus.current, shown: gamepad.connected)
+                                .optionFocus(.d3dMtl4, current: focus.current, shown: gamepad.showsFocus)
                             VStack{
                                 Text(localizedString(forKey: "preferredMaxFrameRate", value: d3dMaxFPS))
                                 Slider(
@@ -235,7 +236,7 @@ struct GameOptionsView: View {
                                     step: 1.0
                                 )
                                 .help(localizedString(forKey: "preferredMaxFrameRateHelp"))
-                                    .optionFocus(.d3dMaxFPS, current: focus.current, shown: gamepad.connected)
+                                    .optionFocus(.d3dMaxFPS, current: focus.current, shown: gamepad.showsFocus)
                             }
                         }
                     }
@@ -251,7 +252,7 @@ struct GameOptionsView: View {
                         }
                         .buttonStyle(.borderedProminent)
                         .disabled(!session.isDirty(gameOptions))
-                            .optionFocus(.save, current: focus.current, shown: gamepad.connected)
+                            .optionFocus(.save, current: focus.current, shown: gamepad.showsFocus)
                         // Undo puts the form back to the file: the escape hatch before
                         // closing, and a state that cannot be wrong. Reset, beside it,
                         // goes to factory defaults -- a different and much larger step,
@@ -261,17 +262,17 @@ struct GameOptionsView: View {
                             session.undo(into: gameOptions)
                         }
                         .disabled(!session.isDirty(gameOptions))
-                            .optionFocus(.undo, current: focus.current, shown: gamepad.connected)
+                            .optionFocus(.undo, current: focus.current, shown: gamepad.showsFocus)
                         Button("Reset") {
                             console.log("resetting")
                             gameOptions.set(data: GameOptionsData(data: GameOptions()))
                         }
-                            .optionFocus(.reset, current: focus.current, shown: gamepad.connected)
+                            .optionFocus(.reset, current: focus.current, shown: gamepad.showsFocus)
                         Spacer()
                         ProminentButton("Auto configure", systemImage: "wand.and.sparkles", isLoading: isLoading) {
                             Task { await runAutoconfigure() }
                         }
-                            .optionFocus(.autoconfigure, current: focus.current, shown: gamepad.connected)
+                            .optionFocus(.autoconfigure, current: focus.current, shown: gamepad.showsFocus)
                     }.padding(.top)
 
                     if fix.entry != nil || fix.state != .noFix {
@@ -366,7 +367,11 @@ struct GameOptionsView: View {
     /// reading it.
     private func takeGamepad(_ current: Game) {
         focus.update(for: panelState(current))
-        gamepad.onMove = { direction in
+        // onAppear can run more than once for this view -- its body sits in
+        // a conditional SwiftUI is free to rebuild -- so a second take
+        // replaces the first rather than stacking on top of it.
+        if let padToken { gamepad.release(padToken) }
+        padToken = gamepad.take(onMove: { direction in
             focus.update(for: panelState(current))
             focus.selectFirstIfNeeded()
             switch direction {
@@ -378,8 +383,7 @@ struct GameOptionsView: View {
                 guard let control = focus.current else { return }
                 _ = apply(direction == .right ? .right : .left, to: control)
             }
-        }
-        gamepad.onPress = { press in
+        }, onPress: { press in
             switch press {
             case .back:
                 // Closing saves, through the sheet's one closing path. There
@@ -392,12 +396,14 @@ struct GameOptionsView: View {
             case .options:
                 break
             }
-        }
+        })
     }
 
+    /// Give the pad back. Only this view's own entry goes; whoever was
+    /// listening underneath is what remains.
     private func releaseGamepad() {
-        gamepad.onMove = nil
-        gamepad.onPress = nil
+        if let padToken { gamepad.release(padToken) }
+        padToken = nil
         focus.clear()
     }
 

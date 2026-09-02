@@ -71,6 +71,7 @@ struct GamesList: View {
     /// behaves: the cards are the same buttons they were, and this only draws
     /// a ring on one of them and calls the same handlers a click calls.
     @EnvironmentObject private var gamepad: GamepadInput
+    @State private var padToken: UUID?
     @State private var focus = GridFocus()
     @State private var gridWidth: CGFloat = 0
     @State private var installChoice: OwnedGame?
@@ -93,7 +94,7 @@ struct GamesList: View {
             ForEach(Array(libraryPageGlobals.filteredGames.enumerated()), id: \.element.id) { index, item in
                 GameThumbnail(item: item,
                               isResizable: appWindowResizable,
-                              isSelected: gamepad.connected && focus.index == index)
+                              isSelected: gamepad.showsFocus && focus.index == index)
                     .id(item.id)
             }
         }
@@ -147,7 +148,11 @@ struct GamesList: View {
     private func wireGamepad() {
         syncFocusShape()
         syncSuspension()
-        gamepad.onMove = { direction in
+        // Once. A sheet listens on top of this and removes only itself when
+        // it goes, so there is nothing to re-wire when a sheet closes -- and
+        // re-wiring is what raced the sheet's own release.
+        if let padToken { gamepad.release(padToken) }
+        padToken = gamepad.take(onMove: { direction in
             // While the options sheet is up, the pad is the sheet's: it takes
             // the handlers over when it appears and hands them back when it
             // goes. The fix warning has nothing to navigate, so B closes it.
@@ -155,8 +160,7 @@ struct GamesList: View {
             syncFocusShape()
             focus.selectFirstIfNeeded()
             focus.move(direction)
-        }
-        gamepad.onPress = { press in
+        }, onPress: { press in
             if warnAboutFix {
                 if press == .back { warnAboutFix = false }
                 return
@@ -174,7 +178,7 @@ struct GamesList: View {
             case .options: optionsGame = game
             case .back:    focus.clear()
             }
-        }
+        })
     }
 
     private func openRow(_ row: LibraryRow) {
@@ -277,12 +281,11 @@ struct GamesList: View {
             }
         }
         .onAppear { wireGamepad() }
+        .onDisappear { if let padToken { gamepad.release(padToken); self.padToken = nil } }
         .onChange(of: libraryPageGlobals.filteredGames.count) { _, _ in syncFocusShape() }
         .onChange(of: gridWidth) { _, _ in syncFocusShape() }
         .onChange(of: libraryPageGlobals.playingID) { _, _ in syncSuspension() }
         .onChange(of: libraryPageGlobals.isLaunchingGame) { _, _ in syncSuspension() }
-        // The sheet took the pad; take it back when the sheet goes.
-        .onChange(of: optionsGame == nil) { _, closed in if closed { wireGamepad() } }
         // Per-title options, through the same sheet the detail page uses.
         .sheet(isPresented: Binding(get: { optionsGame != nil },
                                     set: { if !$0 { optionsGame = nil } })) {

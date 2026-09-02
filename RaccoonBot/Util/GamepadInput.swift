@@ -21,6 +21,7 @@
 //
 
 import Foundation
+import AppKit
 import GameController
 import Combine
 
@@ -33,13 +34,61 @@ final class GamepadInput: ObservableObject {
     /// they mean something.
     @Published private(set) var connected = false
 
+    /// The arrow keys have been used to move the selection. Drawn the same
+    /// way as a pad from then on: a ring that appears on the first press and
+    /// not before, so somebody who never touches the arrows never sees it.
+    @Published private(set) var keyboardUsed = false
+
+    /// Whether to draw the selection at all.
+    var showsFocus: Bool { connected || keyboardUsed }
+
+    private var keyMonitor: Any?
+
     /// Nothing is read while this is true.
     var suspended = false {
         didSet { if suspended { held = nil; repeatTask?.cancel(); repeatTask = nil } }
     }
 
-    var onMove: ((GridFocus.Direction) -> Void)?
-    var onPress: ((Press) -> Void)?
+    /// Who is listening. A stack, because two things can be on screen at
+    /// once -- the grid and a sheet over it -- and the one on top is the one
+    /// a press means. The grid takes the pad when the library appears; a
+    /// sheet takes it on top while it is up and gives it back when it goes.
+    ///
+    /// A stack rather than a single pair of handlers because of what a single
+    /// pair did: the grid re-wired itself the moment the sheet's title was
+    /// cleared, and the sheet's onDisappear -- which runs after the dismissal
+    /// animation -- then set both handlers to nil, taking the grid's with
+    /// them. From then on nothing was listening and the pad was dead until
+    /// the window was reopened. With a stack, the sheet's release removes its
+    /// own entry and whatever was underneath is what is left, in whichever
+    /// order SwiftUI chooses to run the two.
+    struct Handlers {
+        let onMove: (GridFocus.Direction) -> Void
+        let onPress: (Press) -> Void
+    }
+    private var owners: [(id: UUID, handlers: Handlers)] = []
+
+    /// Listen, on top of whoever is listening now. Keep the token.
+    @discardableResult
+    func take(onMove: @escaping (GridFocus.Direction) -> Void,
+              onPress: @escaping (Press) -> Void) -> UUID {
+        let id = UUID()
+        owners.append((id, Handlers(onMove: onMove, onPress: onPress)))
+        return id
+    }
+
+    /// Stop listening. Removes that owner wherever it sits, so releasing out
+    /// of order -- which SwiftUI's appear and disappear ordering can produce
+    /// -- never removes somebody else's handlers. Releasing twice is nothing.
+    func release(_ id: UUID) {
+        owners.removeAll { $0.id == id }
+    }
+
+    /// How many are listening; the tests read it, nothing else should.
+    var listeners: Int { owners.count }
+
+    func deliver(move direction: GridFocus.Direction) { owners.last?.handlers.onMove(direction) }
+    func deliver(press: Press) { owners.last?.handlers.onPress(press) }
 
     /// How far a stick must go before it counts. Sticks rest off centre and a
     /// worn one rests further, so a small reading is not a direction.
@@ -70,10 +119,60 @@ final class GamepadInput: ObservableObject {
         })
         GCController.controllers().forEach(attach)
         refreshConnected()
+
+        // The keyboard, into the same stack. Arrows move, Return selects,
+        // Escape goes back -- the same three things a pad does, delivered to
+        // the same listener, so what is fixed for one is fixed for the other.
+        //
+        // A local monitor rather than onKeyPress, because onKeyPress needs the
+        // view to hold keyboard focus and a grid of buttons does not reliably
+        // have it. The monitor sees the key before any view does, which is
+        // also why it has to step aside for text: an arrow while typing in a
+        // field moves the caret, and taking it would make every field in the
+        // options panel unusable from the keyboard.
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, !self.suspended else { return event }
+            if let responder = NSApp.keyWindow?.firstResponder, responder is NSTextView { return event }
+            guard let action = Self.action(for: event) else { return event }
+            self.keyboardUsed = true
+            switch action {
+            case .move(let direction): self.deliver(move: direction)
+            case .press(let press):    self.deliver(press: press)
+            }
+            return nil
+        }
     }
 
     deinit {
         observers.forEach(NotificationCenter.default.removeObserver)
+        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+    }
+
+    enum KeyAction: Equatable {
+        case move(GridFocus.Direction)
+        case press(Press)
+    }
+
+    /// Which of ours a key is, or nil for one that is not ours. Kept apart
+    /// from the monitor so the mapping can be stated in a test without an
+    /// NSEvent.
+    nonisolated static func action(forKeyCode keyCode: UInt16) -> KeyAction? {
+        switch keyCode {
+        case 126: return .move(.up)
+        case 125: return .move(.down)
+        case 123: return .move(.left)
+        case 124: return .move(.right)
+        case 36:  return .press(.select)   // Return
+        case 76:  return .press(.select)   // Enter on the keypad
+        case 53:  return .press(.back)     // Escape
+        default:  return nil
+        }
+    }
+
+    private static func action(for event: NSEvent) -> KeyAction? {
+        // Not with a modifier: Cmd-arrow and the like belong to the system.
+        guard event.modifierFlags.intersection([.command, .option, .control]).isEmpty else { return nil }
+        return action(forKeyCode: event.keyCode)
     }
 
     private func refreshConnected() {
@@ -107,12 +206,12 @@ final class GamepadInput: ObservableObject {
         repeatTask?.cancel()
         repeatTask = nil
         guard let direction else { return }
-        onMove?(direction)
+        deliver(move: direction)
         repeatTask = Task { [weak self, firstRepeat, nextRepeat] in
             try? await Task.sleep(for: firstRepeat)
             while !Task.isCancelled {
                 guard let self, self.held == direction, !self.suspended else { return }
-                self.onMove?(direction)
+                self.deliver(move: direction)
                 try? await Task.sleep(for: nextRepeat)
             }
         }
@@ -143,7 +242,7 @@ final class GamepadInput: ObservableObject {
         let key = "\(press)"
         guard !down.contains(key) else { return }
         down.insert(key)
-        onPress?(press)
+        deliver(press: press)
         Task { [weak self] in
             while let self, self.isStillDown(press) { try? await Task.sleep(for: .milliseconds(40)) }
             self?.down.remove(key)

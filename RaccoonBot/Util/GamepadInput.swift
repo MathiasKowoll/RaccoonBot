@@ -49,6 +49,29 @@ final class GamepadInput: ObservableObject {
         didSet { if suspended { held = nil; repeatTask?.cancel(); repeatTask = nil } }
     }
 
+    /// Whether this application touches a game controller at all.
+    ///
+    /// Different from `suspended`, and the difference is the point. Suspended
+    /// ignores what the pad says; the handler stays registered and the
+    /// GameController framework keeps the device open on our behalf. Off means
+    /// no handler on any pad and none attached on connect -- the framework has
+    /// nothing of ours to keep open. A game under wine reads the same device
+    /// through its own path, and Mortal Shell 2 was losing the pad about five
+    /// minutes in; this is the switch that says whether we are the second
+    /// reader. The arrow keys are unaffected either way.
+    @Published var enabled: Bool {
+        didSet {
+            defaults.set(enabled, forKey: Self.enabledKey)
+            enabled ? attachAll() : detachAll()
+        }
+    }
+    static let enabledKey = "gamepadEnabled"
+
+    /// Where the switch is kept. The application uses the standard defaults;
+    /// a test hands in a suite of its own, so tests that flip the switch do
+    /// not write into the same store, in parallel, as everything else.
+    private let defaults: UserDefaults
+
     /// Who is listening. A stack, because two things can be on screen at
     /// once -- the grid and a sheet over it -- and the one on top is the one
     /// a press means. The grid takes the pad when the library appears; a
@@ -103,7 +126,21 @@ final class GamepadInput: ObservableObject {
     private var repeatTask: Task<Void, Never>?
     private var observers: [NSObjectProtocol] = []
 
-    init() {
+    /// Whether this instance touches the machine at all. The application
+    /// passes true. Tests pass false: the listener stack, the key mapping and
+    /// the on/off switch are all arithmetic, and constructing eight of these
+    /// with hardware on -- each one enumerating controllers and installing an
+    /// event monitor on the main thread -- starved a timing-sensitive test in
+    /// an unrelated file, the same way main-actor pgrep once did.
+    private let hardware: Bool
+
+    init(hardware: Bool = true, defaults: UserDefaults = .standard) {
+        self.hardware = hardware
+        self.defaults = defaults
+        // Unset means on: the behaviour before the switch existed.
+        enabled = defaults.object(forKey: Self.enabledKey) == nil
+            ? true : defaults.bool(forKey: Self.enabledKey)
+        guard hardware else { return }
         // Explicit rather than default: the whole point is that this stops
         // reading when the game takes over, and a background-monitoring pad
         // would defeat the suspension above by delivering anyway.
@@ -117,8 +154,7 @@ final class GamepadInput: ObservableObject {
             [weak self] _ in
             MainActor.assumeIsolated { self?.refreshConnected() }
         })
-        GCController.controllers().forEach(attach)
-        refreshConnected()
+        if enabled { attachAll() }
 
         // The keyboard, into the same stack. Arrows move, Return selects,
         // Escape goes back -- the same three things a pad does, delivered to
@@ -177,12 +213,30 @@ final class GamepadInput: ObservableObject {
     }
 
     private func refreshConnected() {
-        connected = GCController.controllers().contains { $0.extendedGamepad != nil }
+        connected = hardware && enabled && GCController.controllers().contains { $0.extendedGamepad != nil }
         if !connected { held = nil; repeatTask?.cancel(); repeatTask = nil }
     }
 
+    private func attachAll() {
+        guard hardware else { return }
+        GCController.controllers().forEach(attach)
+        refreshConnected()
+    }
+
+    /// Let go of every pad: no handler, so nothing of ours holds the device.
+    private func detachAll() {
+        guard hardware else { connected = false; return }
+        for controller in GCController.controllers() {
+            controller.extendedGamepad?.valueChangedHandler = nil
+        }
+        held = nil; repeatTask?.cancel(); repeatTask = nil
+        down.removeAll()
+        refreshConnected()
+        console.log("game controller: off; no handler is registered on any pad")
+    }
+
     private func attach(_ controller: GCController?) {
-        guard let pad = controller?.extendedGamepad else { return }
+        guard enabled, let pad = controller?.extendedGamepad else { return }
         pad.valueChangedHandler = { [weak self] pad, _ in
             MainActor.assumeIsolated { self?.read(pad) }
         }

@@ -41,6 +41,7 @@ struct OptionsView: View {
     }
     @State var creatingBottle: Bool = false
     @EnvironmentObject var appGlobals: AppGlobals
+    @EnvironmentObject private var gamepad: GamepadInput
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
     @MainActor var load: @Sendable () async -> Void
     @State var createBtlPrc: Process?
@@ -135,6 +136,14 @@ struct OptionsView: View {
                     }
                     Spacer()
                 }
+                // Off means this application registers nothing on any pad, so a
+                // game reading the same device through wine is its only reader.
+                // A diagnostic as much as a preference: Mortal Shell 2 lost its pad
+                // minutes into play, and this is how to find out whether we were
+                // the second reader. The arrow keys work either way.
+                Toggle("Use a game controller", isOn: $gamepad.enabled)
+                    .font(.footnote)
+                    .help("Off: RaccoonBot does not touch the controller at all. Arrow keys still navigate.")
                 if(downloading){
                     ProgressView(value: progress, total: 100) {
                         Text(progressLabel).font(.footnote)

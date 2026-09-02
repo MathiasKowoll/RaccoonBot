@@ -30,7 +30,26 @@ func resolvePersistedFolders() -> [URL] {
             urls.append(url)
         }
     }
-    return urls
+    return uniqueLibraryFolders(urls)
+}
+
+/// The same folder once, however many bookmarks point at it.
+///
+/// A library can be added twice -- once by hand and once from Steam's own
+/// libraryfolders.vdf, or simply twice by hand -- and each time it is one more
+/// bookmark. Two scans of one folder gave every game in it two cards, and the
+/// load's own "already scanned" check then ended the whole load rather than
+/// skipping the folder. Compared by standardised path without a trailing
+/// slash, so "file:///X/steamapps/" and "file:///X/steamapps" are the same.
+nonisolated func uniqueLibraryFolders(_ urls: [URL]) -> [URL] {
+    var seen: Set<String> = []
+    var out: [URL] = []
+    for url in urls {
+        var key = url.standardizedFileURL.path(percentEncoded: false)
+        while key.count > 1 && key.hasSuffix("/") { key.removeLast() }
+        if seen.insert(key).inserted { out.append(url) }
+    }
+    return out
 }
 
 func removePersistedFolderAccess(url: URL) {

@@ -367,8 +367,11 @@ struct GamesList: View {
             ToolbarItemGroup(placement: .principal) {
                 HStack(spacing: 8) {
                     Button {
+                        // Invalidate the cache and ask; clearing the metadata
+                        // is load()'s own first step, and doing it here while a
+                        // load was in flight is how a refresh published an
+                        // empty library.
                         api.deleteOwnedGamesIDsCache()
-                        libraryPageGlobals.gamesMeta.removeAll()
                         Task { await load() }
                     } label: {
                         Image(systemName: "arrow.clockwise")

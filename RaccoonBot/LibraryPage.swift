@@ -170,20 +170,38 @@ struct LibraryPage: View {
     }
     
     @MainActor
+    /// Asked for a reload while one was running. Kept, and honoured when the
+    /// running one ends -- because a click that lands mid-load used to be
+    /// dropped on the floor with a log line, and the person clicking cannot
+    /// see the log line. The first load at start includes a store request for
+    /// every title and takes a while; the mount observer starts loads of its
+    /// own; a refresh pressed during either did nothing, or worse.
+    @State private var reloadRequested = false
+
     private func load() async {
         guard !isReloading else {
-            console.log("library reload already running; not starting a second")
+            console.log("library reload already running; will run again when it ends")
+            reloadRequested = true
             return
         }
         isReloading = true
-        defer { isReloading = false }
         isLoading = true
+        progress = 0
         defer {
-            Task {
-                isLoading = false
+            isReloading = false
+            if reloadRequested {
+                // Straight into the next one, loader still up: the list must
+                // not flash a half-built state in between.
+                reloadRequested = false
+                Task { await load() }
+            } else {
+                Task { isLoading = false }
             }
         }
-        progress = 0
+        // The only place this is cleared. The refresh button used to clear it
+        // too, before calling here -- and when its call was then dropped as a
+        // duplicate, the load already in flight went on to build the list from
+        // the metadata it had just lost, and published an empty library.
         libraryPageGlobals.gamesMeta.removeAll()
         libraryPageGlobals.folders = getSteamFolderPaths()
         if libraryPageGlobals.folders.isEmpty {
@@ -191,9 +209,13 @@ struct LibraryPage: View {
         } else {
             for folder in libraryPageGlobals.folders {
                 let folderURL = URL(string: folder)!
+                // Already scanned in this pass -- the same folder listed twice.
+                // Skip the folder, not the rest of the load: this was a
+                // `return`, and a duplicate bookmark ended the whole load here,
+                // before the list was ever rebuilt.
                 if (!libraryPageGlobals.gamesMeta.filter { $0.libraryFolder == folderURL }.isEmpty) {
-                    console.log("skipping gamesMeta processing")
-                    return // in memory cache just in case you disconnect/reconnect an external drive that has been scanned already
+                    console.log("skipping \(folderURL.lastPathComponent): already scanned in this pass")
+                    continue
                 }
                 do {
                     let foldergamesMeta = try getGamesMeta(from: folderURL)

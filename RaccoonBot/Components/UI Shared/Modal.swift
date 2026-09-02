@@ -36,6 +36,13 @@ struct Modal<Content: View>: View {
                     .padding(.horizontal, collapse == true ? 0 : 15)
             }
         }
+        // The whole sheet, not the content's width. A vertical ScrollView hugs
+        // its content horizontally, and the gradient below is drawn behind
+        // whatever this ZStack measures -- so a 300-point column inside a
+        // 620-point sheet left the other 290 points showing the window's own
+        // grey. Filling here fixes it for every sheet that uses this, rather
+        // than each of them remembering to.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .topLeading) {
             if collapse == true || title == nil {
                 CloseModalButton(show: $showModal)

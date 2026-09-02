@@ -62,73 +62,78 @@ struct OptionsView: View {
                 // Shown before the button that uses it, because this is the
                 // value the copy is made with and it decides which bottles the
                 // engine will ever see.
-                HStack(spacing: 6) {
-                    Text("Bottles in").font(.footnote)
-                    Button(URL(fileURLWithPath: appGlobals.bottlesRoot).lastPathComponent) {
-                        if let picked = openFolderSelectorPanel(
-                            initialDirectory: URL(fileURLWithPath: appGlobals.bottlesRoot),
-                            title: "Where RaccoonBot keeps its bottles") {
-                            let path = picked.path(percentEncoded: false)
-                            appGlobals.bottlesRoot = path
-                            persistUsrDefOptionString(key: "bottlesRoot", value: path)
+                // One row: where the bottles live, and which engine runs them.
+                // Two short buttons, and the sheet is wide enough for both.
+                HStack(alignment: .center, spacing: 16) {
+                    HStack(spacing: 6) {
+                        Text("Bottles in").font(.footnote)
+                        Button(URL(fileURLWithPath: appGlobals.bottlesRoot).lastPathComponent) {
+                            if let picked = openFolderSelectorPanel(
+                                initialDirectory: URL(fileURLWithPath: appGlobals.bottlesRoot),
+                                title: "Where RaccoonBot keeps its bottles") {
+                                let path = picked.path(percentEncoded: false)
+                                appGlobals.bottlesRoot = path
+                                persistUsrDefOptionString(key: "bottlesRoot", value: path)
+                            }
                         }
+                        .help(appGlobals.bottlesRoot)
                     }
-                    .help(appGlobals.bottlesRoot)
-                }
-                Button(URL(string: appGlobals.cxAppPath ?? "")?.lastPathComponent ?? "Select a Crossover App...") {
-                    shouldShowBottleSelector = false
-                    if let url = openFolderSelectorPanel(type: .application) {
-                        // Refused before anything is copied, rather than after
-                        // an hour of patching. One rule, in EngineLayout.
-                        if let refusal = EngineLayout.refusal(for: url) {
-                            console.error(refusal)
-                            progressLabel = refusal
-                            return
-                        }
-                        appGlobals.selectedBottle = ""
-                        Task { @MainActor in
-                            // MacGameVideoFix makes the copy now, with the
-                            // script this application carries. What comes out
-                            // declares itself in mgvf-origin.json; the patcher
-                            // this replaced left 26.3p0.1.x and nothing else,
-                            // which is how a copy's maker can be told apart.
-                            downloading = true
-                            let patchedAppURL: URL
-                            do {
-                                patchedAppURL = try await EngineMaker.make(
-                                    from: url,
-                                    bottlesRoot: appGlobals.bottlesRoot,
-                                    replacing: true,
-                                    progress: { p, m in Task { @MainActor in progress = p; progressLabel = m } })
-                            } catch {
-                                downloading = false
-                                progress = 0
-                                progressLabel = error.localizedDescription
-                                console.error(error.localizedDescription)
+                    Button(URL(string: appGlobals.cxAppPath ?? "")?.lastPathComponent ?? "Select a Crossover App...") {
+                        shouldShowBottleSelector = false
+                        if let url = openFolderSelectorPanel(type: .application) {
+                            // Refused before anything is copied, rather than after
+                            // an hour of patching. One rule, in EngineLayout.
+                            if let refusal = EngineLayout.refusal(for: url) {
+                                console.error(refusal)
+                                progressLabel = refusal
                                 return
                             }
-                            downloading = false
-                            progress = 0
-                            appGlobals.cxAppPath = patchedAppURL.path(percentEncoded: false)
-                            persistUsrDefOptionString(key: "cxAppPath", value: patchedAppURL.relativePath)
-                            persistUsrDefOptionString(key: "cxCompleteAppPath", value: patchedAppURL.path(percentEncoded: false))
-                            if !bottles.isEmpty {
+                            appGlobals.selectedBottle = ""
+                            Task { @MainActor in
+                                // MacGameVideoFix makes the copy now, with the
+                                // script this application carries. What comes out
+                                // declares itself in mgvf-origin.json; the patcher
+                                // this replaced left 26.3p0.1.x and nothing else,
+                                // which is how a copy's maker can be told apart.
+                                downloading = true
+                                let patchedAppURL: URL
+                                do {
+                                    patchedAppURL = try await EngineMaker.make(
+                                        from: url,
+                                        bottlesRoot: appGlobals.bottlesRoot,
+                                        replacing: true,
+                                        progress: { p, m in Task { @MainActor in progress = p; progressLabel = m } })
+                                } catch {
+                                    downloading = false
+                                    progress = 0
+                                    progressLabel = error.localizedDescription
+                                    console.error(error.localizedDescription)
+                                    return
+                                }
+                                downloading = false
+                                progress = 0
+                                appGlobals.cxAppPath = patchedAppURL.path(percentEncoded: false)
+                                persistUsrDefOptionString(key: "cxAppPath", value: patchedAppURL.relativePath)
+                                persistUsrDefOptionString(key: "cxCompleteAppPath", value: patchedAppURL.path(percentEncoded: false))
+                                if !bottles.isEmpty {
+                                    shouldShowBottleSelector = true
+                                }
+                                if (DEBUG_ENABLED) {
+                                    console.saveLogs()
+                                }
+                            }
+                            do {
+                                bottles = try getAllBottles(appDir: url)
+                            } catch {
+                                console.error(String(reflecting: error))
+                            }
+                        } else {
+                            if !bottles.isEmpty{
                                 shouldShowBottleSelector = true
                             }
-                            if (DEBUG_ENABLED) {
-                                console.saveLogs()
-                            }
-                        }
-                        do {
-                            bottles = try getAllBottles(appDir: url)
-                        } catch {
-                            console.error(String(reflecting: error))
-                        }
-                    } else {
-                        if !bottles.isEmpty{
-                            shouldShowBottleSelector = true
                         }
                     }
+                    Spacer()
                 }
                 if(downloading){
                     ProgressView(value: progress, total: 100) {
@@ -379,28 +384,34 @@ struct OptionsView: View {
                 }
 
                 .padding(.vertical)
-                VStack(alignment: .leading) {
-                    if appGlobals.selectedBottle != "" {
-                        ProminentButton("Set Steam path", image: "steam-fill") {
-                            if let bottlePath = URL(string: appGlobals.selectedBottle) {
-                                if let url = openFolderSelectorPanel(type: .directory, initialDirectory: bottlePath.appendingPathComponent("drive_c"), title: "Select your Steam folder (where steam.exe is located)") {
-                                    let fallbackPath = bottlePath.appendingPathComponent(DEFAULT_STEAM_WINE_PATH).path(percentEncoded: false)
-                                    appGlobals.windowsSteamFolder = url
-                                    persistUsrDefOptionString(key: "windowsSteamFolder", value: appGlobals.windowsSteamFolder?.path(percentEncoded: false) ?? fallbackPath)
-                                    let from = appGlobals.windowsSteamFolder?.appendingPathComponent("config") ?? URL(string: appGlobals.selectedBottle)!.appendingPathComponent(DEFAULT_STEAM_WINE_CONFIG_PATH)
-                                    let steamLibrariesURLs = getSteamLibraryFolders(bottleURL: URL(string: appGlobals.selectedBottle)! ,from: from)
-                                    steamLibrariesURLs.forEach { url in
-                                        validateAddSteamFolder(url, to: &libraryPageGlobals.folders)
+                // Steam's own. The other stores do not have a Windows client in
+                // the bottle to point at, so the button only appears for Steam --
+                // and only once a bottle is chosen, since the path lives inside it.
+                if configuringStore == .steam, appGlobals.selectedBottle != "" {
+                    HStack(alignment: .center, spacing: 12) {
+                            ProminentButton("Set Steam path", image: "steam-fill") {
+                                if let bottlePath = URL(string: appGlobals.selectedBottle) {
+                                    if let url = openFolderSelectorPanel(type: .directory, initialDirectory: bottlePath.appendingPathComponent("drive_c"), title: "Select your Steam folder (where steam.exe is located)") {
+                                        let fallbackPath = bottlePath.appendingPathComponent(DEFAULT_STEAM_WINE_PATH).path(percentEncoded: false)
+                                        appGlobals.windowsSteamFolder = url
+                                        persistUsrDefOptionString(key: "windowsSteamFolder", value: appGlobals.windowsSteamFolder?.path(percentEncoded: false) ?? fallbackPath)
+                                        let from = appGlobals.windowsSteamFolder?.appendingPathComponent("config") ?? URL(string: appGlobals.selectedBottle)!.appendingPathComponent(DEFAULT_STEAM_WINE_CONFIG_PATH)
+                                        let steamLibrariesURLs = getSteamLibraryFolders(bottleURL: URL(string: appGlobals.selectedBottle)! ,from: from)
+                                        steamLibrariesURLs.forEach { url in
+                                            validateAddSteamFolder(url, to: &libraryPageGlobals.folders)
+                                        }
+                                        Task { await load() }
                                     }
-                                    Task { await load() }
                                 }
                             }
-                        }
-                        Text("\(appGlobals.windowsSteamFolder?.path(percentEncoded: false) ?? "Not set")")
+                            Text(appGlobals.windowsSteamFolder?.path(percentEncoded: false) ?? "Not set")
+                                .font(.footnote).foregroundStyle(.secondary)
+                                .lineLimit(1).truncationMode(.middle)
+                                .help(appGlobals.windowsSteamFolder?.path(percentEncoded: false) ?? "Not set")
                     }
                 }
             }
-            .frame(width: 300)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical)
         }
         .onAppear() {

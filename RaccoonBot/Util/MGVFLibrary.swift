@@ -210,10 +210,11 @@ final class MGVFLibrary: ObservableObject {
             if catalog.bottlesChanged(folder: folder, bottles: configuredBottles) { return .unverified }
             return .none
         }
-        var url = URL(fileURLWithPath: folder)
-        if !entry.carrierDir.isEmpty { url.appendPathComponent(entry.carrierDir) }
-        let keptAside = url.appendingPathComponent(entry.keptAs).path(percentEncoded: false)
-        if !FileManager.default.fileExists(atPath: keptAside) { return .missing }
+        // Where the installer actually put the original, not where the
+        // manifest says the carrier lives: for the Unreal titles that is one
+        // subfolder further down, and looking only where told refused four
+        // patched titles at launch.
+        guard entry.keptAsideOriginal(inGameFolder: folder) != nil else { return .missing }
         return catalog.isOutdated(folder: folder, game: entry) ? .outdated : .none
     }
 
@@ -242,10 +243,9 @@ final class MGVFLibrary: ObservableObject {
             // is still there comes back installed and is skipped.
             return catalog.bottlesChanged(folder: folder, bottles: configuredBottles)
         }
-        var url = URL(fileURLWithPath: folder)
-        if !entry.carrierDir.isEmpty { url.appendPathComponent(entry.carrierDir) }
-        let keptAside = url.appendingPathComponent(entry.keptAs).path(percentEncoded: false)
-        if !FileManager.default.fileExists(atPath: keptAside) { return true }
+        // Same lookup as need(folder:), through the entry, so the two cannot
+        // disagree about where a fix leaves its evidence.
+        guard entry.keptAsideOriginal(inGameFolder: folder) != nil else { return true }
         // The fix is on. Is it the one the bundle carries now? The catalogue
         // memoises the answer, so this stays a dictionary lookup per row
         // rather than a hash of every file the fix installs.

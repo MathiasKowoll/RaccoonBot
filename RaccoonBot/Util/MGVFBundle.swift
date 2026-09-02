@@ -179,6 +179,45 @@ struct MGVFGame: Codable, Hashable {
     /// Sorted and length-prefixed, so two different sets of fields cannot
     /// produce one string: "ab" + "c" and "a" + "bc" are the same
     /// concatenation and not the same fix.
+    /// Where the installer put the original aside, if it did. Nil means the
+    /// fix is not on this folder.
+    ///
+    /// The manifest names a carrier directory; the installer does not always
+    /// stop there. For the Unreal titles the ogg carrier sits under a
+    /// compiler-named subfolder -- `Win64/VS2015/` -- which the script
+    /// discovers on the machine rather than assumes, and says so in the very
+    /// sentence the launch gate shows. The gate assumed. Four titles with the
+    /// fix on and working were refused at launch as needing it, because the
+    /// kept-aside original was one directory further down than the manifest
+    /// said.
+    ///
+    /// So this looks where the manifest says first, then one and two levels
+    /// below it, by listing directories rather than by knowing their names.
+    /// Bounded, because a carrier directory is a small, specific place and an
+    /// unbounded walk of a game folder is the wrong cost for drawing a row.
+    func keptAsideOriginal(inGameFolder folder: String) -> URL? {
+        let f = FileManager.default
+        var root = URL(fileURLWithPath: folder)
+        if !carrierDir.isEmpty { root.appendPathComponent(carrierDir) }
+        func has(_ dir: URL) -> URL? {
+            let candidate = dir.appendingPathComponent(keptAs)
+            return f.fileExists(atPath: candidate.path(percentEncoded: false)) ? candidate : nil
+        }
+        func subdirectories(of dir: URL) -> [URL] {
+            ((try? f.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.isDirectoryKey])) ?? [])
+                .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
+                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        }
+        if let here = has(root) { return here }
+        for level1 in subdirectories(of: root) {
+            if let there = has(level1) { return there }
+            for level2 in subdirectories(of: level1) {
+                if let deeper = has(level2) { return deeper }
+            }
+        }
+        return nil
+    }
+
     func fingerprint(inDirectory directory: URL) -> String {
         var parts: [String] = [
             "schema3", script, exe, carrier, keptAs, carrierDir,

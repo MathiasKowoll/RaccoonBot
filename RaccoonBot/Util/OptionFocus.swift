@@ -25,11 +25,11 @@ nonisolated enum OptionControl: String, CaseIterable, Hashable {
     // Generic
     case backend, x87, mtlHud, advertiseAVX, msync, sdl, hidraw, ue4Hack, mvkArgBuff
     // DXMT
-    case dxmtMaxFPS, dxmtMetalFX, dxmtUpscale
+    case dxmtCap, dxmtMaxFPS, dxmtMetalFX, dxmtUpscale
     // Metal HUD
     case hudDetail, hudAlignment, hudOpacity
     // D3DMetal
-    case d3dMtl4, d3dMaxFPS
+    case d3dMtl4, d3dCap, d3dMaxFPS
     // Actions
     case save, undo, reset, autoconfigure
 
@@ -95,6 +95,8 @@ nonisolated struct OptionPanelState: Equatable {
     var backend = "dxmt"
     var hudEnabled = false
     var metalFXOn = false
+    var dxmtCapOn = false
+    var d3dCapOn = false
     var osVersion = 26
     var armShown = false
 }
@@ -130,13 +132,16 @@ nonisolated struct OptionFocus: Equatable {
         list += [.mtlHud, .advertiseAVX]
         if !state.isNative { list += [.msync, .sdl, .hidraw, .ue4Hack, .mvkArgBuff] }
         if state.backend == "dxmt" {
-            list += [.dxmtMaxFPS, .dxmtMetalFX]
+            list.append(.dxmtCap)
+            if state.dxmtCapOn { list.append(.dxmtMaxFPS) }
+            list.append(.dxmtMetalFX)
             if state.metalFXOn { list.append(.dxmtUpscale) }
         }
         if state.hudEnabled { list += [.hudDetail, .hudAlignment, .hudOpacity] }
         if state.backend.hasPrefix("d3dmetal") {
             if state.osVersion >= 27 { list.append(.d3dMtl4) }
-            list.append(.d3dMaxFPS)
+            list.append(.d3dCap)
+            if state.d3dCapOn { list.append(.d3dMaxFPS) }
         }
         list += [.save, .undo, .reset, .autoconfigure]
         return list
@@ -187,6 +192,11 @@ nonisolated enum OptionAdjust {
     static let fpsStep: Double = 5
     static let opacityStep: Double = 0.05
     static let upscaleStep: Double = 0.125   // the slider's own step; anything else lands between its stops
+
+    /// What the cap becomes when its switch is thrown. The launch line emits a
+    /// cap only above 20, so 0 is off in the only sense that matters; 60 is
+    /// where on starts, and the slider takes it from there.
+    static func cap(_ on: Bool) -> Double { on ? 60 : 0 }
 
     static func cycle(_ value: String, in options: [String], forward: Bool) -> String {
         guard let at = options.firstIndex(of: value) else { return options.first ?? value }

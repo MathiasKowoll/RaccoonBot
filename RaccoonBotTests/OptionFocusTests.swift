@@ -37,7 +37,8 @@ struct OptionFocusTests {
     @Test func d3dMetalShowsItsSectionAndMetal4OnlyOn27() {
         var s = OptionPanelState(backend: "d3dmetal4", osVersion: 26)
         #expect(!OptionFocus.visibleControls(for: s).contains(.d3dMtl4))
-        #expect(OptionFocus.visibleControls(for: s).contains(.d3dMaxFPS))
+        // The section is there by its switch; the slider only once it is on.
+        #expect(OptionFocus.visibleControls(for: s).contains(.d3dCap))
         s.osVersion = 27
         #expect(OptionFocus.visibleControls(for: s).contains(.d3dMtl4))
     }
@@ -153,5 +154,32 @@ struct MenuFocusTests {
         #expect(OptionControl.hudAlignment.opensMenu)
         #expect(!OptionControl.hudDetail.opensMenu, "segmented: every choice is already on screen")
         #expect(!OptionControl.mtlHud.opensMenu)
+    }
+}
+
+/// The frame-rate cap, as a switch and not as a slider dragged to its floor.
+struct FrameCapTests {
+    @Test func offIsZeroAndOnStartsAtSixty() {
+        #expect(OptionAdjust.cap(false) == 0)
+        #expect(OptionAdjust.cap(true) == 60)
+        #expect(OptionAdjust.cap(true) > 20, "on has to clear the launch line's threshold")
+    }
+
+    @Test func theSliderAppearsOnlyWhenTheCapIsOn() {
+        var s = OptionPanelState(backend: "dxmt")
+        #expect(OptionFocus.visibleControls(for: s).contains(.dxmtCap))
+        #expect(!OptionFocus.visibleControls(for: s).contains(.dxmtMaxFPS))
+        s.dxmtCapOn = true
+        let on = OptionFocus.visibleControls(for: s)
+        #expect(on.contains(.dxmtMaxFPS))
+        #expect(on.firstIndex(of: .dxmtCap)! < on.firstIndex(of: .dxmtMaxFPS)!, "switch first, then how much")
+    }
+
+    @Test func d3dMetalHasTheSameShape() {
+        var s = OptionPanelState(backend: "d3dmetal4", osVersion: 27)
+        #expect(OptionFocus.visibleControls(for: s).contains(.d3dCap))
+        #expect(!OptionFocus.visibleControls(for: s).contains(.d3dMaxFPS))
+        s.d3dCapOn = true
+        #expect(OptionFocus.visibleControls(for: s).contains(.d3dMaxFPS))
     }
 }

@@ -160,15 +160,25 @@ struct GameOptionsView: View {
                     if(gameOptions.cxGraphicsBackend == "dxmt") {
                         Divider()
                         Section("DXMT Options") {
-                            VStack{
-                                Text(localizedString(forKey: "preferredMaxFrameRate", value: preferredMaxFrameRate))
-                                Slider(
-                                    value: $gameOptions.dxmtPreferredMaxFrameRate,
-                                    in: 19...240,
-                                    step: 1.0
-                                )
-                                .help(localizedString(forKey: "preferredMaxFrameRateHelp"))
-                                    .optionFocus(.dxmtMaxFPS, current: focus.current, shown: gamepad.showsFocus)
+                            // On or off, said outright. The launch line emits a cap only when the
+                            // value is above 20, so "off" used to be a slider dragged to its
+                            // bottom -- which nobody would guess. The toggle writes 0 for off and
+                            // 60 for on; the slider then says how much.
+                            Toggle("Limit frame rate", isOn: Binding(
+                                get: { gameOptions.dxmtPreferredMaxFrameRate > 20 },
+                                set: { gameOptions.dxmtPreferredMaxFrameRate = OptionAdjust.cap($0) }))
+                                .optionFocus(.dxmtCap, current: focus.current, shown: gamepad.showsFocus)
+                            if gameOptions.dxmtPreferredMaxFrameRate > 20 {
+                                                            VStack{
+                                                                Text(localizedString(forKey: "preferredMaxFrameRate", value: preferredMaxFrameRate))
+                                                                Slider(
+                                                                    value: $gameOptions.dxmtPreferredMaxFrameRate,
+                                                                    in: 19...240,
+                                                                    step: 1.0
+                                                                )
+                                                                .help(localizedString(forKey: "preferredMaxFrameRateHelp"))
+                                                                    .optionFocus(.dxmtMaxFPS, current: focus.current, shown: gamepad.showsFocus)
+                            }
                             }
                             
                             Toggle("metalFXSpatial", isOn: $gameOptions.dxmtMetalFXSpatial)
@@ -236,15 +246,25 @@ struct GameOptionsView: View {
                                 .disabled(OSVersion < 27)
                                 .opacity(OSVersion < 27 ? 0.5 : 1.0)
                                 .optionFocus(.d3dMtl4, current: focus.current, shown: gamepad.showsFocus)
-                            VStack{
-                                Text(localizedString(forKey: "preferredMaxFrameRate", value: d3dMaxFPS))
-                                Slider(
-                                    value: $gameOptions.d3dMaxFPS,
-                                    in: 19...240,
-                                    step: 1.0
-                                )
-                                .help(localizedString(forKey: "preferredMaxFrameRateHelp"))
-                                    .optionFocus(.d3dMaxFPS, current: focus.current, shown: gamepad.showsFocus)
+                            // On or off, said outright. The launch line emits a cap only when the
+                            // value is above 20, so "off" used to be a slider dragged to its
+                            // bottom -- which nobody would guess. The toggle writes 0 for off and
+                            // 60 for on; the slider then says how much.
+                            Toggle("Limit frame rate", isOn: Binding(
+                                get: { gameOptions.d3dMaxFPS > 20 },
+                                set: { gameOptions.d3dMaxFPS = OptionAdjust.cap($0) }))
+                                .optionFocus(.d3dCap, current: focus.current, shown: gamepad.showsFocus)
+                            if gameOptions.d3dMaxFPS > 20 {
+                                                            VStack{
+                                                                Text(localizedString(forKey: "preferredMaxFrameRate", value: d3dMaxFPS))
+                                                                Slider(
+                                                                    value: $gameOptions.d3dMaxFPS,
+                                                                    in: 19...240,
+                                                                    step: 1.0
+                                                                )
+                                                                .help(localizedString(forKey: "preferredMaxFrameRateHelp"))
+                                                                    .optionFocus(.d3dMaxFPS, current: focus.current, shown: gamepad.showsFocus)
+                            }
                             }
                         }
                     }
@@ -366,6 +386,8 @@ struct GameOptionsView: View {
                          backend: gameOptions.cxGraphicsBackend,
                          hudEnabled: gameOptions.mtlHudEnabled,
                          metalFXOn: gameOptions.dxmtMetalFXSpatial,
+                         dxmtCapOn: gameOptions.dxmtPreferredMaxFrameRate > 20,
+                         d3dCapOn: gameOptions.d3dMaxFPS > 20,
                          osVersion: Int(OSVersion),
                          armShown: showArmSupport)
     }
@@ -463,6 +485,14 @@ struct GameOptionsView: View {
         case .mvkArgBuff:   return flip(\.mvkArgBuff)
         case .dxmtMetalFX:  return flip(\.dxmtMetalFXSpatial)
         case .d3dMtl4:      return flip(\.d3dMtl4Enabled)
+        case .dxmtCap:
+            guard adjust == .select else { return .nothing }
+            gameOptions.dxmtPreferredMaxFrameRate = OptionAdjust.cap(!(gameOptions.dxmtPreferredMaxFrameRate > 20))
+            return .changed
+        case .d3dCap:
+            guard adjust == .select else { return .nothing }
+            gameOptions.d3dMaxFPS = OptionAdjust.cap(!(gameOptions.d3dMaxFPS > 20))
+            return .changed
         case .dxmtMaxFPS:   return step(\.dxmtPreferredMaxFrameRate, by: OptionAdjust.fpsStep, in: 19...240)
         case .d3dMaxFPS:    return step(\.d3dMaxFPS, by: OptionAdjust.fpsStep, in: 19...240)
         case .dxmtUpscale:  return step(\.dxmtMetalSpatialUpscaleFactor, by: OptionAdjust.upscaleStep, in: 1.0...2.0)

@@ -398,6 +398,13 @@ struct Game: Identifiable, Codable {
     var appNames: [String] = []
     var appExeURL: URL?
     var isCustom: Bool?
+    /// Which store this title belongs to. Nil means Steam, which is every
+    /// title written before the field existed, so old records decode as they
+    /// always did. This is a tag, not an identifier: the identity of an Epic
+    /// title is its three-part id string, kept in `id`, never a scalar beside
+    /// steamAppID.
+    var store: Store?
+    var isEpic: Bool { store == .epic }
     
     // taken from SteamGame
     let type: String
@@ -458,6 +465,7 @@ struct Game: Identifiable, Codable {
         case appNames = "app_names"
         case appExeURL = "app_exe_url"
         case isCustom = "is_custom"
+        case store
         
         case type
         case name
@@ -652,6 +660,30 @@ extension Game {
             "usk": RatingBody(rating: "12", requiredAge: "12", descriptors: "Violence")
         ]
     )
+    /// A title the Epic launcher has installed, as a card. No store page, no
+    /// art, no description: Epic keeps none of that locally, and the card
+    /// shows what is known rather than pretending.
+    static func epic(_ title: EpicInstalled) -> Game {
+        let blank = SteamGame(type: "game", name: title.title, steamAppID: 0, requiredAge: "0",
+                              isFree: false, controllerSupport: nil, dlc: nil,
+                              detailedDescription: "", aboutTheGame: "", shortDescription: "",
+                              supportedLanguages: nil, headerImage: "", capsuleImage: "",
+                              capsuleImageV5: nil, website: nil, pcRequirements: nil,
+                              macRequirements: nil, linuxRequirements: nil, legalNotice: nil,
+                              developers: nil, publishers: nil, priceOverview: nil, packages: nil,
+                              packageGroups: nil, platforms: Platforms(windows: true, mac: false, linux: false),
+                              metacritic: nil, categories: nil, genres: nil, screenshots: nil,
+                              movies: nil, recommendations: nil, achievements: nil,
+                              releaseDate: ReleaseDate(comingSoon: false, date: ""), supportInfo: nil,
+                              background: nil, backgroundRaw: nil, contentDescriptors: nil, ratings: nil)
+        var game = Game(from: blank, id: title.id, isNative: false, downloadProgress: 100,
+                        isInstalled: title.presence == .installed,
+                        appNames: title.executable.map { [$0.lastPathComponent] } ?? [])
+        game.store = .epic
+        game.appExeURL = title.executable
+        return game
+    }
+
     static let mock = Game(from: Game.steamMock, id: "example", isNative: true, downloadProgress: 100, isInstalled: true, appNames: ["test.exe"], isCustom: true)
     static let steamEmptyGame = SteamGame(
         type: "game",
@@ -888,12 +920,16 @@ class LibraryPageGlobals: ObservableObject {
         self.loadCustomAddedGames()
     }
     
+    /// What the Epic launcher in the configured Epic bottle has installed.
+    /// Read from that one bottle and no other; see EpicLibrary.
+    @Published var epicGames: [Game] = []
+
     var allGamesCount: Int {
-        return self.games.count + self.customAddedGames.count
+        return self.games.count + self.customAddedGames.count + self.epicGames.count
     }
     
     var allGames: [Game] {
-        self.games + self.customAddedGames
+        self.games + self.customAddedGames + self.epicGames
     }
     
     var filteredGames: [Game] {

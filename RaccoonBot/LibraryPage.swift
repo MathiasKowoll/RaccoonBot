@@ -203,6 +203,28 @@ struct LibraryPage: View {
                 }
             }
         }
+        // Epic, from the one bottle configured for it. The launcher's records
+        // are cloned across several bottles on this machine, so scanning every
+        // bottle that holds a launcher would list the same titles several
+        // times; the configured bottle is the only one that counts.
+        if let epic = EpicLaunch.target(settings: StoreConfig.settings(for: .epic),
+                                        selectedBottle: appGlobals.selectedBottle),
+           let bottleDir = BottleReference(epic.bottle)?.directory {
+            let installed = EpicLibrary.read(bottle: bottleDir)
+            libraryPageGlobals.epicGames = installed.map(Game.epic)
+            // A meta entry per title, so the fix catalogue and everything else
+            // that asks "where is this game" by id can answer for Epic too.
+            let known = Set(libraryPageGlobals.gamesMeta.map(\.appid))
+            for title in installed where !known.contains(title.id) {
+                libraryPageGlobals.gamesMeta.append(
+                    GamesMeta(appid: title.id, installdir: title.folder.lastPathComponent,
+                              gameURL: title.folder, isNative: false,
+                              libraryFolder: title.folder.deletingLastPathComponent(),
+                              bytesDownloaded: "0", BytesTodownload: "0",
+                              appNames: title.executable.map { [$0.lastPathComponent] } ?? []))
+            }
+            console.log("epic: \(installed.count) installed title(s) in the configured bottle")
+        }
         do {
             if(appGlobals.userID != nil) {
                 let ownedMeta = try await api

@@ -84,6 +84,13 @@ struct GameThumbnail: View {
                         if (item.isNative == true) {
                             OIcon("apple.logo").padding(.vertical, 8)            // icon size
                         }
+                        if item.isEpic {
+                            Text("EPIC").font(.caption2.bold())
+                                .padding(.horizontal, 6).padding(.vertical, 3)
+                                .background(Capsule().fill(.white.opacity(0.18)))
+                                .padding(.vertical, 8)
+                                .help(item.isInstalled ? "Installed by the Epic Games Launcher" : "Installed, but its drive is not mounted")
+                        }
                         if (item.isCustom == true) {
                             Button {
                                 libraryPageGlobals.deleteCustomAddedGame(game: item)
@@ -122,6 +129,11 @@ struct GameThumbnail: View {
                         Spacer()
                         
                         if(!isDownloading && item.isInstalled) {
+                            if item.isEpic {
+                                Text("Play from the Epic launcher")
+                                    .font(.footnote).foregroundStyle(.white.opacity(0.8))
+                                    .frame(height: 30)
+                            } else {
                             Button {
                                 if (isPlaying) {
                                     if(item.isNative) {
@@ -146,6 +158,7 @@ struct GameThumbnail: View {
                             }
                             .background(.procyonSecondary)
                             .cornerRadius(20)
+                            }
                         } else if(item.isInstalled) {
                             ProgressView(value: item.downloadProgress, total: 100,
                                          label: { Text("Downloading...").font(.footnote)

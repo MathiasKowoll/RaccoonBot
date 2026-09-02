@@ -51,6 +51,11 @@ final class GameLauncher {
         if isPlaying { return .alreadyPlaying }
         if game.isNative { return .started }
         if game.isCustom == true && game.appExeURL == nil { return .noExecutable }
+        // Epic titles are listed, not launched, for now: launching goes through
+        // the launcher's own URL scheme, which is the next step and has not
+        // been exercised in a bottle yet. Running the .exe directly is what
+        // the design note says not to do.
+        if game.isEpic { return .noExecutable }
         if needsFix { return .needsFix }
         return .started
     }

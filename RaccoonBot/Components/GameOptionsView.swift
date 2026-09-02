@@ -24,6 +24,8 @@ struct GameOptionsView: View {
     @EnvironmentObject private var gamepad: GamepadInput
     @State private var padToken: UUID?
     @State private var focus = OptionFocus()
+    /// The popup that is open, if one is.
+    @State private var menu: MenuFocus?
     @Environment(\.dismiss) private var dismiss
     @State var isLoading = false
 
@@ -81,6 +83,9 @@ struct GameOptionsView: View {
                                                 backend == "d3dmetal4" && OSVersion >= 27
                                         }
                                         .optionFocus(.backend, current: focus.current, shown: gamepad.showsFocus)
+                                        .popover(isPresented: Binding(get: { menu?.control == .backend },
+                                                                         set: { if !$0 { menu = nil } }),
+                                                 arrowEdge: .bottom) { menuPopover(for: .backend) }
                                 }
                                 Divider()
                                 TextField("Game arguments", text: $gameOptions.gameArguments)
@@ -214,6 +219,9 @@ struct GameOptionsView: View {
                                     }
                                 }
                                     .optionFocus(.hudAlignment, current: focus.current, shown: gamepad.showsFocus)
+                                    .popover(isPresented: Binding(get: { menu?.control == .hudAlignment },
+                                                                     set: { if !$0 { menu = nil } }),
+                                             arrowEdge: .bottom) { menuPopover(for: .hudAlignment) }
                                 VStack {
                                     Text("Opacity \(Int(gameOptions.mtlHudOpacity * 100))%")
                                     Slider(value: $gameOptions.mtlHudOpacity, in: 0.1...1.0)
@@ -372,6 +380,11 @@ struct GameOptionsView: View {
         // replaces the first rather than stacking on top of it.
         if let padToken { gamepad.release(padToken) }
         padToken = gamepad.take(onMove: { direction in
+            // An open popup is a column of its own: up and down walk it, and
+            // nothing reaches the panel behind it until it closes.
+            if var open = menu {
+                open.move(direction); menu = open; return
+            }
             focus.update(for: panelState(current))
             focus.selectFirstIfNeeded()
             switch direction {
@@ -384,6 +397,14 @@ struct GameOptionsView: View {
                 _ = apply(direction == .right ? .right : .left, to: control)
             }
         }, onPress: { press in
+            if let open = menu {
+                switch press {
+                case .select: pick(open.currentID, for: open.control); menu = nil
+                case .back:   menu = nil
+                case .options: break
+                }
+                return
+            }
             switch press {
             case .back:
                 // Closing saves, through the sheet's one closing path. There
@@ -392,7 +413,11 @@ struct GameOptionsView: View {
                 dismiss()
             case .select:
                 guard let control = focus.current else { focus.selectFirstIfNeeded(); return }
-                if case .activate(let button) = apply(.select, to: control) { activate(button) }
+                switch apply(.select, to: control) {
+                case .activate(let button): activate(button)
+                case .openMenu(let popup):  openMenu(popup)
+                case .changed, .nothing:    break
+                }
             case .options:
                 break
             }
@@ -422,6 +447,7 @@ struct GameOptionsView: View {
                                                              in: range, forward: forward)
             return .changed
         }
+        if adjust == .select, control.opensMenu { return .openMenu(control) }
         switch control {
         case .backend:
             gameOptions.cxGraphicsBackend = OptionAdjust.cycle(gameOptions.cxGraphicsBackend,
@@ -451,6 +477,60 @@ struct GameOptionsView: View {
             return .changed
         case .save, .undo, .reset, .autoconfigure:
             return adjust == .select ? .activate(control) : .nothing
+        }
+    }
+
+    /// The same list the mouse gets, for the control that was pressed.
+    private func openMenu(_ control: OptionControl) {
+        switch control {
+        case .backend:
+            menu = MenuFocus(control: control,
+                             options: cxGraphicsBackend.map { (id: $0.id, label: $0.label) },
+                             selected: gameOptions.cxGraphicsBackend)
+        case .hudAlignment:
+            menu = MenuFocus(control: control,
+                             options: MetalHudAlignment.allCases.map { corner in (id: corner.rawValue, label: corner.label) },
+                             selected: gameOptions.mtlHudAlignment)
+        default:
+            break
+        }
+    }
+
+    private func pick(_ id: String, for control: OptionControl) {
+        switch control {
+        case .backend:      gameOptions.cxGraphicsBackend = id
+        case .hudAlignment: gameOptions.mtlHudAlignment = id
+        default: break
+        }
+    }
+
+    /// The popup, drawn as one: a column beside the control, highlighted row
+    /// and all. Rows are buttons, so the mouse can pick from it too, and a
+    /// hover moves the highlight so both devices agree on what a press picks.
+    @ViewBuilder
+    private func menuPopover(for control: OptionControl) -> some View {
+        if let open = menu, open.control == control {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(Array(zip(open.ids, open.labels)), id: \.0) { id, label in
+                    Button {
+                        pick(id, for: control); menu = nil
+                    } label: {
+                        HStack {
+                            Text(label)
+                            Spacer(minLength: 12)
+                            if id == open.currentID { Image(systemName: "checkmark").font(.footnote) }
+                        }
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .frame(minWidth: 150, alignment: .leading)
+                        .background(RoundedRectangle(cornerRadius: 6)
+                            .fill(id == open.currentID ? Color.accentColor.opacity(0.35) : .clear))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { inside in if inside, var m = menu { m.highlight(id); menu = m } }
+                }
+            }
+            .padding(6)
         }
     }
 

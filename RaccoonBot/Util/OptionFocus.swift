@@ -39,6 +39,54 @@ nonisolated enum OptionControl: String, CaseIterable, Hashable {
         default: return false
         }
     }
+
+    /// A press opens a list to choose from, the way a click opens the popup.
+    /// The segmented HUD picker is not one: all its choices are already on
+    /// screen, and cycling is what a click does there too.
+    var opensMenu: Bool {
+        switch self {
+        case .backend, .hudAlignment: return true
+        default: return false
+        }
+    }
+}
+
+/// An open menu: which control it belongs to, what it lists, and where the
+/// highlight is. The list is the same one the mouse gets, so choosing with a
+/// pad, the arrows or a click all land on the same value.
+nonisolated struct MenuFocus: Equatable {
+    let control: OptionControl
+    let ids: [String]
+    let labels: [String]
+    private(set) var index: Int
+
+    init(control: OptionControl, options: [(id: String, label: String)], selected: String) {
+        self.control = control
+        self.ids = options.map(\.id)
+        self.labels = options.map(\.label)
+        // Opens on the current value, as a popup does, so a press-then-select
+        // with nothing in between changes nothing.
+        self.index = max(0, options.firstIndex { $0.id == selected } ?? 0)
+    }
+
+    var currentID: String { ids.isEmpty ? "" : ids[index] }
+
+    /// Up and down, stopping at the ends. Sideways is nothing: a menu is a
+    /// column.
+    @discardableResult
+    mutating func move(_ direction: GridFocus.Direction) -> Bool {
+        guard !ids.isEmpty else { return false }
+        switch direction {
+        case .up:   guard index > 0 else { return false }; index -= 1
+        case .down: guard index < ids.count - 1 else { return false }; index += 1
+        case .left, .right: return false
+        }
+        return true
+    }
+
+    mutating func highlight(_ id: String) {
+        if let at = ids.firstIndex(of: id) { index = at }
+    }
 }
 
 /// What the panel is showing, so the list can be the visible one.
@@ -60,6 +108,9 @@ nonisolated struct OptionFocus: Equatable {
         case nothing
         case changed
         case activate(OptionControl)
+        /// A press on a popup: the view opens the list rather than the value
+        /// changing here. Sideways on the same control still cycles.
+        case openMenu(OptionControl)
     }
 
     private(set) var visible: [OptionControl] = []

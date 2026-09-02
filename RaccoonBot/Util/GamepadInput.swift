@@ -164,6 +164,7 @@ final class GamepadInput: ObservableObject {
         case 124: return .move(.right)
         case 36:  return .press(.select)   // Return
         case 76:  return .press(.select)   // Enter on the keypad
+        case 49:  return .press(.select)   // Space, which is what opens a popup on macOS
         case 53:  return .press(.back)     // Escape
         default:  return nil
         }

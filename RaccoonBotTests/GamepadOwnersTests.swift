@@ -90,12 +90,13 @@ struct KeyboardMappingTests {
         #expect(GamepadInput.action(forKeyCode: 124) == .move(.right))
         #expect(GamepadInput.action(forKeyCode: 36) == .press(.select))
         #expect(GamepadInput.action(forKeyCode: 76) == .press(.select))
+        #expect(GamepadInput.action(forKeyCode: 49) == .press(.select), "Space, as on a native popup")
         #expect(GamepadInput.action(forKeyCode: 53) == .press(.back))
     }
 
     /// Every other key is somebody else's. A letter in particular: taking
     /// one would break typing in the filter field.
     @Test func otherKeysAreNotOurs() {
-        for code: UInt16 in [0, 1, 12, 49, 51, 48] { #expect(GamepadInput.action(forKeyCode: code) == nil) }
+        for code: UInt16 in [0, 1, 12, 51, 48] { #expect(GamepadInput.action(forKeyCode: code) == nil) }
     }
 }

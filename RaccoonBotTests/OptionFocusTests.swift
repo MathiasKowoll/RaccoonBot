@@ -100,3 +100,58 @@ struct OptionFocusTests {
         #expect(!OptionControl.mtlHud.isButton)
     }
 }
+
+/// A popup opened from the pad or the keyboard.
+struct MenuFocusTests {
+    private let backends: [(id: String, label: String)] = [
+        ("dxmt", "DXMT"), ("d3dmetal3", "D3Dmetal3"), ("d3dmetal4", "D3Dmetal4"),
+        ("wined3d", "Wine"), ("dxvk", "DXVK"), ("auto", "Auto"),
+    ]
+
+    /// Opens on what is selected, as the popup does, so opening and choosing
+    /// straight away changes nothing.
+    @Test func opensOnTheCurrentValue() {
+        let m = MenuFocus(control: .backend, options: backends, selected: "wined3d")
+        #expect(m.currentID == "wined3d")
+        #expect(m.index == 3)
+    }
+
+    @Test func anUnknownValueOpensOnTheFirst() {
+        let m = MenuFocus(control: .backend, options: backends, selected: "nonsense")
+        #expect(m.currentID == "dxmt")
+    }
+
+    @Test func upAndDownStopAtTheEnds() {
+        var m = MenuFocus(control: .backend, options: backends, selected: "dxmt")
+        let up = m.move(.up); #expect(up == false)
+        let down = m.move(.down); #expect(down)
+        #expect(m.currentID == "d3dmetal3")
+        while m.move(.down) {}
+        #expect(m.currentID == "auto")
+        let past = m.move(.down); #expect(past == false)
+    }
+
+    @Test func sidewaysIsNothingInAColumn() {
+        var m = MenuFocus(control: .backend, options: backends, selected: "dxmt")
+        let l = m.move(.left); #expect(l == false)
+        let r = m.move(.right); #expect(r == false)
+        #expect(m.currentID == "dxmt")
+    }
+
+    /// A hover with the mouse moves the highlight, so the two devices agree
+    /// on what a press would pick.
+    @Test func highlightingByIDMovesTheIndex() {
+        var m = MenuFocus(control: .backend, options: backends, selected: "dxmt")
+        m.highlight("dxvk")
+        #expect(m.currentID == "dxvk")
+        m.highlight("nope")
+        #expect(m.currentID == "dxvk", "an unknown id leaves it where it was")
+    }
+
+    @Test func onlyThePopupsOpenAMenu() {
+        #expect(OptionControl.backend.opensMenu)
+        #expect(OptionControl.hudAlignment.opensMenu)
+        #expect(!OptionControl.hudDetail.opensMenu, "segmented: every choice is already on screen")
+        #expect(!OptionControl.mtlHud.opensMenu)
+    }
+}

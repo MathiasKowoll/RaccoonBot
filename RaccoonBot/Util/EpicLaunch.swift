@@ -25,10 +25,20 @@ nonisolated enum EpicLaunch {
     /// the application already uses for everything. So an unset Epic bottle
     /// falls back to the selected one rather than to "no bottle", and the
     /// client path falls back to where Epic's installer always puts it.
-    static func target(settings: StoreSettings, selectedBottle: String) -> Target? {
+    static func target(settings: StoreSettings, selectedBottle: String,
+                       fileManager: FileManager = .default) -> Target? {
         let bottle = settings.bottle.isEmpty ? selectedBottle : settings.bottle
         guard !bottle.isEmpty else { return nil }
-        return Target(bottle: bottle, clientPath: settings.clientPath ?? Store.epic.defaultClientPath)
+        if let chosen = settings.clientPath { return Target(bottle: bottle, clientPath: chosen) }
+        // A launcher that has updated itself carries a Win64 build beside the
+        // Win32 one, and that is the one that runs: the bottle that works
+        // logs its base directory as Win64. Prefer it when it is there, and
+        // fall back to Epic's installer default when it is not.
+        let win64 = Store.epic.defaultClientPath.replacingOccurrences(of: "\\Win32\\", with: "\\Win64\\")
+        if let path = unixPath(of: win64, inBottle: bottle), fileManager.fileExists(atPath: path) {
+            return Target(bottle: bottle, clientPath: win64)
+        }
+        return Target(bottle: bottle, clientPath: Store.epic.defaultClientPath)
     }
 
     /// The client's file on this Mac, for the one question a button needs

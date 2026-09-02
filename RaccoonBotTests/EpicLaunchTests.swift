@@ -81,3 +81,26 @@ struct BottleVersionGuardTests {
         #expect(EpicLaunch.bottleVersion(of: dir.absoluteString) == "27.0.0.40921")
     }
 }
+
+/// A self-updated launcher carries a Win64 build, and that is the one to run.
+struct EpicLaunchWin64Tests {
+    @Test func prefersWin64WhenItIsThere() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("epic64-\(UUID().uuidString)")
+            .appendingPathComponent("Steam")
+        let bin = dir.appendingPathComponent("drive_c/Program Files (x86)/Epic Games/Launcher/Portal/Binaries")
+        try FileManager.default.createDirectory(at: bin.appendingPathComponent("Win64"), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: bin.appendingPathComponent("Win32"), withIntermediateDirectories: true)
+        try "x".write(to: bin.appendingPathComponent("Win32/EpicGamesLauncher.exe"), atomically: true, encoding: .utf8)
+        let before = try #require(EpicLaunch.target(settings: StoreSettings(), selectedBottle: dir.absoluteString))
+        #expect(before.clientPath.contains("\\Win32\\"), "only Win32 there: use it")
+        try "x".write(to: bin.appendingPathComponent("Win64/EpicGamesLauncher.exe"), atomically: true, encoding: .utf8)
+        let after = try #require(EpicLaunch.target(settings: StoreSettings(), selectedBottle: dir.absoluteString))
+        #expect(after.clientPath.contains("\\Win64\\"))
+    }
+
+    @Test func anExplicitClientPathIsNotSecondGuessed() throws {
+        var s = StoreSettings(); s.clientPath = #"C:\Somewhere\Else.exe"#
+        let t = try #require(EpicLaunch.target(settings: s, selectedBottle: "file:///tmp/x"))
+        #expect(t.clientPath == s.clientPath)
+    }
+}

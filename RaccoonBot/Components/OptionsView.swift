@@ -393,7 +393,7 @@ struct OptionsView: View {
                                 }
                                 .disabled(!EpicLaunch.isInstalled(epic))
                                 Text(EpicLaunch.isInstalled(epic)
-                                     ? "Runs on D3DMetal 3: the launcher's renderer fails on the 4.0 beta."
+                                     ? "Opens the launcher in this bottle, on whatever the engine holds."
                                      : "Not installed in this bottle. Install it from CrossOver first.")
                                     .font(.footnote).foregroundStyle(.secondary)
                                     .lineLimit(2)

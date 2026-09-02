@@ -139,15 +139,13 @@ func openSteam(cxAppPath: String?, selectedBottle: String?, SteamX86AppPath: Str
 ///
 /// Ours showed "Unsupported Graphics Card". Its log: a Direct3D 11 device,
 /// then every CreateVertexShader and CreatePixelShader returning E_INVALIDARG,
-/// then "failed to initialise slate renderer". What was running was a 32-bit
-/// launcher from a March-2025 installer that had never managed its first
-/// self-update. In CrossOver's own Epic bottle the launcher had self-updated
-/// to UE 5.5.4, x86-64, and runs -- on CrossOver 27, whose active toolkit is
-/// the same generation-4 build as ours. So the difference that is measured is
-/// the launcher, not the toolkit generation; generation 3 is put in below as
-/// the other thing CrossOver's bottle may have had when its old launcher first
-/// ran, and it costs nothing, but it is an attempt and not a proven fix. If it
-/// fails, the fix is a current launcher in this bottle.
+/// then "failed to initialise slate renderer". It was a 32-bit UE 4.27 launcher
+/// from a March-2025 installer that had never managed its first self-update.
+/// The bottle that works runs a self-updated UE 5.5.4, x86-64 -- on the same
+/// generation-4 toolkit build as ours, byte for byte. The launcher was the
+/// difference, and putting generation 3 in first was tried and changed
+/// nothing, so this no longer touches the toolkit: whatever the last game
+/// asked for stays, and the launcher is what gets fixed.
 ///
 /// Refuses a bottle newer than the engine. Wine updates a bottle it meets
 /// with a different engine, and with an older engine that is a downgrade of
@@ -163,14 +161,6 @@ func openEpic(cxAppPath: String?, bottle: String, clientPath: String) {
     }
     let bottleName = bottleURL.lastPathComponent
     let bottleRoot = bottleURL.deletingLastPathComponent().path(percentEncoded: false)
-    do {
-        try installd3dMetal(at: URL(fileURLWithPath: cxAppPath), version: "3")
-        console.log("epic: D3DMetal generation 3 in the engine")
-    } catch {
-        // Launch anyway and say so: the engine may already hold 3, and a
-        // refusal here would leave the person with no way to find out.
-        console.error("epic: could not put D3DMetal 3 in the engine: \(String(reflecting: error))")
-    }
     let command = "CX_BOTTLE_PATH=\"\(bottleRoot)\" MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=0 "
         + "CX_GRAPHICS_BACKEND=\"d3dmetal\" "
         + "\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \"\(clientPath)\""

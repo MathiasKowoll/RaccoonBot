@@ -65,6 +65,8 @@ nonisolated struct EpicInstalled: Equatable, Sendable {
     }
     let id: String
     let appName: String
+    let catalogNamespace: String?
+    let catalogItemId: String?
     let title: String
     let folder: URL
     let executable: URL?
@@ -121,10 +123,16 @@ nonisolated enum EpicLibrary {
         return defaultDataPath
     }
 
+    /// The launcher's Data folder on this Mac, or nil when it is not there.
+    static func dataDirectory(bottle: URL) -> URL? {
+        guard case .resolved(let data) = BottleDrives(bottle: bottle).resolve(dataPath(inBottle: bottle)) else { return nil }
+        return data
+    }
+
     /// Every listable title the launcher in this bottle has installed.
     static func read(bottle: URL, fileManager f: FileManager = .default) -> [EpicInstalled] {
         let drives = BottleDrives(bottle: bottle)
-        guard case .resolved(let data) = drives.resolve(dataPath(inBottle: bottle)) else { return [] }
+        guard let data = dataDirectory(bottle: bottle) else { return [] }
         let manifests = data.appendingPathComponent("Manifests")
         let files = ((try? f.contentsOfDirectory(at: manifests, includingPropertiesForKeys: nil)) ?? [])
             .filter { $0.pathExtension == "item" }
@@ -160,6 +168,8 @@ nonisolated enum EpicLibrary {
         let exe = (m.LaunchExecutable ?? "").isEmpty ? nil : folder.appendingPathComponent(m.LaunchExecutable!)
         return EpicInstalled(id: m.tripleID,
                              appName: m.AppName,
+                             catalogNamespace: m.CatalogNamespace,
+                             catalogItemId: m.CatalogItemId,
                              title: m.DisplayName ?? m.AppName,
                              folder: folder,
                              executable: exe,

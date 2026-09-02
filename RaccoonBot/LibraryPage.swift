@@ -233,7 +233,24 @@ struct LibraryPage: View {
                                         selectedBottle: appGlobals.selectedBottle),
            let bottleDir = BottleReference(epic.bottle)?.directory {
             let installed = EpicLibrary.read(bottle: bottleDir)
-            libraryPageGlobals.epicGames = installed.map(Game.epic)
+            // The launcher's catalogue cache, if it has one: titles, art and
+            // the rest of the account. Read off the main thread; it is a
+            // 400 KB base64 blob on this machine.
+            let catalog = await Task.detached(priority: .utility) {
+                EpicLibrary.dataDirectory(bottle: bottleDir).flatMap(EpicCatalog.read)
+            }.value
+            libraryPageGlobals.epicGames = installed.map { title in
+                Game.epic(title, catalog: catalog?.item(forAppName: title.appName,
+                                                        namespace: title.catalogNamespace,
+                                                        catalogItemId: title.catalogItemId))
+            }
+            let installedNames = Set(installed.map(\.appName))
+            libraryPageGlobals.epicOwnedGames = (catalog?.ownedNotInstalled(installedAppNames: installedNames) ?? []).map { item in
+                OwnedGame(appID: item.tripleID(appName: item.appNames.first ?? ""),
+                          name: item.title ?? "", platforms: ["windows"],
+                          lastPlayed: nil, playtimeMinutes: nil, coverURL: item.tallCover)
+            }
+            console.log("epic: catalogue \(catalog == nil ? "absent" : "\(catalog!.items.count) items"), \(libraryPageGlobals.epicOwnedGames.count) owned and not installed")
             // A meta entry per title, so the fix catalogue and everything else
             // that asks "where is this game" by id can answer for Epic too.
             let known = Set(libraryPageGlobals.gamesMeta.map(\.appid))
@@ -284,7 +301,12 @@ struct LibraryPage: View {
         // have a cover in Steam's own art cache, so the library is complete
         // enough to use before a single request goes out -- and stays that way
         // if every one of them fails. It used to come up empty and silent.
-        libraryPageGlobals.games = libraryPageGlobals.gamesMeta.map { Game(local: $0) }
+        // Steam's metadata only. The Epic titles have a meta entry each so the
+        // fix catalogue can find their folders, and turning those into cards
+        // here gave every Epic game a second card named after its folder,
+        // with a Play button that would have run steam://rungameid/0.
+        let steamMeta = libraryPageGlobals.gamesMeta.filter { Int($0.appid) != nil }
+        libraryPageGlobals.games = steamMeta.map { Game(local: $0) }
         progress = 100
 
         // Then the store, if there is one, to fill in what the disk does not
@@ -292,7 +314,7 @@ struct LibraryPage: View {
         // must not delete the seventeen the disk knew about.
         do {
             let enriched = try await api.fetchGamesInfo(
-                meta: libraryPageGlobals.gamesMeta,
+                meta: steamMeta,
                 setProgress: { self.progress = $0 },
                 // Each record replaces its placeholder the moment it lands, so
                 // the grid fills in rather than sitting still and then changing

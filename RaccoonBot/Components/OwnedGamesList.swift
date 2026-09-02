@@ -41,7 +41,7 @@ struct OwnedGamesList: View {
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if libraryPageGlobals.ownedGames.isEmpty {
+            } else if libraryPageGlobals.allOwnedGames.isEmpty {
                 VStack(spacing: 6) {
                     Text("Nothing else to install").font(.headline)
                     Text("Every title Steam knows about on this machine is already installed.")
@@ -225,6 +225,16 @@ struct OwnedGamesGrid: View {
     private func send(_ game: OwnedGame, toMac: Bool) {
         asking = nil
         if toMac {
+            // An Epic title is installed from the Epic launcher, which is
+            // opened for it; the launcher's own install action is a later
+            // step. Steam's URL scheme would not know what to do with it.
+            if game.appID.hasPrefix("epic:") {
+                if let epic = EpicLaunch.target(settings: StoreConfig.settings(for: .epic),
+                                                selectedBottle: appGlobals.selectedBottle) {
+                    openEpic(cxAppPath: appGlobals.cxAppPath, bottle: epic.bottle, clientPath: epic.clientPath)
+                }
+                return
+            }
             if let url = URL(string: "steam://install/\(game.appID)") {
                 NSWorkspace.shared.open(url)
             }

@@ -54,7 +54,7 @@ struct RaccoonBotToolbar: View {
                     Button {
                         openEpic(cxAppPath: appGlobals.cxAppPath, bottle: epic.bottle, clientPath: epic.clientPath)
                     } label: {
-                        Image(systemName: "e.circle.fill").resizable().scaledToFit().frame(width: iconSize, height: iconSize)
+                        EpicGlyph(size: iconSize)
                     }
                     .help("Open the Epic Games Launcher, on D3DMetal 3")
                 }

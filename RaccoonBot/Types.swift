@@ -663,14 +663,21 @@ extension Game {
     /// A title the Epic launcher has installed, as a card. No store page, no
     /// art, no description: Epic keeps none of that locally, and the card
     /// shows what is known rather than pretending.
-    static func epic(_ title: EpicInstalled) -> Game {
-        let blank = SteamGame(type: "game", name: title.title, steamAppID: 0, requiredAge: "0",
+    static func epic(_ title: EpicInstalled, catalog item: EpicCatalogItem? = nil) -> Game {
+        // The launcher's catalogue, when it has been cached, is the only place
+        // Epic keeps a title's art and description. The manifest's own name
+        // stands when it has not.
+        let name = item?.title?.isEmpty == false ? item!.title! : title.title
+        let blank = SteamGame(type: "game", name: name, steamAppID: 0, requiredAge: "0",
                               isFree: false, controllerSupport: nil, dlc: nil,
-                              detailedDescription: "", aboutTheGame: "", shortDescription: "",
-                              supportedLanguages: nil, headerImage: "", capsuleImage: "",
+                              detailedDescription: item?.description ?? "", aboutTheGame: "",
+                              shortDescription: item?.description ?? "",
+                              supportedLanguages: nil,
+                              headerImage: item?.cover?.absoluteString ?? "",
+                              capsuleImage: item?.tallCover?.absoluteString ?? "",
                               capsuleImageV5: nil, website: nil, pcRequirements: nil,
                               macRequirements: nil, linuxRequirements: nil, legalNotice: nil,
-                              developers: nil, publishers: nil, priceOverview: nil, packages: nil,
+                              developers: item?.developer.map { [$0] }, publishers: nil, priceOverview: nil, packages: nil,
                               packageGroups: nil, platforms: Platforms(windows: true, mac: false, linux: false),
                               metacritic: nil, categories: nil, genres: nil, screenshots: nil,
                               movies: nil, recommendations: nil, achievements: nil,
@@ -923,6 +930,12 @@ class LibraryPageGlobals: ObservableObject {
     /// What the Epic launcher in the configured Epic bottle has installed.
     /// Read from that one bottle and no other; see EpicLibrary.
     @Published var epicGames: [Game] = []
+    /// Games in the Epic account that no manifest says are installed. From
+    /// the launcher's catalogue cache; empty when there is none.
+    @Published var epicOwnedGames: [OwnedGame] = []
+    /// What the "not installed" tab shows: Steam's owned titles and Epic's,
+    /// each from its own source, drawn by one list.
+    var allOwnedGames: [OwnedGame] { ownedGames + epicOwnedGames }
 
     var allGamesCount: Int {
         return self.games.count + self.customAddedGames.count + self.epicGames.count

@@ -44,9 +44,24 @@ final class GamepadInput: ObservableObject {
 
     private var keyMonitor: Any?
 
-    /// Nothing is read while this is true.
+    /// A game is running, or starting. While this is true the pad is not
+    /// ours: not ignored, but let go of.
+    ///
+    /// It used to be ignored -- the handler stayed registered and read every
+    /// event, then dropped it. That still leaves the GameController framework
+    /// holding the device on our behalf while a game under wine reads the
+    /// same device its own way. So suspending now detaches from every pad,
+    /// exactly as turning the switch off does, and resuming attaches again.
+    /// Set from playingID and isLaunchingGame: the tracker's onLoad and
+    /// onTerminate, which know the difference between a launcher exiting and
+    /// a game finishing, so the pad comes back when everything has closed
+    /// and not a moment before.
     var suspended = false {
-        didSet { if suspended { held = nil; repeatTask?.cancel(); repeatTask = nil } }
+        didSet {
+            guard suspended != oldValue else { return }
+            held = nil; repeatTask?.cancel(); repeatTask = nil
+            if suspended { detachAll() } else if enabled { attachAll() }
+        }
     }
 
     /// Whether this application touches a game controller at all.
@@ -213,7 +228,8 @@ final class GamepadInput: ObservableObject {
     }
 
     private func refreshConnected() {
-        connected = hardware && enabled && GCController.controllers().contains { $0.extendedGamepad != nil }
+        connected = hardware && enabled && !suspended
+            && GCController.controllers().contains { $0.extendedGamepad != nil }
         if !connected { held = nil; repeatTask?.cancel(); repeatTask = nil }
     }
 
@@ -232,7 +248,8 @@ final class GamepadInput: ObservableObject {
         held = nil; repeatTask?.cancel(); repeatTask = nil
         down.removeAll()
         refreshConnected()
-        console.log("game controller: off; no handler is registered on any pad")
+        console.log(suspended ? "game controller: let go while a game runs"
+                              : "game controller: off; no handler is registered on any pad")
     }
 
     private func attach(_ controller: GCController?) {

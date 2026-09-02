@@ -142,3 +142,31 @@ struct GamepadEnabledTests {
         #expect(heard == 1)
     }
 }
+
+/// While a game runs the pad is the game's. Letting go must not take the
+/// listener stack or the switch with it, or nothing would come back after.
+@MainActor
+struct GamepadSuspensionTests {
+    private func fresh() -> UserDefaults { UserDefaults(suiteName: "test.gamepad.\(UUID().uuidString)")! }
+
+    @Test func suspendingKeepsTheStackAndTheSwitch() {
+        let pad = GamepadInput(hardware: false, defaults: fresh())
+        var heard = 0
+        pad.take(onMove: { _ in heard += 1 }, onPress: { _ in })
+        pad.suspended = true
+        #expect(pad.listeners == 1, "the grid is still listening for when the game ends")
+        #expect(pad.enabled == true, "letting go is not turning off")
+        #expect(pad.connected == false, "no ring while a game has the pad")
+        pad.suspended = false
+        pad.deliver(move: .down)
+        #expect(heard == 1)
+    }
+
+    @Test func settingTheSameValueTwiceIsNothing() {
+        let pad = GamepadInput(hardware: false, defaults: fresh())
+        pad.suspended = true
+        pad.suspended = true
+        pad.suspended = false
+        #expect(pad.suspended == false)
+    }
+}

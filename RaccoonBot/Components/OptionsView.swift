@@ -384,6 +384,21 @@ struct OptionsView: View {
                         }
                         Text("Running \(configuringStore.label) in an ARM bottle has not been tested, so the option is off.")
                             .font(.footnote).foregroundStyle(.secondary)
+                        if configuringStore == .epic,
+                           let epic = EpicLaunch.target(settings: StoreConfig.settings(for: .epic),
+                                                        selectedBottle: appGlobals.selectedBottle) {
+                            HStack(alignment: .center, spacing: 12) {
+                                ProminentButton("Open Epic Games Launcher", systemImage: "e.circle.fill") {
+                                    openEpic(cxAppPath: appGlobals.cxAppPath, bottle: epic.bottle, clientPath: epic.clientPath)
+                                }
+                                .disabled(!EpicLaunch.isInstalled(epic))
+                                Text(EpicLaunch.isInstalled(epic)
+                                     ? "Runs on D3DMetal 3: the launcher's renderer fails on the 4.0 beta."
+                                     : "Not installed in this bottle. Install it from CrossOver first.")
+                                    .font(.footnote).foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                            }
+                        }
                     }
 
                     GameLibrariesList(store: configuringStore, load: load)

@@ -44,6 +44,20 @@ struct RaccoonBotToolbar: View {
                 } label: {
                     Image("steam-fill").resizable().scaledToFit().frame(width: iconSize, height: iconSize)
                 }
+                // Beside Steam, and only when Epic is actually installed in the
+                // bottle it would open in. A button for a launcher that is not
+                // there would open a wine window that closes at once.
+                if let epic = EpicLaunch.target(settings: StoreConfig.settings(for: .epic),
+                                                selectedBottle: appGlobals.selectedBottle),
+                   EpicLaunch.isInstalled(epic) {
+                    Divider()
+                    Button {
+                        openEpic(cxAppPath: appGlobals.cxAppPath, bottle: epic.bottle, clientPath: epic.clientPath)
+                    } label: {
+                        Image(systemName: "e.circle.fill").resizable().scaledToFit().frame(width: iconSize, height: iconSize)
+                    }
+                    .help("Open the Epic Games Launcher, on D3DMetal 3")
+                }
                 Divider()
                 Button {
                     if let selectedBottleURL = URL(string: appGlobals.selectedBottle){

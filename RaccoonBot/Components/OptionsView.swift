@@ -147,7 +147,7 @@ struct OptionsView: View {
                     // been updated.
                     // Every installed title that needs its fix, in one go.
                     let targets = PatchAll.targets(from: libraryPageGlobals.gamesMeta,
-                                                   needsPatch: { fixLibrary.needsPatch(folder: $0) })
+                                                   needsPatch: { fixLibrary.need(folder: $0) != .none })
                     VStack(alignment: .leading, spacing: 4) {
                         // Which fixes are running, where a person can see it.
                         //

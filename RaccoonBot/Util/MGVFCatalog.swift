@@ -265,6 +265,7 @@ final class MGVFCatalog: @unchecked Sendable {
     /// acting, since a record is a memory and the bottle is the fact -- but not
     /// once per row while a list of fifty-eight titles is drawn.
     func hasApplied(folder: String) -> Bool { store.appliedFingerprint(for: folder) != nil }
+    func appliedFingerprint(folder: String) -> String? { store.appliedFingerprint(for: folder) }
 
     func pair(folder: String, to game: MGVFGame) { store.setPairedTitle(game.name, for: folder) }
     func unpair(folder: String) { store.setPairedTitle(nil, for: folder) }

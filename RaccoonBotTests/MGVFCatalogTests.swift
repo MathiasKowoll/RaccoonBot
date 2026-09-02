@@ -545,3 +545,41 @@ struct BottleStampRecordTests {
     }
 }
 
+/// An older fix is a fix. The badge and the launch gate must not call it
+/// missing.
+@MainActor
+struct OutdatedIsNotMissingTests {
+
+    @Test func anOutdatedFolderFixIsPresentToTheGateAndOutdatedToTheRow() throws {
+        let folder = try makeFolder { dir in
+            try "x".write(to: dir.appendingPathComponent("carrier_real.dll"), atomically: true, encoding: .utf8)
+            try "x".write(to: dir.appendingPathComponent("game.exe"), atomically: true, encoding: .utf8)
+        }
+        defer { try? FileManager.default.removeItem(atPath: folder) }
+        let store = MemoryStore()
+        let entry = game("install-x-fix.sh", exe: "game.exe")
+        let catalog = MGVFCatalog(manifest: manifest([entry]),
+                                  directory: URL(fileURLWithPath: "/tmp"), store: store)
+        // Recorded under a bundle that carried a different fix.
+        store.fingerprints[folder] = "an-older-fingerprint"
+        #expect(catalog.isOutdated(folder: folder, game: entry))
+
+        let library = MGVFLibrary(catalog: catalog)
+        #expect(library.need(folder: folder) == .outdated)
+        #expect(library.needsPatch(folder: folder) == false, "an older fix is not an absent one")
+    }
+
+    @Test func aMissingFolderFixIsMissingToBoth() throws {
+        let folder = try makeFolder { dir in
+            try "x".write(to: dir.appendingPathComponent("game.exe"), atomically: true, encoding: .utf8)
+        }
+        defer { try? FileManager.default.removeItem(atPath: folder) }
+        let entry = game("install-x-fix.sh", exe: "game.exe")
+        let catalog = MGVFCatalog(manifest: manifest([entry]),
+                                  directory: URL(fileURLWithPath: "/tmp"), store: MemoryStore())
+        let library = MGVFLibrary(catalog: catalog)
+        #expect(library.need(folder: folder) == .missing)
+        #expect(library.needsPatch(folder: folder) == true)
+    }
+}
+

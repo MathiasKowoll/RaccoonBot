@@ -60,7 +60,7 @@ struct FixSummaryTests {
         let all = FixSummary.sentence(missing: 2, outdated: 3, unverified: 1)
         #expect(all.contains("2 installed titles need their video fix"))
         #expect(all.contains("3 have an older one"))
-        #expect(all.contains("1 is in a bottle that has been updated since it was patched"))
+        #expect(all.contains("1 is in a bottle not yet checked"))
         #expect(all.hasSuffix("."))
         // The outdated ones are not folded into the ones that need a fix.
         #expect(!all.contains("5"))

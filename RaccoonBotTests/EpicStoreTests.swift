@@ -138,4 +138,46 @@ struct EpicStoreTests {
         #expect(g.background == "https://cdn/bg.jpg")
         #expect(g.headerImage == "https://cdn/bg.jpg", "no catalogue cover: the store's background stands in")
     }
+
+    /// Epic's own copy runs spaces together: six mid-sentence in Alan Wake 2,
+    /// two in Ghostwire Tokyo's graphics line. Paragraphs are left alone.
+    @Test func runsOfSpacesAreCollapsed() {
+        #expect(EpicStore.squeezed("each other, and      affecting the world") == "each other, and affecting the world")
+        #expect(EpicStore.squeezed("Arc A380*  (VRAM 6GB)") == "Arc A380* (VRAM 6GB)")
+        #expect(EpicStore.squeezed("one\n\ntwo") == "one\n\ntwo", "the blank line is a paragraph")
+        #expect(EpicStore.squeezed("  padded  ") == "padded")
+    }
+
+    /// "OS: TBD" is worse than no requirements, because it looks like some.
+    @Test func placeholderRequirementsAreNotRequirements() throws {
+        let page: [String: Any] = ["namespace": "ns", "productName": "P", "pages": [[
+            "type": "productHome",
+            "data": ["requirements": ["systems": [["systemType": "Windows", "details": [
+                ["title": "OS", "minimum": "TBD", "recommended": "TBD"],
+                ["title": "Memory", "minimum": "8 GB", "recommended": "n/a"],
+            ]]]]],
+        ]]]
+        let c = try #require(EpicStore.parse(try JSONSerialization.data(withJSONObject: page), slug: "p"))
+        #expect(c.minimumRequirements == "Memory: 8 GB", "the TBD line is dropped, the real one kept")
+        #expect(c.recommendedRequirements == nil, "every line a placeholder is no block at all")
+    }
+
+    /// A miss is kept a week, so a change in the matching would otherwise stay
+    /// invisible for a week. Borderlands 4 lived exactly that: its page is
+    /// under another namespace, the rules learned to accept it by name, and
+    /// the day-old miss went on hiding it.
+    @Test func changingTheRulesForgetsWhatTheOldOnesDecided() throws {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("rules-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        var cache = EpicStoreCache()
+        cache.record(namespace: "ns", content: nil)
+        cache.save(to: url)
+        #expect(EpicStoreCache.load(from: url).entries.count == 1)
+
+        // The same file, written by an older set of rules.
+        var stale = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
+        stale["rules"] = EpicStoreCache.currentRules - 1
+        try JSONSerialization.data(withJSONObject: stale).write(to: url)
+        #expect(EpicStoreCache.load(from: url).entries.isEmpty, "an older rule's answers are dropped")
+    }
 }

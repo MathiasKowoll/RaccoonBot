@@ -193,9 +193,30 @@ nonisolated enum EpicStore {
         return c
     }
 
+    /// A requirement line, unless it says nothing.
+    ///
+    /// Epic's own pages carry placeholders: Borderlands 4 lists its entire
+    /// Windows requirements as "TBD", measured 2026-09-03. A specification of
+    /// "OS: TBD" is worse than no specification, because it looks like one.
+    static let placeholders: Set<String> = ["tbd", "tba", "n/a", "na", "-", "--", "?", "coming soon", "unknown"]
+
     private static func line(_ d: [String: Any], _ key: String) -> String? {
-        guard let title = d["title"] as? String, let value = d[key] as? String, !value.isEmpty else { return nil }
-        return "\(title): \(value)"
+        guard let title = d["title"] as? String, let value = d[key] as? String else { return nil }
+        let clean = squeezed(value)
+        guard !clean.isEmpty, !placeholders.contains(clean.lowercased()) else { return nil }
+        return "\(squeezed(title)): \(clean)"
+    }
+
+    /// Runs of spaces collapsed, line by line.
+    ///
+    /// The source has them: Alan Wake 2's description runs six spaces together
+    /// mid-sentence and Ghostwire Tokyo's graphics line two, both measured
+    /// 2026-09-03. Newlines are left alone, since they are the paragraphs.
+    static func squeezed(_ s: String) -> String {
+        s.split(separator: "\n", omittingEmptySubsequences: false)
+            .map { $0.split(separator: " ", omittingEmptySubsequences: true).joined(separator: " ") }
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private static func nonEmpty(_ s: String?) -> String? {
@@ -234,7 +255,7 @@ nonisolated enum EpicStore {
         }
         var text = out.joined(separator: "\n")
         while text.contains("\n\n\n") { text = text.replacingOccurrences(of: "\n\n\n", with: "\n\n") }
-        return nonEmpty(text)
+        return nonEmpty(squeezed(text))
     }
 }
 
@@ -242,7 +263,18 @@ nonisolated enum EpicStore {
 nonisolated struct EpicStoreCache: Codable, Equatable {
     struct Entry: Codable, Equatable { var content: EpicStoreContent?; var checked: Date }
     var entries: [String: Entry] = [:]     // by namespace
+    /// Which set of rules decided what is in here.
+    ///
+    /// A miss is kept for a week, so a title the rules could not match stays
+    /// unmatched for a week after the rules learn to match it. That is exactly
+    /// what happened to Borderlands 4: its store page is under a different
+    /// namespace than its catalogue entry, the matching learned to accept a
+    /// page by name on 2026-09-03, and the miss recorded the day before went
+    /// on hiding the page that was now findable. Bump this when the matching
+    /// changes and the old answers are dropped.
+    var rules: Int = Self.currentRules
 
+    static let currentRules = 2
     static let missRetry: TimeInterval = 7 * 24 * 3600
 
     static var defaultURL: URL {
@@ -251,7 +283,9 @@ nonisolated struct EpicStoreCache: Codable, Equatable {
     }
 
     static func load(from url: URL = defaultURL) -> EpicStoreCache {
-        guard let d = try? Data(contentsOf: url), let c = try? JSONDecoder().decode(EpicStoreCache.self, from: d) else { return EpicStoreCache() }
+        guard let d = try? Data(contentsOf: url),
+              let c = try? JSONDecoder().decode(EpicStoreCache.self, from: d),
+              c.rules == currentRules else { return EpicStoreCache() }
         return c
     }
 

@@ -140,7 +140,15 @@ struct GameDetailView: View {
                         Spacer(minLength: Self.columnGutter)
 
                         VStack(alignment: .leading) {
-                            Text("Release date: \(game!.releaseDate.date)").padding(.bottom)
+                            // Not every store knows one. Epic's page for a
+                            // title it has not dated carries the free text
+                            // "Coming Soon", which is wrong for a game that
+                            // shipped years ago, so nothing is taken from it
+                            // and nothing is drawn here rather than a label
+                            // with an empty space after it.
+                            if !game!.releaseDate.date.isEmpty {
+                                Text("Release date: \(game!.releaseDate.date)").padding(.bottom)
+                            }
                             
                             HStack{
                                 if (game!.isFree == true){

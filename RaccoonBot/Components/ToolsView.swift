@@ -22,6 +22,22 @@ struct ToolsView: View {
     @State var createBtlPrc: Process?
     @State var cleard3dmCacheStatus: DeleteStatus = DeleteStatus.idle
     
+    /// What the retry button says on hover, including whether it has anything
+    /// to do. A title lands in that list when the store answers that it has no
+    /// record of it -- delisted, unreleased, or not a store item at all -- and
+    /// it keeps its card and its name from the .acf either way; what it loses
+    /// is the cover and the description.
+    private var skippedHelp: String {
+        let count = api.skippedCount
+        guard count > 0 else {
+            return "Nothing has been skipped. Titles the store answers nothing for are "
+                 + "set aside so they are not asked about again; this asks again."
+        }
+        return "\(count) title\(count == 1 ? "" : "s") set aside because the store had no record of "
+             + "\(count == 1 ? "it" : "them"). They keep their cards and their names, without a cover "
+             + "or a description. This asks the store about them again, without touching the rest of the cache."
+    }
+
     var body: some View {
         Modal(
             "Tools",
@@ -40,13 +56,30 @@ struct ToolsView: View {
                 }
                 ProminentButton("Delete cache", systemImage: "trash") {
                     api.deleteGameCache()
-                    api.deleteBlacklistCache()
                     libraryPageGlobals.games.removeAll()
                     Task {
                         await load()
                     }
                     libraryPageGlobals.showOptions = false
                 }
+                .help("Throws away every stored store record and asks for them all again, one title roughly every two seconds.")
+
+                // Its own button, and its own words.
+                //
+                // Clearing the skipped titles used to be something "Delete
+                // cache" did on the side, without saying so. That is the only
+                // way back for a title the store answered nothing for, and it
+                // cost the whole record cache to use -- four hundred titles
+                // re-fetched at one every two seconds to undo a handful. The
+                // two are separate now, and this one names what it undoes.
+                ProminentButton("Retry skipped titles", systemImage: "arrow.clockwise") {
+                    api.deleteBlacklistCache()
+                    Task {
+                        await load()
+                    }
+                    libraryPageGlobals.showOptions = false
+                }
+                .help(skippedHelp)
                 ProminentButton("Delete all downloads cache", systemImage: "trash") {
                     TarDownloader.deleteAllDownloadCache()
                 }

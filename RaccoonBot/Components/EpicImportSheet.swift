@@ -21,6 +21,7 @@ struct EpicImportSheet: View {
     @State private var result: String?
     @State private var failed: String?
     @State private var live = false
+    @State private var problems: [String] = []
 
     private var ready: [EpicImport.Found] { found.filter { $0.status == .ready } }
 
@@ -48,6 +49,9 @@ struct EpicImportSheet: View {
                     }
                 }
                 .frame(minHeight: 160, maxHeight: 320)
+            }
+            ForEach(problems, id: \.self) { p in
+                Text(p).font(.caption).foregroundStyle(.orange).lineLimit(2)
             }
             if live {
                 Text("The bottle is running. Close the launcher and every game in it first; the launcher's records are written only while it is down.")
@@ -87,27 +91,41 @@ struct EpicImportSheet: View {
     private func scan() async {
         scanned = false; result = nil; failed = nil
         let bottle = bottle, libraries = libraries
-        let (list, isLive) = await Task.detached(priority: .userInitiated) { () -> ([EpicImport.Found], Bool) in
+        let (list, isLive, trouble) = await Task.detached(priority: .userInitiated) { () -> ([EpicImport.Found], Bool, [String]) in
             let catalog = EpicLibrary.dataDirectory(bottle: bottle).flatMap(EpicCatalog.read)
             let registered = EpicImport.registered(in: bottle)
             var all: [EpicImport.Found] = []
-            for lib in libraries { all += EpicImport.scan(library: lib, catalog: catalog, registered: registered) }
-            return (all, BottleProcesses.serverIsAlive(inBottleAt: bottle))
+            var trouble: [String] = []
+            for lib in libraries { all += EpicImport.scan(library: lib, catalog: catalog, registered: registered, problems: &trouble) }
+            return (all, BottleProcesses.serverIsAlive(inBottleAt: bottle), trouble)
         }.value
-        found = list; live = isLive; scanned = true
+        found = list; live = isLive; problems = trouble; scanned = true
     }
 
     private func register() {
-        do {
-            let applied = try EpicImport.apply(found, bottle: bottle)
-            result = "Registered \(applied.registered.count): \(applied.registered.joined(separator: ", ")). The launcher will list them at its next start."
-            console.log("epic: registered \(applied.registered.count) game(s) with the launcher, revision \(applied.revision)")
-            Task { await load() }
-        } catch EpicImport.Failure.bottleIsLive {
-            live = true
-        } catch {
-            failed = "Could not register: \(error)"
-            console.error("epic: register failed: \(error)")
+        let found = found, bottle = bottle
+        Task {
+            // Off the main thread: the liveness check asks the system for
+            // the bottle's processes, and the records are files.
+            let outcome = await Task.detached(priority: .userInitiated) { () -> Result<EpicImport.Applied, Error> in
+                Result { try EpicImport.apply(found, bottle: bottle) }
+            }.value
+            switch outcome {
+            case .success(let applied):
+                result = "Registered \(applied.registered.count): \(applied.registered.joined(separator: ", ")). The launcher will list them at its next start."
+                console.log("epic: registered \(applied.registered.count) game(s) with the launcher, revision \(applied.revision)")
+                await load()
+            case .failure(EpicImport.Failure.bottleIsLive):
+                live = true
+            case .failure(EpicImport.Failure.nothingToRegister):
+                failed = "Nothing left to register: the launcher already knows these."
+                await scan()
+            case .failure(EpicImport.Failure.launcherInstalledUnreadable):
+                failed = "The launcher's LauncherInstalled.dat could not be read; nothing was written."
+            case .failure(let error):
+                failed = "Could not register: \(error)"
+                console.error("epic: register failed: \(error)")
+            }
         }
     }
 }

@@ -72,30 +72,47 @@ nonisolated enum EpicImport {
 
     // MARK: - scanning
 
-    /// Every game folder under `library` that carries an `.egstore`.
+    /// Every game folder under `library` that carries an `.egstore`. A
+    /// manifest that cannot be read is reported in `problems`, not dropped:
+    /// a folder whose only manifest fails would otherwise vanish from the
+    /// list as if it held no game.
     static func scan(library: URL, catalog: EpicCatalog?, registered: Set<String>,
-                     fileManager f: FileManager = .default) -> [Found] {
+                     problems: inout [String], fileManager f: FileManager = .default) -> [Found] {
         guard let folders = try? f.contentsOfDirectory(at: library, includingPropertiesForKeys: [.isDirectoryKey],
-                                                       options: [.skipsHiddenFiles]) else { return [] }
+                                                       options: [.skipsHiddenFiles]) else {
+            problems.append("\(library.path(percentEncoded: false)): cannot be listed")
+            return []
+        }
         var out: [Found] = []
         for folder in folders.sorted(by: { $0.lastPathComponent.lowercased() < $1.lastPathComponent.lowercased() }) {
             let egstore = folder.appendingPathComponent(".egstore")
             guard f.fileExists(atPath: egstore.path) else { continue }
-            out += found(inFolder: folder, catalog: catalog, registered: registered, fileManager: f)
+            out += found(inFolder: folder, catalog: catalog, registered: registered, problems: &problems, fileManager: f)
         }
         return out
     }
 
+    static func scan(library: URL, catalog: EpicCatalog?, registered: Set<String>,
+                     fileManager f: FileManager = .default) -> [Found] {
+        var problems: [String] = []
+        return scan(library: library, catalog: catalog, registered: registered, problems: &problems, fileManager: f)
+    }
+
     /// What one folder holds, resolved against the catalogue.
     static func found(inFolder folder: URL, catalog: EpicCatalog?, registered: Set<String>,
-                      fileManager f: FileManager = .default) -> [Found] {
+                      problems: inout [String], fileManager f: FileManager = .default) -> [Found] {
         let egstore = folder.appendingPathComponent(".egstore")
         guard let entries = try? f.contentsOfDirectory(at: egstore, includingPropertiesForKeys: [.contentModificationDateKey]) else { return [] }
         struct Parsed { let guid: String; let url: URL; let build: EpicBuildManifest; let modified: Date; let mancpnAppName: String? }
         var parsed: [Parsed] = []
         for url in entries where url.pathExtension == "manifest" {
             let guid = url.deletingPathExtension().lastPathComponent
-            guard let build = try? EpicBuildManifest.read(url) else { continue }
+            let build: EpicBuildManifest
+            do { build = try EpicBuildManifest.read(url) } catch {
+                problems.append("\(folder.lastPathComponent)/.egstore/\(url.lastPathComponent): \(error)")
+                console.error("epic: \(url.path(percentEncoded: false)): \(error)")
+                continue
+            }
             let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
             let mancpn = egstore.appendingPathComponent(guid + ".mancpn")
             var mancpnApp: String? = nil
@@ -121,6 +138,17 @@ nonisolated enum EpicImport {
         }
         guard !baseCandidates.isEmpty else { return out }
 
+        // Ranked once, so every branch below takes the same head: the
+        // launcher's own record first (nothing is written for it), then the
+        // build that launches something, the newest, the largest.
+        baseCandidates.sort {
+            let r0 = registered.contains($0.guid.uppercased()), r1 = registered.contains($1.guid.uppercased())
+            if r0 != r1 { return r0 }
+            if ($0.build.launchExecutable.isEmpty) != ($1.build.launchExecutable.isEmpty) { return !$0.build.launchExecutable.isEmpty }
+            if $0.modified != $1.modified { return $0.modified > $1.modified }
+            return $0.build.installSize > $1.build.installSize
+        }
+
         // The base game: the catalogue's FolderName is the folder's name.
         let byFolder = catalog?.items.first { $0.isBaseGame && $0.folderName == folder.lastPathComponent }
         let byApp = baseCandidates.compactMap { p -> (Parsed, EpicCatalogItem)? in
@@ -133,22 +161,17 @@ nonisolated enum EpicImport {
         }
         let chosen: (Parsed, EpicCatalogItem?)
         var note: String? = nil
+        // By the manifest's own name, then by the launcher's own note of
+        // which item it installed (.mancpn), then by the folder's name,
+        // which two catalogue items may share.
         if let first = byApp.first {
             chosen = first
-        } else if let item = byFolder {
-            // Among the unnamed manifests, the one that launches something,
-            // then the newest, then the largest.
-            let ranked = baseCandidates.sorted {
-                if ($0.build.launchExecutable.isEmpty) != ($1.build.launchExecutable.isEmpty) { return !$0.build.launchExecutable.isEmpty }
-                if $0.modified != $1.modified { return $0.modified > $1.modified }
-                return $0.build.installSize > $1.build.installSize
-            }
-            chosen = (ranked[0], item)
         } else if let first = byMancpn.first {
             chosen = first
+        } else if let item = byFolder {
+            chosen = (baseCandidates[0], item)
         } else {
-            let ranked = baseCandidates.sorted { $0.modified > $1.modified }
-            chosen = (ranked[0], nil)
+            chosen = (baseCandidates[0], nil)
         }
         if baseCandidates.count > 1 {
             let others = baseCandidates.filter { $0.guid != chosen.0.guid }.map { "\($0.guid.prefix(8)) \($0.build.buildVersion)" }
@@ -159,12 +182,17 @@ nonisolated enum EpicImport {
 
         func make(_ p: Parsed, item: EpicCatalogItem?, kind: Found.Kind, folder: URL, catalog: EpicCatalog?,
                   registered: Set<String>, note: String?) -> Found {
-            let appName = item?.appNames.first ?? p.mancpnAppName ?? p.build.appName
+            // The name that made the join, when the item lists it: an item
+            // with more than one release must not register the wrong one.
+            let listed = item?.appNames ?? []
+            let appName = [p.build.appName, p.mancpnAppName].compactMap { $0 }.first { listed.contains($0) }
+                ?? item?.appNames.first ?? p.mancpnAppName ?? p.build.appName
             var mainApp = ""
             if kind == .dlc, let main = item?.mainGameItem, let mainItem = catalog?.items.first(where: { $0.namespace == main.namespace && $0.id == main.id }) {
                 mainApp = mainItem.appNames.first ?? ""
             }
-            let status: Found.Status = registered.contains(p.guid.uppercased()) ? .registered : (item == nil ? .unknownTitle : .ready)
+            let known = registered.contains(p.guid.uppercased()) || registered.contains(appName)
+            let status: Found.Status = known ? .registered : (item == nil ? .unknownTitle : .ready)
             return Found(folder: folder, manifestURL: p.url, installationGuid: p.guid.uppercased(), kind: kind,
                          title: item?.title ?? folder.lastPathComponent,
                          namespace: item?.namespace ?? "", catalogItemId: item?.id ?? "", appName: appName,
@@ -185,23 +213,32 @@ nonisolated enum EpicImport {
         let launcherInstalled: URL
         init(bottle: URL) {
             let programData = bottle.appendingPathComponent("drive_c/ProgramData/Epic")
-            manifests = programData.appendingPathComponent("EpicGamesLauncher/Data/Manifests")
+            // The same resolver the catalogue is read with: the registry's
+            // AppDataPath when it names one, the conventional place if not.
+            let data = EpicLibrary.dataDirectory(bottle: bottle) ?? programData.appendingPathComponent("EpicGamesLauncher/Data")
+            manifests = data.appendingPathComponent("Manifests")
             installedItems = programData.appendingPathComponent("EpicOnlineServices/InstallHelper/InstalledItems")
             launcherInstalled = programData.appendingPathComponent("UnrealEngineLauncher/LauncherInstalled.dat")
         }
     }
 
-    /// Installation guids the launcher or the helper already has a record for.
+    /// What the launcher or the helper already has a record for: the
+    /// installation guids, and the AppNames those records carry, so a game
+    /// the launcher holds under another guid is known too.
     static func registered(in bottle: URL, fileManager f: FileManager = .default) -> Set<String> {
         let places = Places(bottle: bottle)
-        var guids: Set<String> = []
+        var known: Set<String> = []
         for dir in [places.manifests, places.manifests.appendingPathComponent("Pending"), places.installedItems] {
             for url in (try? f.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
             where url.pathExtension == "item" || url.pathExtension == "egi" {
-                guids.insert(url.deletingPathExtension().lastPathComponent.uppercased())
+                known.insert(url.deletingPathExtension().lastPathComponent.uppercased())
+                if let d = try? Data(contentsOf: url), let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
+                    if let app = o["AppName"] as? String, !app.isEmpty { known.insert(app) }
+                    if let v4 = o["v4"] as? [String: Any], let app = v4["artifactId"] as? String, !app.isEmpty { known.insert(app) }
+                }
             }
         }
-        return guids
+        return known
     }
 
     // MARK: - writing
@@ -210,6 +247,9 @@ nonisolated enum EpicImport {
         case bottleIsLive
         case noLauncher
         case nothingToRegister
+        /// LauncherInstalled.dat exists and does not decode: rewriting it
+        /// from what is known here would drop whatever it held.
+        case launcherInstalledUnreadable
     }
 
     struct Applied: Equatable { let registered: [String]; let revision: String }
@@ -243,7 +283,11 @@ nonisolated enum EpicImport {
         guard !BottleProcesses.serverIsAlive(inBottleAt: bottle) else { throw Failure.bottleIsLive }
         let places = Places(bottle: bottle)
         guard f.fileExists(atPath: places.manifests.deletingLastPathComponent().path) else { throw Failure.noLauncher }
-        let todo = found.filter { $0.status == .ready }
+        // Checked again now, not trusted from the scan: the launcher may
+        // have registered a title itself between the two, and its record
+        // is not ours to replace.
+        let known = registered(in: bottle, fileManager: f)
+        let todo = found.filter { $0.status == .ready && !known.contains($0.installationGuid) && !known.contains($0.appName) }
         guard !todo.isEmpty else { throw Failure.nothingToRegister }
 
         try f.createDirectory(at: places.installedItems.appendingPathComponent("ManifestCache"), withIntermediateDirectories: true)
@@ -257,7 +301,9 @@ nonisolated enum EpicImport {
         let revision = revisionString(ticks: ticks, number: number + 1)
 
         var installed: [InstalledEntry] = []
-        if let d = try? Data(contentsOf: places.launcherInstalled), let l = try? JSONDecoder().decode(LauncherInstalled.self, from: d) {
+        if f.fileExists(atPath: places.launcherInstalled.path) {
+            guard let d = try? Data(contentsOf: places.launcherInstalled),
+                  let l = try? JSONDecoder().decode(LauncherInstalled.self, from: d) else { throw Failure.launcherInstalledUnreadable }
             installed = l.InstallationList
         }
         var written: [String] = []

@@ -173,9 +173,13 @@ nonisolated struct EpicBuildManifest: Equatable {
             let n = Int(i32())
             if n == 0 { return "" }
             if n < 0 {
+                // The terminator is dropped from the bytes, not from the
+                // decoded string: String.prefix counts grapheme clusters,
+                // and a surrogate pair or a combining accent has fewer of
+                // those than it has code units, which left the NUL on.
                 let d = bytes(2 * -n)
-                guard d.count == 2 * -n, let s = String(data: d, encoding: .utf16LittleEndian) else { throw Failure.truncated("string") }
-                return String(s.prefix(-n - 1))
+                guard d.count == 2 * -n, let s = String(data: d.prefix(2 * (-n - 1)), encoding: .utf16LittleEndian) else { throw Failure.truncated("string") }
+                return s
             }
             let d = bytes(n)
             guard d.count == n else { throw Failure.truncated("string") }

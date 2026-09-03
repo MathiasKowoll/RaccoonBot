@@ -100,6 +100,16 @@ struct EpicBuildManifestTests {
         #expect(m.appName == "Ys IX – Monstrum")
     }
 
+    /// A surrogate pair or a combining accent has fewer grapheme clusters
+    /// than code units; the terminator must go by the byte, or it stays.
+    @Test func utf16StringsWithFewerGraphemesThanUnitsLoseTheirTerminator() throws {
+        for name in ["Game\u{1F3AE}", "cafe\u{301}", "a\r\nb"] {
+            let m = try EpicBuildManifest.parse(try Self.file(body: Self.body(appName: name, utf16: true)))
+            #expect(m.appName == name, Comment(rawValue: name.debugDescription))
+            #expect(!m.appName.unicodeScalars.contains("\u{0}"))
+        }
+    }
+
     @Test func theHashOfTheFileIsTheLaunchersManifestHash() throws {
         let raw = try Self.file(body: Self.body())
         let m = try EpicBuildManifest.parse(raw)

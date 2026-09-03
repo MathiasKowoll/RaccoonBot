@@ -152,4 +152,117 @@ struct EpicImportTests {
         let found = EpicImport.scan(library: lib, catalog: cat, registered: [])
         #expect(throws: EpicImport.Failure.noLauncher) { try EpicImport.apply(found, bottle: root.appendingPathComponent("nobottle")) }
     }
+
+    /// The name that made the join is the one registered, not the item's
+    /// first release.
+    @Test func anItemWithTwoReleasesRegistersTheOneOnDisk() throws {
+        let lib = try tempDir(); defer { try? FileManager.default.removeItem(at: lib) }
+        try manifest(in: lib.appendingPathComponent("X"), guid: "X1", app: "x-b")
+        var item = game("x", title: "X", app: "x-a", folder: "X")
+        item["releaseInfo"] = [["appId": "x-a"], ["appId": "x-b"]]
+        let found = EpicImport.scan(library: lib, catalog: try catalog([item]), registered: [])
+        #expect(found.first?.appName == "x-b")
+    }
+
+    /// Two catalogue items share a folder name; the launcher's own .mancpn
+    /// says which one it installed, and outranks the folder.
+    @Test func theMancpnOutranksTheFolderName() throws {
+        let lib = try tempDir(); defer { try? FileManager.default.removeItem(at: lib) }
+        let folder = lib.appendingPathComponent("Shared")
+        try manifest(in: folder, guid: "S1", app: "build-not-listed")
+        let mancpn = ["FormatVersion": 0, "CatalogNamespace": "ns", "CatalogItemId": "second", "AppName": "second-app"] as [String: Any]
+        try JSONSerialization.data(withJSONObject: mancpn).write(to: folder.appendingPathComponent(".egstore/S1.mancpn"))
+        let cat = try catalog([game("first", title: "First", app: "first-app", folder: "Shared"),
+                               game("second", title: "Second", app: "second-app", folder: "Shared")])
+        let found = EpicImport.scan(library: lib, catalog: cat, registered: [])
+        #expect(found.first?.catalogItemId == "second" && found.first?.appName == "second-app")
+    }
+
+    /// Two builds both named by the catalogue: the launcher's own record,
+    /// when it has one, is the build shown as known.
+    @Test func theRegisteredBuildWinsAmongNamedOnes() throws {
+        let lib = try tempDir(); defer { try? FileManager.default.removeItem(at: lib) }
+        let folder = lib.appendingPathComponent("G")
+        try manifest(in: folder, guid: "NEW1", app: "g-app", version: "2.0")
+        try manifest(in: folder, guid: "OLD1", app: "g-app", version: "1.0")
+        let cat = try catalog([game("g", title: "G", app: "g-app", folder: "G")])
+        let found = EpicImport.scan(library: lib, catalog: cat, registered: ["OLD1"])
+        #expect(found.first?.installationGuid == "OLD1" && found.first?.status == .registered)
+    }
+
+    /// Known by AppName too: the launcher holds the game under another guid.
+    @Test func aGameTheLauncherHoldsUnderAnotherGuidIsKnown() throws {
+        let root = try tempDir(); defer { try? FileManager.default.removeItem(at: root) }
+        let bottle = root.appendingPathComponent("bottle"); let lib = root.appendingPathComponent("lib")
+        let places = EpicImport.Places(bottle: bottle)
+        try FileManager.default.createDirectory(at: places.manifests, withIntermediateDirectories: true)
+        try JSONSerialization.data(withJSONObject: ["AppName": "g-app", "InstallationGuid": "OTHER"]).write(to: places.manifests.appendingPathComponent("OTHER.item"))
+        try manifest(in: lib.appendingPathComponent("G"), guid: "MINE", app: "g-app")
+        let cat = try catalog([game("g", title: "G", app: "g-app", folder: "G")])
+        let found = EpicImport.scan(library: lib, catalog: cat, registered: EpicImport.registered(in: bottle))
+        #expect(found.first?.status == .registered)
+        #expect(throws: EpicImport.Failure.nothingToRegister) { try EpicImport.apply(found, bottle: bottle) }
+    }
+
+    /// Between the scan and the click the launcher registered the game
+    /// itself; apply checks again and leaves its record alone.
+    @Test func applyDoesNotReplaceARecordMadeSinceTheScan() throws {
+        let root = try tempDir(); defer { try? FileManager.default.removeItem(at: root) }
+        let bottle = root.appendingPathComponent("bottle"); let lib = root.appendingPathComponent("lib")
+        let places = EpicImport.Places(bottle: bottle)
+        try FileManager.default.createDirectory(at: places.manifests, withIntermediateDirectories: true)
+        try manifest(in: lib.appendingPathComponent("G"), guid: "G1", app: "g-app")
+        let cat = try catalog([game("g", title: "G", app: "g-app", folder: "G")])
+        let found = EpicImport.scan(library: lib, catalog: cat, registered: [])
+        #expect(found.first?.status == .ready)
+        let theirs = Data("{\"AppName\":\"g-app\",\"InstallationGuid\":\"G1\",\"BaseURLs\":[\"http://real\"]}".utf8)
+        try theirs.write(to: places.manifests.appendingPathComponent("G1.item"))
+        #expect(throws: EpicImport.Failure.nothingToRegister) { try EpicImport.apply(found, bottle: bottle) }
+        #expect(try Data(contentsOf: places.manifests.appendingPathComponent("G1.item")) == theirs, "untouched")
+    }
+
+    /// An installed list that exists but does not decode stops everything
+    /// before a record is written, rather than being rewritten from scratch.
+    @Test func anUnreadableInstalledListStopsTheWrite() throws {
+        let root = try tempDir(); defer { try? FileManager.default.removeItem(at: root) }
+        let bottle = root.appendingPathComponent("bottle"); let lib = root.appendingPathComponent("lib")
+        let places = EpicImport.Places(bottle: bottle)
+        try FileManager.default.createDirectory(at: places.manifests, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: places.launcherInstalled.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("not json".utf8).write(to: places.launcherInstalled)
+        try manifest(in: lib.appendingPathComponent("G"), guid: "G1", app: "g-app")
+        let found = EpicImport.scan(library: lib, catalog: try catalog([game("g", title: "G", app: "g-app", folder: "G")]), registered: [])
+        #expect(throws: EpicImport.Failure.launcherInstalledUnreadable) { try EpicImport.apply(found, bottle: bottle) }
+        #expect(!FileManager.default.fileExists(atPath: places.manifests.appendingPathComponent("G1.item").path))
+    }
+
+    /// An existing installed list keeps its entries.
+    @Test func theInstalledListKeepsWhatItHad() throws {
+        let root = try tempDir(); defer { try? FileManager.default.removeItem(at: root) }
+        let bottle = root.appendingPathComponent("bottle"); let lib = root.appendingPathComponent("lib")
+        let places = EpicImport.Places(bottle: bottle)
+        try FileManager.default.createDirectory(at: places.manifests, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: places.launcherInstalled.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let existing: [String: Any] = ["InstallationList": [["InstallLocation": "Z:\\old", "NamespaceId": "n", "ItemId": "i", "ArtifactId": "old-app", "AppVersion": "1", "AppName": "old-app"]]]
+        try JSONSerialization.data(withJSONObject: existing).write(to: places.launcherInstalled)
+        try manifest(in: lib.appendingPathComponent("G"), guid: "G1", app: "g-app")
+        let found = EpicImport.scan(library: lib, catalog: try catalog([game("g", title: "G", app: "g-app", folder: "G")]), registered: [])
+        try EpicImport.apply(found, bottle: bottle)
+        let dat = try JSONSerialization.jsonObject(with: Data(contentsOf: places.launcherInstalled)) as! [String: Any]
+        let names = (dat["InstallationList"] as? [[String: Any]])?.compactMap { $0["AppName"] as? String }
+        #expect(names == ["old-app", "g-app"])
+    }
+
+    /// A manifest that cannot be read is said, and the folder is not
+    /// mistaken for one without a game.
+    @Test func anUnreadableManifestIsReported() throws {
+        let lib = try tempDir(); defer { try? FileManager.default.removeItem(at: lib) }
+        let eg = lib.appendingPathComponent("Broken/.egstore")
+        try FileManager.default.createDirectory(at: eg, withIntermediateDirectories: true)
+        try Data("garbage".utf8).write(to: eg.appendingPathComponent("B1.manifest"))
+        var problems: [String] = []
+        let found = EpicImport.scan(library: lib, catalog: nil, registered: [], problems: &problems)
+        #expect(found.isEmpty)
+        #expect(problems.count == 1 && problems[0].hasPrefix("Broken/.egstore/B1.manifest"))
+    }
 }

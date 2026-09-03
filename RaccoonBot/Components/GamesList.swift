@@ -456,6 +456,41 @@ struct GamesList: View {
                           : "Showing only " + libraryPageGlobals.platformFilter.sorted()
                                 .map(PlatformBadge.name(for:)).joined(separator: ", "))
 
+                    // Its own button rather than a section inside the one
+                    // beside it, on Mathias's decision of 2026-09-03: two
+                    // filters that read as two, at the cost of the width.
+                    Menu {
+                        ForEach(Store.allCases) { store in
+                            Toggle(store.label, isOn: Binding(
+                                get: { libraryPageGlobals.storeFilter.contains(store) },
+                                set: { on in
+                                    if on { libraryPageGlobals.storeFilter.insert(store) }
+                                    else { libraryPageGlobals.storeFilter.remove(store) }
+                                }))
+                        }
+                        Divider()
+                        Button("All stores") { libraryPageGlobals.storeFilter.removeAll() }
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: libraryPageGlobals.storeFilter.isEmpty ? "storefront" : "storefront.fill")
+                                .font(.system(size: toolbarGlyphSize))
+                            // The same rule as the platform badge beside it:
+                            // glyphs rather than names, so the bar does not
+                            // resize as you filter.
+                            ForEach(libraryPageGlobals.storeFilter.sorted { $0.rawValue < $1.rawValue }) { store in
+                                Image(systemName: store.systemSymbol).font(.caption2)
+                            }
+                        }
+                    }
+                    .menuStyle(.button)
+                    .buttonStyle(.plain)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .help(libraryPageGlobals.storeFilter.isEmpty
+                          ? "Filter by store"
+                          : "Showing only " + libraryPageGlobals.storeFilter
+                                .sorted { $0.rawValue < $1.rawValue }.map(\.label).joined(separator: ", "))
+
                     Image(systemName: libraryPageGlobals.filter.isEmpty ? "magnifyingglass" : "xmark.circle")
                         .font(.system(size: toolbarGlyphSize))
                         .foregroundStyle(.secondary)

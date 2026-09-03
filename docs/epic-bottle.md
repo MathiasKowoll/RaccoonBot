@@ -291,9 +291,9 @@ Ratings come back empty and `customReleaseDate` is free text, so neither is
 shown.
 
 
-## Still to build
+## Two questions that were open, and what closed them
 
-Two pieces agreed on 2026-09-03, neither built.
+Both raised on 2026-09-03; neither is outstanding now.
 
 ### The Epic library the launcher caches IS the account  (settled 2026-09-03)
 
@@ -331,19 +331,28 @@ bytes under Epic's own encryption rather than Windows' DPAPI, and reading it
 would mean decrypting a vendor's credential store with a key taken out of
 their client -- an account's safety spent on a convenience.
 
-### A filter by store
+### A filter by store  (built 2026-09-03)
 
-The library now mixes Steam and Epic in one grid, with nothing to say "only
-Epic". The pattern to copy is the platform filter, which already does exactly
-this shape: `platformFilter: Set<String>` on `LibraryPageGlobals`
-(`Types.swift:902`), applied in `filteredGames`, `rows` and `ownedRows`, and
-drawn as a menu of toggles with a badge showing what is on
-(`GamesList.swift:416-456`).
+The library mixes Steam and Epic in one grid with no way to show one. It has
+its own button beside the platform filter now, with the same shape: a menu of
+toggles, an "All stores" reset, and a badge of glyphs rather than names so the
+bar does not resize as you filter. Two decisions, both Mathias's: its own
+button rather than a section inside the platform menu, and always visible
+rather than appearing only once a second store is configured.
 
-A store filter is `Set<Store>` over `Game.store`, which every card already
-carries (nil means Steam, from before the field existed), and over the
-not-installed rows, whose Epic entries are the ones whose id begins `epic:`.
-Two things worth deciding while building it: whether it belongs beside the
-platform filter or in the same menu, and whether to show it at all when only
-one store is configured (`StoreConfig.configured.count > 1`), so a
-Steam-only machine does not grow a control that filters nothing.
+Building it turned up two defects it would otherwise have inherited.
+
+The grid ignored the platform filter. `filteredGames` narrowed the list by
+platform and then reassigned `games = allGames` before searching, throwing the
+result away; the same filter worked in list view, which goes through `rows`.
+Each filter now narrows what the one before it left.
+
+And the Epic titles that are owned and not installed were drawn by nothing.
+`allOwnedGames` reached exactly one place -- an `isEmpty` check for the empty
+state -- while everything that displays or counts read `ownedGames`, which is
+Steam's alone. So they were read off the disk, counted, and never shown.
+
+One thing the filter does not do: the toolbar is not reachable with a
+controller. Neither is the platform filter, the tab switcher or the search
+field -- the pad's owner stack holds the game grid and the options panel and
+nothing else -- so this is not a regression, but it is not covered either.

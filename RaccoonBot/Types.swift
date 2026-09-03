@@ -405,6 +405,9 @@ struct Game: Identifiable, Codable {
     /// steamAppID.
     var store: Store?
     var isEpic: Bool { store == .epic }
+    /// The store this title came from. Nil means Steam: the field was added
+    /// when the second store was, and every card written before it is Steam's.
+    var storeOrSteam: Store { store ?? .steam }
     
     // taken from SteamGame
     let type: String
@@ -855,6 +858,9 @@ struct LibraryRow: Identifiable {
     let lastPlayed: Date?
     let coverURL: URL?
     let isInstalled: Bool
+    /// Which store it came from, so the list can be filtered by it without
+    /// going back to the game it was built from.
+    let store: Store
 }
 
 class LibraryPageGlobals: ObservableObject {
@@ -898,6 +904,11 @@ class LibraryPageGlobals: ObservableObject {
     /// somebody who never looks at it.
     @Published var ownedGames: [OwnedGame] = []
     @Published var ownedLoaded: Bool = false
+    /// Empty means every store; a non-empty set is a whitelist. Shown even
+    /// with one store configured, on Mathias's decision of 2026-09-03: a
+    /// control that stays where it was put is worth more than one that
+    /// appears when a second store does.
+    @Published var storeFilter: Set<Store> = []
     /// Empty means every platform; a non-empty set is a whitelist.
     @Published var platformFilter: Set<String> = []
     /// app id -> how long, and when last. Read from localconfig.vdf, which is
@@ -962,8 +973,19 @@ class LibraryPageGlobals: ObservableObject {
         self.games + self.customAddedGames + self.epicGames
     }
     
+    /// What the grid draws.
+    ///
+    /// Each filter narrows what the one before it left. It used to reassign
+    /// `games = self.allGames` before searching, which threw the platform
+    /// filtering away every time: in grid view, filtering by platform did
+    /// nothing at all, while the same filter worked in list view, which goes
+    /// through `rows`. Found 2026-09-03 while adding the store filter beside
+    /// it, which would have been just as silently ignored.
     var filteredGames: [Game] {
         var games: [Game] = self.allGames
+        if !storeFilter.isEmpty {
+            games = games.filter { storeFilter.contains($0.storeOrSteam) }
+        }
         if !platformFilter.isEmpty {
             games = games.filter { game in
                 (game.platforms.windows && platformFilter.contains("windows"))
@@ -971,12 +993,11 @@ class LibraryPageGlobals: ObservableObject {
                 || (game.platforms.linux && platformFilter.contains("linux"))
             }
         }
-        if self.filter.isEmpty || self.filter.count < 3 {
-            games = self.allGames
-        } else {
-            games = allGames.filter { item in
-                self.filter.isEmpty || item.name.lowercased().contains(self.filter.lowercased())
-            }
+        // Under three characters is not a search: it would leave one letter
+        // matching most of a library.
+        if self.filter.count >= 3 {
+            let needle = self.filter.lowercased()
+            games = games.filter { $0.name.lowercased().contains(needle) }
         }
         return games.sorted { lhs, rhs in
             switch self.sortBy {
@@ -1003,8 +1024,8 @@ class LibraryPageGlobals: ObservableObject {
     var tabTotal: Int {
         switch tab {
         case .installed:    return allGamesCount
-        case .notInstalled: return ownedGames.count
-        case .all:          return allGamesCount + ownedGames.count
+        case .notInstalled: return allOwnedGames.count
+        case .all:          return allGamesCount + allOwnedGames.count
         }
     }
 
@@ -1016,6 +1037,9 @@ class LibraryPageGlobals: ObservableObject {
         case .all:          rows = installedRows + ownedRows
         }
         var shown = rows
+        if !storeFilter.isEmpty {
+            shown = shown.filter { storeFilter.contains($0.store) }
+        }
         if !platformFilter.isEmpty {
             shown = shown.filter { !$0.platforms.isDisjoint(with: platformFilter) }
         }
@@ -1083,12 +1107,13 @@ class LibraryPageGlobals: ObservableObject {
                               sizeBytes: sizes[game.id] ?? nil,
                               lastPlayed: stats?.lastPlayed,
                               coverURL: game.headerImage.isEmpty ? nil : URL(string: game.headerImage),
-                              isInstalled: true)
+                              isInstalled: true,
+                              store: game.storeOrSteam)
         }
     }
 
     private var ownedRows: [LibraryRow] {
-        ownedGames.filter { !hiddenAppIDs.contains($0.appID) }.map {
+        allOwnedGames.filter { !hiddenAppIDs.contains($0.appID) }.map {
             LibraryRow(id: $0.appID, appID: $0.appID, name: $0.displayName,
                        platforms: $0.platforms,
                        // Nothing is installed, so there is nothing it is
@@ -1096,12 +1121,19 @@ class LibraryPageGlobals: ObservableObject {
                        installedOn: nil,
                        playtimeMinutes: $0.playtimeMinutes,
                        sizeBytes: nil, lastPlayed: $0.lastPlayed,
-                       coverURL: $0.coverURL, isInstalled: false)
+                       coverURL: $0.coverURL, isInstalled: false, store: $0.store)
         }
     }
 
     var filteredOwnedGames: [OwnedGame] {
-        var owned = self.ownedGames.filter { !hiddenAppIDs.contains($0.appID) }
+        // Every store's, not Steam's alone. `allOwnedGames` reached exactly one
+        // place before this -- an isEmpty check for the empty state -- so the
+        // Epic titles were read off the disk, counted, and then drawn by
+        // nothing.
+        var owned = self.allOwnedGames.filter { !hiddenAppIDs.contains($0.appID) }
+        if !storeFilter.isEmpty {
+            owned = owned.filter { storeFilter.contains($0.store) }
+        }
         if !platformFilter.isEmpty {
             owned = owned.filter { !$0.platforms.isDisjoint(with: platformFilter) }
         }

@@ -34,6 +34,9 @@ nonisolated struct OwnedGame: Identifiable, Sendable, Equatable {
     /// Filled in later for the titles Steam never cached art for: the list is
     /// drawn first, with placeholders, and these arrive one at a time.
     var coverURL: URL?
+    /// Which store owns it. Defaults to Steam, which is where every owned
+    /// title came from before there was a second store to say.
+    var store: Store = .steam
 
     var id: String { appID }
     var displayName: String { name.isEmpty ? "App \(appID)" : name }

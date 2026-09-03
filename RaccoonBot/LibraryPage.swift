@@ -284,7 +284,8 @@ struct LibraryPage: View {
             libraryPageGlobals.epicOwnedGames = (catalog?.ownedNotInstalled(installedAppNames: installedNames) ?? []).map { item in
                 OwnedGame(appID: item.tripleID(appName: item.appNames.first ?? ""),
                           name: item.title ?? "", platforms: ["windows"],
-                          lastPlayed: nil, playtimeMinutes: nil, coverURL: item.tallCover)
+                          lastPlayed: nil, playtimeMinutes: nil, coverURL: item.tallCover,
+                          store: .epic)
             }
             console.log("epic: catalogue \(catalog == nil ? "absent" : "\(catalog!.items.count) items"), \(libraryPageGlobals.epicOwnedGames.count) owned and not installed")
             // A meta entry per title, so the fix catalogue and everything else

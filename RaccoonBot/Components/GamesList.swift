@@ -471,7 +471,10 @@ struct GamesList: View {
                         .frame(height: toolbarCapsuleHeight - switcherInset * 2)
                         .background(.black.opacity(0.18),
                                     in: RoundedRectangle(cornerRadius: switcherSelectionRadius))
-                        .frame(minWidth: 90, maxWidth: .infinity)
+                        // The one control in the row that yields, so it is
+                        // the one that reads as cramped first. 90 fitted; it
+                        // did not leave room to see what you had typed.
+                        .frame(minWidth: 170, maxWidth: .infinity)
 
                     // Answers the same question the field asks, and stays
                     // readable while typing. Fixed, because 58/58 and 334/334

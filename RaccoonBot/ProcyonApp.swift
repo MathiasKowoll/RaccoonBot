@@ -19,13 +19,18 @@ let windowWidth: CGFloat = 1280
 let windowHeight: CGFloat = 820
 /// Never narrower than the toolbar needs.
 ///
-/// 1024 was this window's fixed size before it could be resized, and it is
-/// still the right floor -- not for the grid, which reflows happily at 860, but
+/// 1024 was this window's fixed size before it could be resized, and it was the
+/// floor for a long time -- not for the grid, which reflows happily at 860, but
 /// for the toolbar. macOS collapses a toolbar group into an overflow menu the
 /// moment it decides there is no room, and it decides that silently: controls
 /// simply stop existing. A minimum that fits the pill means it never has to.
-let windowMinWidth: CGFloat = 1024
-let windowMinHeight: CGFloat = 600
+///
+/// Raised 15% (2026-09-03) because fitting is not the same as being usable: at
+/// 1024 the toolbar fits by squeezing the one control that yields, the search
+/// field, down to its own floor, and the grid runs three columns. The extra 156
+/// points go to the field and to a fourth column.
+let windowMinWidth: CGFloat = 1180
+let windowMinHeight: CGFloat = 690
 
 /// Resizable, and therefore able to go full screen.
 ///

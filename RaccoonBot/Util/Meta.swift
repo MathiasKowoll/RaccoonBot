@@ -7,7 +7,7 @@
 
 import Foundation
 
-func getGamesMeta(from: URL) throws -> [GamesMeta] {
+nonisolated func getGamesMeta(from: URL) throws -> [GamesMeta] {
     /**
      scans a folder and returns an array of steam games meta
      */
@@ -20,7 +20,9 @@ func getGamesMeta(from: URL) throws -> [GamesMeta] {
             let parsed = parseVDFToDict(from: file)
             let meta = mapDictToGamesMeta(from: parsed["AppState"] as! [String: Any])
             meta.gameURL = from.appendingPathComponent("common").appendingPathComponent(meta.installdir)
-            meta.isNative = meta.isDownloaded() ? getIsNative(fromURL: meta.gameURL!) : false
+            // Through the cache: a refresh used to work this out again for
+            // every installed game, and that is what froze the window.
+            meta.isNative = meta.isDownloaded() ? NativeKind.isNative(folder: meta.gameURL!) : false
             meta.appNames = []
             meta.libraryFolder = from
             array.append(meta)

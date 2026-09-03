@@ -217,12 +217,19 @@ struct LibraryPage: View {
                     console.log("skipping \(folderURL.lastPathComponent): already scanned in this pass")
                     continue
                 }
-                do {
-                    let foldergamesMeta = try getGamesMeta(from: folderURL)
-                    libraryPageGlobals.gamesMeta.append(contentsOf: foldergamesMeta)
-                } catch {
-                    console.error(String(reflecting: error))
-                }
+                // Off the main thread. This reads a library folder's
+                // manifests and then looks inside every installed game to
+                // tell a Mac one from a Windows one, and it is disk work on
+                // whatever the games are stored on -- an external drive
+                // here. Run on the main thread it froze the window for
+                // forty-five seconds cold, and for forty-four minutes before
+                // the walk itself was fixed. The window now stays live while
+                // it happens.
+                let scanned: [GamesMeta] = await Task.detached(priority: .userInitiated) {
+                    do { return try getGamesMeta(from: folderURL) }
+                    catch { console.error(String(reflecting: error)); return [] }
+                }.value
+                libraryPageGlobals.gamesMeta.append(contentsOf: scanned)
             }
         }
         // Epic, from the one bottle configured for it. The launcher's records

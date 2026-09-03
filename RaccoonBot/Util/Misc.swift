@@ -250,11 +250,82 @@ func getIDsFromFolder(dest: URL) throws -> [String] {
 //    } ?? []
 }
 
-func getIsNative(fromURL: URL) -> Bool {
-    if !folderContainsFile(withExtension: "exe", at: fromURL) && folderContainsFile(withExtension: "app", at: fromURL) {
-        return true
+/// A Mac game is one with an application bundle and no Windows executable.
+///
+/// Asked as two questions, in this order, and never as one. A Windows
+/// executable settles it wherever it turns up, so that search stops at the
+/// first one -- which for most games is in the folder's own listing, one
+/// directory read. Asking for the bundle in the same pass is what kept it
+/// going: an extension that is not there is only ever proved absent by
+/// looking everywhere, so every Windows game paid for a bundle it was never
+/// going to have. Measured on this machine: Tiebreak's executable sits at
+/// the top of its folder and the pass that also wanted a bundle spent 192
+/// seconds below it, among 74,000 files.
+///
+/// The cost that is left is a folder with no executable at all, which is a
+/// Mac game or an empty install, and there are few of those. It is paid once
+/// -- see `NativeKind`.
+nonisolated func getIsNative(fromURL: URL) -> Bool {
+    if !folderContains(extensions: ["exe"], at: fromURL).isEmpty { return false }
+    return !folderContains(extensions: ["app"], at: fromURL).isEmpty
+}
+
+/// Whether a game folder is a Mac game, remembered between refreshes.
+///
+/// The answer cannot change while the folder does not, and a refresh asks it
+/// of every installed game. Keyed by the folder and stamped with the folder's
+/// own modification date, so a game that is replaced or reinstalled is asked
+/// about again and nothing else ever is.
+nonisolated enum NativeKind {
+    private static let key = namespacedKey("NativeKind", "byFolder")
+    /// The whole map is read, changed and written back, so two callers doing
+    /// that at once would lose one of the answers. Sequential in the app --
+    /// the scan walks one folder at a time -- and not in the tests, which is
+    /// where it was noticed.
+    private static let lock = NSLock()
+    /// Where the answers live. Injectable so a test has its own, rather than
+    /// three tests sharing one key and overwriting each other.
+    static var sharedStore: UserDefaults { UserDefaults(suiteName: suiteName) ?? .standard }
+
+    struct Entry: Codable, Equatable {
+        var isNative: Bool
+        /// The folder's modification date, as an interval. A game whose top
+        /// level changes is looked at again.
+        var stamp: Double
     }
-    return false
+
+    /// Asked of the file system, not of the URL: a URL caches the resource
+    /// values it has already been asked for, so a folder that changed after
+    /// the first look still reported the first look's date -- and the answer
+    /// would never have been worked out again.
+    static func stamp(of url: URL, fileManager f: FileManager = .default) -> Double {
+        let date = (try? f.attributesOfItem(atPath: url.path(percentEncoded: false)))?[.modificationDate] as? Date
+        return date?.timeIntervalSince1970 ?? 0
+    }
+
+    /// The remembered answer, or the one just worked out and now remembered.
+    static func isNative(folder: URL,
+                         measure: (URL) -> Bool = getIsNative(fromURL:),
+                         store: UserDefaults? = nil,
+                         fileManager f: FileManager = .default) -> Bool {
+        let defaults = store ?? sharedStore
+        let path = folder.path(percentEncoded: false)
+        let now = stamp(of: folder, fileManager: f)
+        lock.lock()
+        defer { lock.unlock() }
+        var all = read(from: defaults)
+        if let known = all[path], known.stamp == now { return known.isNative }
+        let answer = measure(folder)
+        all[path] = Entry(isNative: answer, stamp: now)
+        if let data = try? JSONEncoder().encode(all) { defaults.set(data, forKey: key) }
+        return answer
+    }
+
+    static func read(from defaults: UserDefaults) -> [String: Entry] {
+        guard let data = defaults.data(forKey: key),
+              let all = try? JSONDecoder().decode([String: Entry].self, from: data) else { return [:] }
+        return all
+    }
 }
 
 /// Run a command and do not wait for it.

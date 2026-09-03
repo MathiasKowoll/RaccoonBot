@@ -295,36 +295,41 @@ shown.
 
 Two pieces agreed on 2026-09-03, neither built.
 
-### The whole Epic library, not the part the launcher happened to cache
+### The Epic library the launcher caches IS the account  (settled 2026-09-03)
 
-The "not installed" tab shows Epic titles taken from the launcher's catalogue
-cache: 258 items here, 50 of them base games, 46 not installed. That cache is
-whatever the launcher wrote when it last signed in and showed the library. It
-is not a statement about the account, and nothing measured here says the two
-are the same list.
+This was written as an open worry: the "not installed" tab reads Epic titles
+from the launcher's catalogue cache, `<AppDataPath>/Catalog/catcache.bin`, and
+that file is whatever the launcher wrote at its last signed-in library browse.
+It was not known whether that is the same list as what the account owns, so
+the tab might have been silently short.
 
-A complete list needs a source that answers for the account, and the ones
-that would are shut to anyone without the launcher's own session, measured
-2026-09-02: the catalogue API answers 401 and the store's GraphQL 403, both
-with a browser's user agent. The store's content endpoint answers by slug and
-knows one product at a time, so it can fill a page but cannot enumerate.
-What is left, in rough order of how much they cost:
+It is the same list, on this machine. Three things say so, and they were
+measured rather than assumed:
 
-- Read the launcher's cache after making the launcher refresh it. Cheap, and
-  it is what already happens; the open question is whether a full library
-  browse in the launcher makes the cache complete, which one session with the
-  launcher would answer.
-- Reuse the launcher's own signed-in session. Its tokens live in the bottle;
-  using them is a decision about touching the user's account credentials, not
-  a technical problem, and it should be taken deliberately rather than
-  discovered in a diff.
-- A third-party client (Legendary) as a separate, opt-in path. The design
-  note already weighs this and puts it after v1.
+- All 50 base games in the cache carry an `entitlementName`. That is the mark
+  of ownership, not of having browsed past something.
+- The launcher rewrote the cache three times across deliberate library
+  browses (00:24, 06:16 and 08:38 that day) and it came back byte-identical
+  each time: 258 items, 50 of them base games.
+- The account owns 50 games, counted by its owner in the launcher's own
+  library page.
 
-Decide first what "the games that can be installed" means: the account's own
-titles, which is the list above finished properly, or the store's whole
-catalogue, which is a different feature with a different source and a
-different screen.
+So nothing is missing, and nothing needs building for it. What the mechanism
+still implies is worth keeping in mind: the cache is written by the launcher,
+so a machine whose launcher has never signed in and shown the library has no
+cache at all, and one that has not done so in a long time has an old one. The
+remedy is the cheap one -- open the launcher's library once -- and it is what
+RaccoonBot should say if the list ever looks short.
+
+A signing-in route was designed for the case this closed, and then removed
+rather than left unused: the user signs in on Epic's own page, which returns
+a one-time code, and only the tokens are kept, in the keychain. It is in the
+history at commit 325c221 if a future account ever proves the cache
+incomplete. The route deliberately NOT taken, and why: the desktop launcher
+keeps its own session in `GameUserSettings.ini` under `[RememberMe]`, 1312
+bytes under Epic's own encryption rather than Windows' DPAPI, and reading it
+would mean decrypting a vendor's credential store with a key taken out of
+their client -- an account's safety spent on a convenience.
 
 ### A filter by store
 

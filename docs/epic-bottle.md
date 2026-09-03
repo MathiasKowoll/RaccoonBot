@@ -280,8 +280,10 @@ release date; and it returns the product's `namespace`, which equals the
 catalogue's. RaccoonBot guesses the slug from the title (the plain slug, a
 digit split from its word, the title before a colon, edition words dropped,
 a trailing number as a numeral: ten of fourteen titles on the first try),
-fetches, and keeps a page only when its namespace is the catalogue's; a
-wrong slug is a 404 and the next guess is tried. The page fills the detail
+fetches, and keeps a page only when it is the title's: its namespace is the
+catalogue's, or its product name is the title with everything but letters
+and digits removed (Borderlands 4's page and its owned item are under
+different namespaces). A wrong slug is a 404 and the next guess is tried. The page fills the detail
 view where Steam's does: description, publisher, screenshots, requirements,
 language tags, release date, background. One fetch per title, cached in
 `~/Library/Caches/RaccoonBotEpicStoreCache.json`; a miss is kept a week.

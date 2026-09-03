@@ -96,6 +96,18 @@ struct EpicStoreTests {
         #expect(none == nil)
     }
 
+    /// The page's namespace is not always the catalogue's; the product
+    /// name, letters and digits alone, is the second key.
+    @Test func aPageUnderAnotherNamespaceIsTheTitlesWhenItsNameIs() async throws {
+        let page = try Self.page(namespace: "store-ns")          // productName "Lantern Harbour"
+        let fetch: EpicStore.Fetcher = { _ in (200, page) }
+        let same = await EpicStore.content(for: "Lantern® Harbour", namespace: "owned-ns", fetch: fetch)
+        #expect(same?.slug == "lantern-harbour", "the mark and the space do not make another game")
+        let other = await EpicStore.content(for: "Lantern Harbour 2", namespace: "owned-ns", fetch: fetch)
+        #expect(other == nil, "another name under another namespace is another product")
+        #expect(EpicStore.letters("Ys IX: Monstrum Nox") == "ysixmonstrumnox")
+    }
+
     @Test func theCacheRemembersHitsAndMissesForAWhile() throws {
         let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("epicstore-\(UUID().uuidString).json")
         defer { try? FileManager.default.removeItem(at: url) }

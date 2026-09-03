@@ -13,11 +13,15 @@
 //
 //      https://store-content.ak.epicgames.com/api/en-US/content/products/<slug>
 //
-//  It carries all of the above and, decisively, the product's `namespace`,
-//  which is the catalogue's namespace for the same title. So a slug guessed
+//  It carries all of the above and the product's `namespace`, which for most
+//  titles is the catalogue's namespace for the same game. So a slug guessed
 //  from the title can be CHECKED before a word of it is shown: a guess that
-//  lands on another product has another namespace and is dropped. Guessing
-//  hit ten of fourteen titles here on the first try; a wrong slug is a 404.
+//  lands on another product is dropped. Not every title's page shares the
+//  catalogue's namespace, though -- Borderlands 4's page is under one
+//  namespace and the owned item under another (measured 2026-09-03) -- so a
+//  page whose product name, stripped to letters and digits, is the title's
+//  is taken as well. Guessing hit ten of fourteen titles here on the first
+//  try; a wrong slug is a 404.
 //
 //  Two things the page does not give reliably. `customReleaseDate` is free
 //  text ("Coming Soon" on a game two years out) and is ignored; only an ISO
@@ -113,15 +117,30 @@ nonisolated enum EpicStore {
         return ((resp as? HTTPURLResponse)?.statusCode ?? 0, data)
     }
 
-    /// The page for a title, or nil when no guess lands on its namespace.
+    /// The page for a title, or nil when no guess is the title's: a page is
+    /// the title's when its namespace is the catalogue's, or when its product
+    /// name is the title, letters and digits alone.
     static func content(for title: String, namespace: String, fetch: Fetcher = live) async -> EpicStoreContent? {
         for slug in slugCandidates(for: title) {
             guard let (status, body) = try? await fetch(slug) else { continue }
             guard status == 200, let page = parse(body, slug: slug) else { continue }
-            if page.namespace == namespace { return page }
-            console.log("epic store: \(slug) is another product (\(page.namespace.prefix(8)) vs \(namespace.prefix(8))); not \(title)")
+            if isPage(page, forTitle: title, namespace: namespace) { return page }
+            console.log("epic store: \(slug) is another product (\(page.namespace.prefix(8)) vs \(namespace.prefix(8)), \"\(page.title ?? "")\"); not \(title)")
         }
         return nil
+    }
+
+    static func isPage(_ page: EpicStoreContent, forTitle title: String, namespace: String) -> Bool {
+        if !namespace.isEmpty, page.namespace == namespace { return true }
+        guard let name = page.title else { return false }
+        let a = letters(name), b = letters(title)
+        return !a.isEmpty && a == b
+    }
+
+    /// "Borderlands®4" and "Borderlands 4" are the same word.
+    static func letters(_ s: String) -> String {
+        s.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
+            .lowercased().filter { $0.isLetter || $0.isNumber }
     }
 
     // MARK: - reading the page

@@ -788,9 +788,17 @@ func runningExecutable(among names: [String]) -> String? {
 /// If Steam never records the game at all, this waits and nothing happens: the
 /// executable-name path is still armed, and lingering is the failure worth
 /// having.
+/// `onFirstRunning` is called once, the first time the game reads as running.
+/// Nothing in the application passes it: it exists so a test can wait on the
+/// fact that the watcher has seen the 1, rather than on a length of time.
+/// That distinction is the whole difficulty here -- the transition this
+/// function reports is a 1 followed by a 0, so a test that writes the 0 before
+/// the watcher has been scheduled even once has quietly removed the thing it
+/// then waits for, and fails as a mystery rather than as contention.
 func watchSteamSession(_ state: SteamAppState,
                        appID: Int,
                        every interval: UInt64 = 2_000_000_000,
+                       onFirstRunning: (() -> Void)? = nil,
                        then shutDown: @escaping (String) async -> Void) async {
     var seenRunning = false
     while !Task.isCancelled {
@@ -800,6 +808,7 @@ func watchSteamSession(_ state: SteamAppState,
             if !seenRunning {
                 console.log("steam reports \(appID) running; watching for it to finish")
                 seenRunning = true
+                onFirstRunning?()
             }
         case .notRunning where seenRunning:
             await shutDown("steam reports \(appID) is no longer running, closing steam...")

@@ -239,10 +239,39 @@ struct LibraryPage: View {
             let catalog = await Task.detached(priority: .utility) {
                 EpicLibrary.dataDirectory(bottle: bottleDir).flatMap(EpicCatalog.read)
             }.value
-            libraryPageGlobals.epicGames = installed.map { title in
-                Game.epic(title, catalog: catalog?.item(forAppName: title.appName,
-                                                        namespace: title.catalogNamespace,
-                                                        catalogItemId: title.catalogItemId))
+            let catalogued: [(EpicInstalled, EpicCatalogItem?)] = installed.map { title in
+                (title, catalog?.item(forAppName: title.appName, namespace: title.catalogNamespace, catalogItemId: title.catalogItemId))
+            }
+            libraryPageGlobals.epicGames = catalogued.map { Game.epic($0.0, catalog: $0.1) }
+            // The store page for each title, from the cache first and the
+            // store once. After the cards are up, not before: the store is
+            // slow and may be absent, and a card needs neither.
+            libraryPageGlobals.epicLoadGeneration += 1
+            let generation = libraryPageGlobals.epicLoadGeneration
+            let globals = libraryPageGlobals
+            Task.detached(priority: .utility) {
+                var cache = EpicStoreCache.load()
+                var enriched: [Game] = []
+                var asked = false
+                for (title, item) in catalogued {
+                    guard let ns = item?.namespace, !ns.isEmpty else { enriched.append(Game.epic(title, catalog: item)); continue }
+                    let known = cache.lookup(namespace: ns)
+                    let page: EpicStoreContent?
+                    if case .some(let c) = known {
+                        page = c
+                    } else {
+                        page = await EpicStore.content(for: item?.title ?? title.title, namespace: ns)
+                        cache.record(namespace: ns, content: page); asked = true
+                    }
+                    enriched.append(Game.epic(title, catalog: item, store: page))
+                }
+                if asked { cache.save() }
+                let games = enriched
+                await MainActor.run {
+                    // A reload since then has its own titles; do not overwrite them.
+                    guard generation == globals.epicLoadGeneration else { return }
+                    globals.epicGames = games
+                }
             }
             let installedNames = Set(installed.map(\.appName))
             libraryPageGlobals.epicOwnedGames = (catalog?.ownedNotInstalled(installedAppNames: installedNames) ?? []).map { item in

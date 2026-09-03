@@ -420,7 +420,9 @@ struct OptionsView: View {
                         }
                         .sheet(isPresented: $showEpicImport) {
                             EpicImportSheet(bottle: bottleDir,
-                                            libraries: StoreConfig.settings(for: .epic).libraries.compactMap { URL(string: $0) ?? URL(fileURLWithPath: $0) },
+                                            // Stored as POSIX paths by GameLibrariesList; URL(string:) would take
+                                            // a path without spaces for a scheme-less URL that no file API opens.
+                                            libraries: StoreConfig.settings(for: .epic).libraries.map { URL(fileURLWithPath: $0) },
                                             load: load)
                         }
                     }

@@ -81,3 +81,19 @@ struct EpicCatalogTests {
         #expect(EpicCatalog.decode(Data(wrapped.utf8))?.items.count == 1)
     }
 }
+
+/// Which name wins for an installed title.
+struct EpicTitleNameTests {
+    @Test func theManifestNamesAnInstalledTitle() throws {
+        let installed = EpicInstalled(id: "epic:ns:item:app", appName: "app", catalogNamespace: "ns",
+                                      catalogItemId: "item", title: "Borderlands®4",
+                                      folder: URL(fileURLWithPath: "/tmp/x"), executable: nil,
+                                      version: "1", presence: .installed)
+        let json = try JSONSerialization.data(withJSONObject: [["id": "item", "namespace": "ns", "title": "Borderlands?4",
+                                                                "keyImages": [["type": "DieselGameBox", "url": "https://cdn/b.jpg"]]]])
+        let item = try #require(EpicCatalog.decode(Data(json.base64EncodedString().utf8))?.items.first)
+        let game = Game.epic(installed, catalog: item)
+        #expect(game.name == "Borderlands®4", "the mark the cache lost")
+        #expect(game.headerImage == "https://cdn/b.jpg", "the art the manifest never had")
+    }
+}

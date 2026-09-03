@@ -665,9 +665,12 @@ extension Game {
     /// shows what is known rather than pretending.
     static func epic(_ title: EpicInstalled, catalog item: EpicCatalogItem? = nil) -> Game {
         // The launcher's catalogue, when it has been cached, is the only place
-        // Epic keeps a title's art and description. The manifest's own name
-        // stands when it has not.
-        let name = item?.title?.isEmpty == false ? item!.title! : title.title
+        // Epic keeps a title's art and description. The NAME comes from the
+        // manifest, which is what the launcher itself shows: the cache had
+        // "Borderlands?4" where the manifest had "Borderlands®4", the mark
+        // lost somewhere on the way into the cache. The cache names a title
+        // only when the manifest does not.
+        let name = title.title.isEmpty ? (item?.title ?? title.appName) : title.title
         let blank = SteamGame(type: "game", name: name, steamAppID: 0, requiredAge: "0",
                               isFree: false, controllerSupport: nil, dlc: nil,
                               detailedDescription: item?.description ?? "", aboutTheGame: "",

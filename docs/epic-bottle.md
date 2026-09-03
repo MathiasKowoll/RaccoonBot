@@ -275,8 +275,15 @@ public content endpoint answers without a session, by slug:
     https://store-content.ak.epicgames.com/api/en-US/content/products/<slug>
 
 with long and short descriptions, developer and publisher, gallery and
-carousel images, system requirements, languages, ratings and release date,
-and it returns the product's `namespace`, which equals the catalogue's. So a
-slug guessed from the title (`alan-wake-2`, `alan-wake-remastered` both
-answered 200) can be checked against the namespace before any of it is
-shown. Not implemented yet.
+carousel images, system requirements, languages and, when it is a date, the
+release date; and it returns the product's `namespace`, which equals the
+catalogue's. RaccoonBot guesses the slug from the title (the plain slug, a
+digit split from its word, the title before a colon, edition words dropped,
+a trailing number as a numeral: ten of fourteen titles on the first try),
+fetches, and keeps a page only when its namespace is the catalogue's; a
+wrong slug is a 404 and the next guess is tried. The page fills the detail
+view where Steam's does: description, publisher, screenshots, requirements,
+language tags, release date, background. One fetch per title, cached in
+`~/Library/Caches/RaccoonBotEpicStoreCache.json`; a miss is kept a week.
+Ratings come back empty and `customReleaseDate` is free text, so neither is
+shown.

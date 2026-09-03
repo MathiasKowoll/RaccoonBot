@@ -913,8 +913,24 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
                 // no Steam running, "Steam.exe -shutdown" would start one.
                 try await epicLog?.waitForLauncherToSettle()
                 try await quitEpic(cxAppPath: cxAppPath, bottle: bottle)
+                // Steam may be in this very prefix, and usually is: the Epic
+                // launcher is installed into whichever bottle the user
+                // pointed at, which on this machine is the Steam one. The
+                // rule stays "never start a Steam that is not running", so it
+                // is asked to leave only when the bottle says it is there --
+                // otherwise `wineserver -k` a moment later would take a
+                // running Steam down without a word to it, mid-download or
+                // mid-cloud-sync of its own.
+                var clients = ["epic"]
+                if let dir = BottleReference(bottle)?.directory,
+                   BottleProcesses.running(inBottleAt: dir)
+                       .contains(where: { $0.name.lowercased().hasPrefix("steam") }) {
+                    console.log("steam is in this bottle too; asking it to leave before the prefix goes")
+                    try await quitSteam(cxAppPath: cxAppPath, bottle: bottle, isNative: false)
+                    clients.append("steam")
+                }
                 try await closeBottle(cxAppPath: cxAppPath, bottle: bottle,
-                                      client: "epic", decidedAt: generation)
+                                      clients: clients, decidedAt: generation)
             } else {
                 // Steam uploads save data when a game exits. Killing it mid-upload
                 // leaves the cloud copy behind whatever was actually played, and it
@@ -943,6 +959,20 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
         let terminatedAppName = String(terminatedAppPath.split(separator: "/").last ?? "unknown")
         guard appNames.contains(terminatedAppName) || appNames.contains(terminatedAppProcessName) else { return }
         console.log(output.userInfo?.description ?? "no userInfo")
+        // An Epic session is not decided here.
+        //
+        // This path tears down the instant a name in `appNames` exits, with
+        // no grace at all. For an Epic title that name is the one executable
+        // the manifest carries, which for a title with a chain of its own is
+        // the bootstrap: it exits seconds before the real game appears, and
+        // this would have killed the bottle in between. The Epic block below
+        // owns that decision, from the bottle census and epicIdleGrace, which
+        // is the only authority the measured facts support -- the launcher
+        // writes nothing when a title exits.
+        if isEpic {
+            console.log("\(terminatedAppProcessName) exited; the epic watch decides when the session is over")
+            return
+        }
 
         guard let game = loaded.name else {
             if steamID != nil {
@@ -1086,11 +1116,30 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
                     try? await Task.sleep(nanoseconds: 500_000_000)
                 }
             }
-            guard let exe = found else {
-                console.warn("epic: nothing started in this bottle in 180s; letting the window go")
+            // Nothing yet is not nothing ever.
+            //
+            // A first run can sit past this deadline on a prerequisite
+            // install, an EOS setup, a EULA or a shader step, and returning
+            // here ended the session's only two watchers at once: this task
+            // stops, and the `onTerminate` it calls releases the
+            // TerminationObserver as well (GameLauncher drops it from
+            // `observers`). The bottle would then never be torn down and the
+            // save never waited for. So the window is released -- that is
+            // what onTerminate is for -- and the search goes on.
+            if found == nil {
+                console.warn("epic: nothing started in this bottle in 180s; releasing the window, still watching")
                 await MainActor.run { onTerminate() }
-                return
+                while !Task.isCancelled, found == nil {
+                    if let named = await epicLog?.launchedExecutableInNewLines() {
+                        found = named
+                    } else if let seen = BottleProcesses.gamesRunning(inBottleAt: dir).first {
+                        found = seen
+                    } else {
+                        try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    }
+                }
             }
+            guard let exe = found else { return }
             // Everything written up to here belongs to the launch, including
             // the save sync the launcher runs BEFORE it starts a title. Left
             // unread, that sync's "Exiting Cloud Sync" would satisfy the
@@ -1100,6 +1149,27 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
             await MainActor.run {
                 loaded.name = exe
                 onLoad(exe)
+            }
+
+            // Said to have started is not the same as running.
+            //
+            // The idle watch below counts an empty bottle towards a teardown,
+            // and when the launcher's log is what answered above, the bottle
+            // is still empty -- the process takes its own time to appear, and
+            // on a first run it can take minutes. Entering the loop then
+            // starts the clock on a game that is still coming up, which is
+            // how the bottle would be pulled out from under it. Nothing is
+            // counted until the game has actually been seen once.
+            var everSeen = false
+            let appearBy = Date().addingTimeInterval(600)
+            while !Task.isCancelled, !everSeen, Date() < appearBy {
+                if !BottleProcesses.gamesRunning(inBottleAt: dir).isEmpty { everSeen = true; break }
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
+            guard everSeen else {
+                console.warn("epic: \(exe) never appeared in the bottle; leaving it alone rather than closing it")
+                await MainActor.run { onTerminate() }
+                return
             }
 
             // Down. A gap is not an ending: a title with a launcher chain of

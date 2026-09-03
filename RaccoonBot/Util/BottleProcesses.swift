@@ -135,7 +135,20 @@ enum BottleProcesses {
         if let known = steamCache[key] { steamCacheLock.unlock(); return known }
         steamCacheLock.unlock()
 
-        let launcher = bottle.appendingPathComponent("drive_c/Program Files (x86)/Epic Games/Launcher")
+        // The whole of "Epic Games", not just "Launcher".
+        //
+        // Epic Online Services installs beside the launcher, not inside it:
+        // the EOS host is a registered wine service in this prefix
+        // (System\CurrentControlSet\Services\EpicOnlineServices, demand
+        // start), and it, its three helpers and the overlay renderer all
+        // outlive a title. Scanning only Launcher/ left every one of them
+        // counted as the game, so an Epic session never read as over: the
+        // bottle stayed up, the loader never released, and playingID stayed
+        // pinned so the title could not be played again. Exactly the failure
+        // the Steam comment above records for the missing overlay, repeated.
+        // DirectXRedist and any Launcher.old-* copy come along, which is
+        // right: none of them is a game either.
+        let launcher = bottle.appendingPathComponent("drive_c/Program Files (x86)/Epic Games")
         var names: Set<String> = []
         if let walker = FileManager.default.enumerator(
             at: launcher, includingPropertiesForKeys: nil,
@@ -157,14 +170,37 @@ enum BottleProcesses {
     /// from a log, and a log can be misread or be a minute out of date -- which
     /// is how a relaunched MGS4 got killed by a decision taken about the attempt
     /// before it. This asks the machine instead of the record.
+    /// How much of a process name lsof will tell us.
+    ///
+    /// Its -F command field is capped, and the cap is the kernel's, so it
+    /// cannot be worked around by asking differently: measured on this
+    /// machine, every name of 31 characters or more comes back at exactly 31.
+    /// It matters here because Epic ships names past it --
+    /// `EOSOverlayRenderer-Win64-Shipping.exe` is 37 -- and a name compared
+    /// at full length against a truncated one never matches, so the overlay
+    /// would have been counted as the game however wide the walk above went.
+    static let lsofNameLimit = 31
+
+    /// Anything running in this bottle that belongs to neither wine, nor
+    /// Steam, nor the Epic launcher.
+    ///
+    /// The last word before a teardown. Every judgement above this one is made
+    /// from a log, and a log can be misread or be a minute out of date -- which
+    /// is how a relaunched MGS4 got killed by a decision taken about the attempt
+    /// before it. This asks the machine instead of the record.
     static func gamesRunning(inBottleAt bottle: URL) -> [String] {
-        let steams = steamsOwnExecutables(inBottleAt: bottle)
-        let launchers = launchersOwnExecutables(inBottleAt: bottle)
+        let known = wineFurniture
+            .union(steamsOwnExecutables(inBottleAt: bottle))
+            .union(launchersOwnExecutables(inBottleAt: bottle))
+        // Compared at the length lsof is willing to report, in both
+        // directions: a known name longer than the cap is stored cut down to
+        // it, and the running name is cut the same way before the comparison.
+        let knownAtLimit = Set(known.map { String($0.prefix(lsofNameLimit)) })
         return running(inBottleAt: bottle)
             .map(\.name)
             .filter { name in
                 let lower = name.lowercased()
-                return !wineFurniture.contains(lower) && !steams.contains(lower) && !launchers.contains(lower)
+                return !known.contains(lower) && !knownAtLimit.contains(String(lower.prefix(lsofNameLimit)))
             }
     }
 

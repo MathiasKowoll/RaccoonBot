@@ -22,12 +22,17 @@ import AppKit
 ///
 /// Save data is already safe by the time this runs: the caller waits for
 /// Steam's exit sync to finish before asking Steam to quit at all.
-/// `client` is the name prefix of the store client waited for: "steam" for
-/// Steam, "epic" for the Epic launcher, whose processes are EpicGamesLauncher,
-/// EpicWebHelper and EpicOnlineServices.
+/// `clients` are the name prefixes of the store clients waited for: "steam"
+/// for Steam, "epic" for the Epic launcher, whose processes are
+/// EpicGamesLauncher, EpicWebHelper and EpicOnlineServices.
+///
+/// More than one because a bottle can hold more than one: the Epic launcher
+/// is installed into whichever bottle the user pointed at, which here is the
+/// Steam one, and a teardown that waited only for Epic's processes would
+/// reach `wineserver -k` while Steam was still winding down.
 func closeBottle(cxAppPath: String, bottle: String,
                  waitingUpTo settleTimeout: TimeInterval = 30,
-                 client: String = "steam",
+                 clients: [String] = ["steam"],
                  decidedAt generation: Int = LaunchGeneration.shared.current) async throws {
     // Asked before every destructive step, not once at the top. The waits below
     // run for half a minute, and a launch inside that window was destroyed by a
@@ -61,16 +66,16 @@ func closeBottle(cxAppPath: String, bottle: String,
             console.log("the bottle closed on its own")
             return
         }
-        if !here.contains(where: { $0.name.lowercased().hasPrefix(client) }) {
-            console.log("\(client) has gone; ending what wine keeps running")
+        if !here.contains(where: { p in clients.contains { p.name.lowercased().hasPrefix($0) } }) {
+            console.log("\(clients.joined(separator: " and ")) has gone; ending what wine keeps running")
             break
         }
         try await Task.sleep(nanoseconds: 500_000_000)
     }
 
     let left = BottleProcesses.running(inBottleAt: directory)
-    if left.contains(where: { $0.name.lowercased().hasPrefix(client) }) {
-        console.warn("\(client) did not go in \(Int(settleTimeout))s: "
+    if left.contains(where: { p in clients.contains { p.name.lowercased().hasPrefix($0) } }) {
+        console.warn("\(clients.joined(separator: " and ")) did not go in \(Int(settleTimeout))s: "
                      + left.map(\.name).sorted().joined(separator: ", "))
     }
 

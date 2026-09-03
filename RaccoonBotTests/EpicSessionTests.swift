@@ -186,4 +186,44 @@ struct EpicSessionTests {
         watcher.drainPastLaunch()
         #expect(watcher.linesForTesting().isEmpty, "the pull's line went with the drain")
     }
+
+    /// Epic Online Services installs BESIDE the launcher, not inside it, and
+    /// its host is a registered wine service that outlives a title. Counted
+    /// as the game, it meant an Epic session never read as over: the bottle
+    /// stayed up, the loader never released, and the title could not be
+    /// played again.
+    @Test func theLaunchersOwnIncludesEpicOnlineServices() throws {
+        let bottle = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("bottle-\(UUID().uuidString)")
+        let epic = bottle.appendingPathComponent("drive_c/Program Files (x86)/Epic Games")
+        let places = ["Launcher/Portal/Binaries/Win64/EpicGamesLauncher.exe",
+                      "Epic Online Services/service/EpicOnlineServicesHost.exe",
+                      "Epic Online Services/EpicOnlineServicesUserHelper.exe",
+                      "DirectXRedist/DXSETUP.exe"]
+        for place in places {
+            let url = epic.appendingPathComponent(place)
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            FileManager.default.createFile(atPath: url.path, contents: Data())
+        }
+        defer { try? FileManager.default.removeItem(at: bottle) }
+        let names = BottleProcesses.launchersOwnExecutables(inBottleAt: bottle)
+        #expect(names.contains("epicgameslauncher.exe"))
+        #expect(names.contains("epiconlineserviceshost.exe"), "the service that outlives the game")
+        #expect(names.contains("epiconlineservicesuserhelper.exe"))
+        #expect(names.contains("dxsetup.exe"), "not a game either")
+    }
+
+    /// lsof will not report a name longer than its cap, so a long name
+    /// compared at full length never matches. Epic ships one:
+    /// EOSOverlayRenderer-Win64-Shipping.exe is 37 characters.
+    @Test func aNameTooLongForLsofIsStillRecognised() {
+        let full = "eosoverlayrenderer-win64-shipping.exe"
+        #expect(full.count > BottleProcesses.lsofNameLimit)
+        let asLsofReportsIt = String(full.prefix(BottleProcesses.lsofNameLimit))
+        #expect(asLsofReportsIt.count == BottleProcesses.lsofNameLimit)
+        // The comparison gamesRunning makes, in both directions.
+        let known: Set<String> = [full]
+        let knownAtLimit = Set(known.map { String($0.prefix(BottleProcesses.lsofNameLimit)) })
+        #expect(!known.contains(asLsofReportsIt), "which is why the full-length check alone failed")
+        #expect(knownAtLimit.contains(String(asLsofReportsIt.prefix(BottleProcesses.lsofNameLimit))))
+    }
 }

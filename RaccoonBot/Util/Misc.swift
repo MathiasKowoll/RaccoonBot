@@ -760,6 +760,16 @@ final class LoadedGame: @unchecked Sendable {
 /// somebody watch two minutes of Steam processes to prove it is a cost with
 /// nothing bought. A game that stopped seconds after starting is the ambiguous
 /// one, and that is where the patience belongs.
+/// How long an empty Epic bottle has to stay empty before the session is over.
+///
+/// Chosen, not measured, and said so rather than dressed up: no Epic title
+/// with a launcher chain of its own has been watched exiting here yet. Steam's
+/// equivalent earns its two minutes from a title that is known to exit and
+/// come back forty-four seconds later; this is the same fear with less
+/// evidence behind it, so it is generous. Shorten it once a real chain has
+/// been seen.
+let epicIdleGrace: TimeInterval = 60
+
 func steamIdleGrace(forSessionLasting duration: TimeInterval,
                     crashed: Bool = false) -> TimeInterval {
     // A game that fell over is not a launcher chain about to come back, however
@@ -1027,6 +1037,98 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
                     console.log("the game is running again; it was still starting")
                     onLoad(loaded.name ?? "")
                     reportedIdle = false
+                }
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
+        }
+    }
+
+    // The Epic session, which has no Steam to ask about either half of it.
+    //
+    // Up: the launcher's own log names the executable it started -- the one
+    // party that knows, since the title is started by the launcher and not by
+    // us. Down: what is actually running in the bottle, which is the same
+    // last word the Steam path falls back to, because the launcher writes
+    // nothing at all when a title exits -- measured across every session on
+    // this machine, and the reason this cannot be done from the log.
+    //
+    // Without this, `onLoad` was never called for an Epic title at all:
+    // it lives inside the `if let steamID` below, and an Epic title has none.
+    // The loader it turns off stayed up for the rest of the run -- "Launching
+    // Alan Wake 2..." over a dimmed window, for ever.
+    if isEpic, let dir = BottleReference(bottle)?.directory {
+        Task.detached(priority: .background) {
+            // Up: whichever of the two answers first.
+            //
+            // The launcher's log names the executable, and is the nicer
+            // answer -- but the line can be written before this tracker's
+            // tail exists at all. When the launcher is ALREADY running, the
+            // whole sequence it writes (pull the saves, then "Launching
+            // app") takes under a second, and this tracker is built at the
+            // same moment the URI is handed over. Waiting only on the log
+            // would then wait out the full deadline for a line already gone
+            // by, and leave the window saying "Launching..." for three
+            // minutes before giving up on a game that is running.
+            //
+            // So the bottle is watched for the same fact from the other
+            // side: a process that is neither wine's furniture, nor Steam's,
+            // nor the launcher's own is the game.
+            let deadline = Date().addingTimeInterval(180)
+            var found: String?
+            while Date() < deadline, found == nil {
+                if let named = await epicLog?.launchedExecutableInNewLines() {
+                    console.log("epic: the launcher started \(named)")
+                    found = named
+                } else if let seen = BottleProcesses.gamesRunning(inBottleAt: dir).first {
+                    console.log("epic: \(seen) is running in the bottle")
+                    found = seen
+                } else {
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                }
+            }
+            guard let exe = found else {
+                console.warn("epic: nothing started in this bottle in 180s; letting the window go")
+                await MainActor.run { onTerminate() }
+                return
+            }
+            // Everything written up to here belongs to the launch, including
+            // the save sync the launcher runs BEFORE it starts a title. Left
+            // unread, that sync's "Exiting Cloud Sync" would satisfy the
+            // teardown's wait for the sync that runs AFTER the title exits --
+            // and the launcher would be asked to leave mid-upload.
+            await epicLog?.drainPastLaunch()
+            await MainActor.run {
+                loaded.name = exe
+                onLoad(exe)
+            }
+
+            // Down. A gap is not an ending: a title with a launcher chain of
+            // its own exits and comes back, which is what the grace is for --
+            // the same reasoning as the Steam idle grace, chosen rather than
+            // measured for Epic, and safe to shorten once a real chain has
+            // been watched here.
+            var idleSince: Date?
+            var reportedIdle = false
+            while !Task.isCancelled {
+                let playing = BottleProcesses.gamesRunning(inBottleAt: dir)
+                if playing.isEmpty {
+                    if idleSince == nil { idleSince = Date() }
+                    if !reportedIdle {
+                        console.log("nothing of the game is running; the window is free again")
+                        await MainActor.run { onTerminate() }
+                        reportedIdle = true
+                    }
+                    if let since = idleSince, Date().timeIntervalSince(since) >= epicIdleGrace {
+                        await shutDown(because: "nothing has run in this bottle for \(Int(epicIdleGrace))s, closing down...")
+                        return
+                    }
+                } else {
+                    idleSince = nil
+                    if reportedIdle {
+                        console.log("the game is running again; it was still starting")
+                        await MainActor.run { onLoad(exe) }
+                        reportedIdle = false
+                    }
                 }
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
             }

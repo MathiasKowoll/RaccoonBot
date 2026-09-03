@@ -50,10 +50,22 @@ nonisolated struct EpicSettle {
         lastHeard = now
     }
 
-    /// The lines the launcher is known to end an exit sync with. Empty until
-    /// a real session has been read -- see the header. A guess here would be
-    /// read back as a measurement.
-    static func isTerminal(_ line: String) -> Bool { false }
+    /// The line the launcher ends a save sync with.
+    ///
+    /// Measured on 2026-09-03, from this machine's own sessions, which is why
+    /// this was left answering false until then: the launcher writes
+    ///
+    ///     LogCloudSync: Cloud Sync: Sync Started for <ns>:<item>:<app>
+    ///     LogCloudSync: Cloud Sync: Exiting Cloud Sync - SUCCESS - AppName: <ns>:<item>:<app>
+    ///
+    /// once before it launches a title, pulling the cloud copy down, and again
+    /// when the title exits, pushing it back up. "Exiting" is what is matched
+    /// rather than "SUCCESS", for the same reason the Steam watcher accepts
+    /// "Failed sync for": a sync that ended badly has still ended, and waiting
+    /// past it buys nothing.
+    static func isTerminal(_ line: String) -> Bool {
+        line.contains("Exiting Cloud Sync")
+    }
 
     enum Verdict: Equatable { case waiting, settled(String) }
 
@@ -82,6 +94,65 @@ final class EpicLauncherLogWatcher {
     init(bottle: URL) {
         tail = SteamLogTail(url: Self.logURL(inBottleAt: bottle))
     }
+
+    /// The executable the launcher says it is starting, out of its own line.
+    ///
+    /// Measured 2026-09-03; the launcher writes a pair, and it is the second
+    /// that means it actually went:
+    ///
+    ///     FCommunityPortalLaunchAppTask: Preparing to launch app 'Z:/.../AlanWake2.exe' with commandline ...
+    ///     FCommunityPortalLaunchAppTask: Launching app 'Z:/.../AlanWake2.exe' with commandline ...
+    ///
+    /// "Preparing to launch" is deliberately not accepted: it is written for
+    /// a launch that may still fail, and this answer starts a clock.
+    static func launchedExecutable(in line: String) -> String? {
+        guard line.contains("FCommunityPortalLaunchAppTask"),
+              line.contains("Launching app"),
+              !line.contains("Preparing to launch") else { return nil }
+        // The path is the first thing in single quotes.
+        guard let open = line.firstIndex(of: "'") else { return nil }
+        let rest = line[line.index(after: open)...]
+        guard let close = rest.firstIndex(of: "'") else { return nil }
+        let path = String(rest[..<close])
+        guard !path.isEmpty else { return nil }
+        // Written with forward slashes here, whatever the manifest says.
+        let name = path.split(whereSeparator: { $0 == "/" || $0 == "\\" }).last.map(String.init)
+        return (name?.isEmpty ?? true) ? nil : name
+    }
+
+    /// One look at whatever the launcher has written since the last look: the
+    /// executable it says it started, if it said so.
+    ///
+    /// A single pass rather than a loop, so the caller can watch the bottle
+    /// for the same fact at the same time -- see the Epic block in
+    /// getGameTracker. The Epic half of what SteamLaunchWatcher does: a title
+    /// started through the launcher is not started by us, so the only party
+    /// that knows its executable by name is the launcher.
+    func launchedExecutableInNewLines() -> String? {
+        for line in tail.newLines() {
+            if let exe = Self.launchedExecutable(in: line) { return exe }
+        }
+        return nil
+    }
+
+    /// Read everything written up to now and throw it away.
+    ///
+    /// Called the moment a game is known to have started, and it is what
+    /// stops a save being lost. The launcher syncs saves TWICE around a
+    /// session -- pulling before it launches, pushing after the title exits
+    /// -- and both write the same "Exiting Cloud Sync" line. If the pull's
+    /// line is still sitting unread when the teardown starts waiting for the
+    /// push's, the wait is satisfied by the wrong one instantly, the launcher
+    /// is asked to leave mid-upload, and the cloud copy keeps whatever it had
+    /// before this session. Everything written before the game started is
+    /// about the past, so it can all go.
+    func drainPastLaunch() {
+        _ = tail.newLines()
+    }
+
+    /// What the tail has to offer right now. Exposed so a test can state what
+    /// the drain left behind, which is the whole point of the drain.
+    func linesForTesting() -> [String] { tail.newLines() }
 
     /// Wait for the launcher to finish whatever it does when a game exits.
     func waitForLauncherToSettle() async throws {

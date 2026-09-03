@@ -239,3 +239,44 @@ is End Task. The launcher keeps a `.manifest` per synced artifact under
 `AppData\Local\EpicGamesLauncher\Saved\Saves\<EpicAccountID>\<ArtifactID>\`,
 which is a documented artifact a future "sync finished" could be measured
 from, instead of the quiet-log rule.
+
+
+## Registering games already on the disk
+
+Options > Epic > *Register games on the disk* lists every folder with an
+`.egstore` under the Epic library folders configured above, says whether the
+launcher in the bottle already knows it, and writes the launcher's records
+for the ones it does not: the `.item` manifest and the helper's `.egi`, with
+the revision bumped. The launcher lists them installed at its next start and
+takes them over from there (it rewrites the records with its own fields and
+offers updates as usual). Nothing is downloaded, deleted or rewritten, and
+nothing is written while the bottle is up.
+
+What it reads: the binary build manifest beside the game
+(`.egstore/<guid>.manifest`) for the version, executable, command and size,
+and the launcher's catalogue cache for the title and the ids. Two joins,
+both measured: a DLC's manifest carries the catalogue AppName; a base game
+joins by the catalogue's `FolderName`, because its manifest may carry another
+build id. A folder with two builds of one app takes the build the catalogue
+names, and says so.
+
+Limits. The catalogue cache must exist (open the launcher and sign in once).
+A title the cache does not name is listed but not registered. The download
+URLs are left empty and the launcher fetches them again on update; that an
+update works from an empty list has not been exercised yet.
+
+## Metadata beyond the catalogue cache
+
+The cache holds title, a short description, developer, the box and tall
+covers, categories and the store's date-added: no genres, screenshots,
+publisher, release date or requirements, and no store slug. The store's
+public content endpoint answers without a session, by slug:
+
+    https://store-content.ak.epicgames.com/api/en-US/content/products/<slug>
+
+with long and short descriptions, developer and publisher, gallery and
+carousel images, system requirements, languages, ratings and release date,
+and it returns the product's `namespace`, which equals the catalogue's. So a
+slug guessed from the title (`alan-wake-2`, `alan-wake-remastered` both
+answered 200) can be checked against the namespace before any of it is
+shown. Not implemented yet.

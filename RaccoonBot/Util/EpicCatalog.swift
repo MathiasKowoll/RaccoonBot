@@ -39,6 +39,14 @@ nonisolated struct EpicCatalogItem: Decodable, Equatable {
     let releaseInfo: [Release]?
     let categories: [Category]?
     let mainGameItem: MainGame?
+    /// Free-form, per title. Two matter here: FolderName, the folder the
+    /// launcher installs into and so the join from a folder on the disk to
+    /// its title; and CanRunOffline.
+    let customAttributes: [String: Attribute]?
+    struct Attribute: Decodable, Equatable { let value: String? }
+
+    var folderName: String? { customAttributes?["FolderName"]?.value }
+    var canRunOffline: Bool { customAttributes?["CanRunOffline"]?.value?.lowercased() == "true" }
 
     /// A game somebody can play, as opposed to DLC, an engine or a tool.
     ///

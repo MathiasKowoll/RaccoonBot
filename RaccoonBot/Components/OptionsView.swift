@@ -44,6 +44,7 @@ struct OptionsView: View {
     @EnvironmentObject private var gamepad: GamepadInput
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
     @MainActor var load: @Sendable () async -> Void
+    @State private var showEpicImport = false
     @State var createBtlPrc: Process?
     @State var cleard3dmCacheStatus: DeleteStatus = DeleteStatus.idle
     /// Read once, off the main thread, and remembered. NEVER computed in the
@@ -402,6 +403,27 @@ struct OptionsView: View {
                     }
 
                     GameLibrariesList(store: configuringStore, load: load)
+                    // Games already on the disk that the launcher does not
+                    // know: it is told, rather than made to download them.
+                    if configuringStore == .epic,
+                       let epic = EpicLaunch.target(settings: StoreConfig.settings(for: .epic),
+                                                    selectedBottle: appGlobals.selectedBottle),
+                       EpicLaunch.isInstalled(epic),
+                       let bottleDir = BottleReference(epic.bottle)?.directory,
+                       !StoreConfig.settings(for: .epic).libraries.isEmpty {
+                        HStack(alignment: .center, spacing: 12) {
+                            ProminentButton("Register games on the disk", systemImage: "externaldrive.badge.plus") {
+                                showEpicImport = true
+                            }
+                            Text("Tells the launcher about games already in the Epic folders above, so it lists them installed instead of downloading them again.")
+                                .font(.footnote).foregroundStyle(.secondary).lineLimit(2)
+                        }
+                        .sheet(isPresented: $showEpicImport) {
+                            EpicImportSheet(bottle: bottleDir,
+                                            libraries: StoreConfig.settings(for: .epic).libraries.compactMap { URL(string: $0) ?? URL(fileURLWithPath: $0) },
+                                            load: load)
+                        }
+                    }
                 }
                 .task(id: configuringStore) {
                     storeBottle = StoreConfig.settings(for: configuringStore).bottle

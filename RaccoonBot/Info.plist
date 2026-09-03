@@ -20,7 +20,19 @@
 	     the game itself runs under wine, which gamepolicyd does not see, so
 	     the only thing Game Mode could ever have prioritised here is this
 	     launcher -- at the game's expense. The key stays, set to false, so
-	     the intent is stated rather than inferred from its absence. -->
+	     the intent is stated rather than inferred from its absence.
+
+	     What happened after, reported by Mathias on 2026-09-03: about 30 fps
+	     more, and Mortal Shell in particular much steadier. Worth writing
+	     down, and worth not over-reading. The change that removed this
+	     shipped a second one beside it -- the launcher also lets go of the
+	     controller while a game runs -- so neither is separated from the
+	     other by this evidence. And it sits oddly with what was measured
+	     before removing: gamepolicyd had logged nothing in 24 hours, which
+	     was taken to mean Game Mode was not engaging at all. A gain that
+	     size says either that silence was not evidence of inaction, or the
+	     gain belongs to the controller change. Separating them is one build
+	     each way, and nobody has spent a session on it. -->
 	<key>LSSupportsGameMode</key>
 	<false/>
 </dict>

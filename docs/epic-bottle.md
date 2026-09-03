@@ -185,3 +185,57 @@ existing folder, choose the PARENT folder. The launcher appends the game's
 mandatory folder name, so pointing it at `...\AlanWake2` prepares
 `...\AlanWake2\AlanWake2`, registers an incomplete installation there, and
 the real one becomes a "stale duplicate" and is removed.
+
+
+## What the documentation says
+
+Checked 2026-09-02 against the pages themselves (several Epic help pages
+answer 403 to anything but a browser and were read from Wayback captures of
+the same article ids; Epic's developer pages were read live).
+
+**No headless launcher.** Epic documents no headless, silent or no-window
+start for `EpicGamesLauncher.exe`, and no launcher-level command-line switch
+at all. `-silent`, `-launchcontext`, `-noselfupdate`, `-nullrhi` exist in the
+binary and nowhere in Epic's material. The only documented "silent" is the
+URI parameter below. Epic also states that the launcher coming back up after
+a game closes "does not have the feature to disable this behavior"; its
+workaround is to uncheck *Minimize To System Tray* and close the launcher
+after launching a game.
+
+**The launch URI is official.** Epic's *Protocol Activation* page
+(dev.epicgames.com/docs/epic-games-store/protocol-activation) gives exactly
+the form Play uses, `com.epicgames.launcher://apps/[SandboxID]%3A[CatalogID]%3A[ArtifactId]?action=launch&silent=true`,
+names the three ids (Sandbox = namespace, Catalog = item, Artifact = the
+manifest's AppName), lists the actions `launch`, `updatecheck`, `installer`,
+keeps the ArtifactId-only form as deprecated but supported, and says of
+`silent=true`: it launches the app "without visibly popping up the EGS
+Launcher" but is "suggestive": if the launcher decides UI is required
+(sign-in, update, prerequisites) it is shown. What a running launcher does
+with a second activation is not documented anywhere official.
+
+**Wine does not run the `Run` keys at an automatic boot.** Nothing in the
+wineboot man page or the WineHQ wiki says so; the source does. In upstream
+`programs/wineboot/wineboot.c` HKLM\Run, HKCU\Run and the Startup folder are
+processed only under `if (!init && !restart)`, and the boot that ntdll starts
+for a fresh wineserver is always `wineboot.exe --init` (`dlls/ntdll/unix/env.c`,
+`run_wineboot`), so they never run there. `RunOnce` does run at every boot and
+is deleted afterwards. CrossOver goes further: its wineboot (winecx mirrors,
+21 and 25.1) replaces the block with `goto done; /* CodeWeavers hack:
+reboot.exe should have handled these already */`, and its `reboot.exe` handles
+only `RunOnce`, wininit and file operations per its option strings. The
+shipped scripts invoke wineboot only with `--restart` or shutdown flags.
+Measured here to match: 637 Steam starts logged by its bootstrapper, none
+with the Run key's arguments. The `Steam -silent` and
+`EpicGamesLauncher -silent -launchcontext=boot` entries in the bottle's
+`Run` key are inert. CodeWeavers documents none of this.
+
+**Cloud saves: after the game closes, by the launcher.** Epic's only timing
+statement is in the store's developer test cases: "Close the game. The
+Launcher should now sync the cloud save." Nothing official says what a
+launcher closed or killed mid-upload does, whether an exit-time upload
+happens when no launcher is running, or what the cloud-save log category is
+called; the help centre's remedy for a launcher "stuck while cloud syncing"
+is End Task. The launcher keeps a `.manifest` per synced artifact under
+`AppData\Local\EpicGamesLauncher\Saved\Saves\<EpicAccountID>\<ArtifactID>\`,
+which is a documented artifact a future "sync finished" could be measured
+from, instead of the quiet-log rule.

@@ -103,3 +103,77 @@ struct InstallRouteTests {
         #expect(Install.route(for: game, toMac: true) == .steamOnMac(appID: "220"))
     }
 }
+
+
+/// When the Epic launcher may be handed an install, and when doing so would
+/// only earn the user an II-E1003.
+@MainActor
+struct EpicReadinessTests {
+
+    private func log(header: String, ready: Bool) -> String {
+        var text = header + "\nAppSettings: Version: 20.2.7-0+UE5\n"
+        text += "[2026.09.03-20.24.56:841][  5]LogSysTrayUserPresentation: "
+        text += "FSysTrayUserPresentationImpl::AddSocialApplicationViewModel called for product with namespace poodle, apps 29\n"
+        if ready {
+            text += "[2026.09.03-20.25.04:465][212]LogSysTrayUserPresentation: "
+            text += "FSysTrayUserPresentationImpl::AddSocialApplicationViewModel called for product with namespace EpicGamesLauncher, apps 1\n"
+        }
+        return text
+    }
+
+    @Test func theMarkerMeansReady() {
+        #expect(EpicReadiness.verdict(logText: log(header: "Log file open, 09/03/26 16:24:53", ready: true),
+                                      previousHeader: "Log file open, 09/03/26 16:20:52") == .ready)
+    }
+
+    /// The other namespaces fire at 3.7s, a second before the failures. Matching
+    /// the bare call would deliver the install into exactly the window this
+    /// exists to avoid.
+    @Test func anotherNamespaceIsNotTheMarker() {
+        #expect(EpicReadiness.verdict(logText: log(header: "Log file open, 09/03/26 16:24:53", ready: false),
+                                      previousHeader: "Log file open, 09/03/26 16:20:52") == .notYet)
+    }
+
+    /// The one that would silently reintroduce the bug: the launcher has not
+    /// rotated its log yet, so what is on disk is the PREVIOUS session -- which
+    /// ended with the marker in it. Reading that as readiness would hand the
+    /// install to a launcher one second old.
+    @Test func thePreviousSessionsMarkerDoesNotCount() {
+        let header = "Log file open, 09/03/26 16:20:52"
+        #expect(EpicReadiness.verdict(logText: log(header: header, ready: true),
+                                      previousHeader: header) == .notYet)
+    }
+
+    /// No log at all, and a log with nothing in it: both are "not yet", never a
+    /// crash and never a green light.
+    @Test func nothingToReadIsNotReady() {
+        #expect(EpicReadiness.verdict(logText: nil, previousHeader: nil) == .notYet)
+        #expect(EpicReadiness.verdict(logText: "", previousHeader: nil) == .notYet)
+        #expect(EpicReadiness.verdict(logText: "\n\n", previousHeader: nil) == .notYet)
+    }
+
+    /// A first run, with no previous log to compare against, still needs the
+    /// marker before it says yes.
+    @Test func withNoPreviousLogTheMarkerStillDecides() {
+        #expect(EpicReadiness.verdict(logText: log(header: "Log file open, 09/03/26 16:24:53", ready: false),
+                                      previousHeader: nil) == .notYet)
+        #expect(EpicReadiness.verdict(logText: log(header: "Log file open, 09/03/26 16:24:53", ready: true),
+                                      previousHeader: nil) == .ready)
+    }
+
+    @Test func theHeaderIsTheFirstLineThatHasSomethingInIt() {
+        #expect(EpicReadiness.header(of: "\n\nLog file open, 09/03/26 16:24:53\nmore\n")
+                == "Log file open, 09/03/26 16:24:53")
+        #expect(EpicReadiness.header(of: "") == nil)
+    }
+
+    /// The wait ends rather than hanging when the launcher never says anything:
+    /// two sessions in eleven never emitted the marker, and a late install is
+    /// better than none.
+    @Test func theWaitGivesUpAndLetsTheCallerDeliver() async {
+        let missing = URL(fileURLWithPath: "/nonexistent/EpicGamesLauncher.log")
+        let answer = await EpicReadiness.waitUntilInstallable(log: missing, after: nil,
+                                                             deadline: 0.3, poll: 0.05)
+        #expect(answer == false)
+    }
+}

@@ -487,8 +487,39 @@ func installGame(id: String, cxAppPath: String?, selectedBottle: String?, SteamX
 ///
 /// One function for both lists: the not-installed tab and the mixed grid both
 /// offer Install, and each used to work it out for itself.
+/// Install through the Epic launcher, which will not take one on its own
+/// command line -- see `EpicReadiness`. Start it plain, wait for its own log to
+/// say it is up, then knock: delivering to a launcher already running is the
+/// only shape ever measured to reach the install dialog.
+///
+/// The wait is visible without any spinner of ours: the launcher window opens
+/// within a second or two, and the install dialog lands on top of it about ten
+/// seconds later.
+func openEpicForInstall(cxAppPath: String?, bottle: String, clientPath: String, uri: String) async {
+    guard let directory = BottleReference(bottle)?.directory else {
+        console.error("epic: cannot resolve the bottle directory for \(bottle)")
+        return
+    }
+    if EpicReadiness.isRunning(inBottleAt: directory) {
+        openEpic(cxAppPath: cxAppPath, bottle: bottle, clientPath: clientPath, uri: uri)
+        return
+    }
+    // Read the header BEFORE starting, or the log we later find is this same
+    // file and its old marker answers for the new session.
+    let log = EpicLauncherLogWatcher.logURL(inBottleAt: directory)
+    let previousHeader = (try? String(contentsOf: log, encoding: .utf8))
+        .flatMap(EpicReadiness.header(of:))
+    console.log("epic: launcher not running; starting it before the install")
+    openEpic(cxAppPath: cxAppPath, bottle: bottle, clientPath: clientPath)
+    let ready = await EpicReadiness.waitUntilInstallable(log: log, after: previousHeader)
+    if !ready {
+        console.error("epic: the launcher never said it was ready; sending the install anyway")
+    }
+    openEpic(cxAppPath: cxAppPath, bottle: bottle, clientPath: clientPath, uri: uri)
+}
+
 func runInstall(_ route: Install.Route, cxAppPath: String?, selectedBottle: String,
-                windowsSteamFolder: URL?) {
+                windowsSteamFolder: URL?) async {
     switch route {
     case .steamOnMac(let appID):
         guard let url = URL(string: "steam://install/\(appID)") else { return }
@@ -505,10 +536,13 @@ func runInstall(_ route: Install.Route, cxAppPath: String?, selectedBottle: Stri
             console.error("epic: no bottle configured for the launcher; nothing can install this")
             return
         }
-        if uri == nil {
+        guard let uri else {
             console.error("epic: the id is missing the namespace or the catalogue item, so there is no install URI; opening the launcher instead")
+            openEpic(cxAppPath: cxAppPath, bottle: epic.bottle, clientPath: epic.clientPath)
+            return
         }
-        openEpic(cxAppPath: cxAppPath, bottle: epic.bottle, clientPath: epic.clientPath, uri: uri)
+        await openEpicForInstall(cxAppPath: cxAppPath, bottle: epic.bottle,
+                                 clientPath: epic.clientPath, uri: uri)
     }
 }
 

@@ -335,10 +335,12 @@ struct GamesList: View {
 
     private func sendInstall(_ game: OwnedGame, toMac: Bool) {
         installChoice = nil
-        runInstall(Install.route(for: game, toMac: toMac),
-                   cxAppPath: appGlobals.cxAppPath,
-                   selectedBottle: appGlobals.selectedBottle,
-                   windowsSteamFolder: appGlobals.windowsSteamFolder)
+        Task {
+            await runInstall(Install.route(for: game, toMac: toMac),
+                             cxAppPath: appGlobals.cxAppPath,
+                             selectedBottle: appGlobals.selectedBottle,
+                             windowsSteamFolder: appGlobals.windowsSteamFolder)
+        }
     }
 
     /// Play from the list, through the same launcher the cards use -- fix

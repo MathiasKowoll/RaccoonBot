@@ -230,9 +230,13 @@ struct OwnedGamesGrid: View {
 
     private func send(_ game: OwnedGame, toMac: Bool) {
         asking = nil
-        runInstall(Install.route(for: game, toMac: toMac),
-                   cxAppPath: appGlobals.cxAppPath,
-                   selectedBottle: appGlobals.selectedBottle,
-                   windowsSteamFolder: appGlobals.windowsSteamFolder)
+        // Awaited rather than fired: an Epic install waits for the launcher to
+        // come up before it knocks.
+        Task {
+            await runInstall(Install.route(for: game, toMac: toMac),
+                             cxAppPath: appGlobals.cxAppPath,
+                             selectedBottle: appGlobals.selectedBottle,
+                             windowsSteamFolder: appGlobals.windowsSteamFolder)
+        }
     }
 }

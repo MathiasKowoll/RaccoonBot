@@ -137,3 +137,96 @@ struct LibraryFilterTests {
         }
     }
 }
+
+/// An installed title must never also read as owned-and-not-installed --
+/// not in the not-installed tab, and not folded into "All".
+@MainActor
+struct InstalledExcludesOwnedTests {
+
+    /// `steamAppID` is a `let` on `SteamGame`, so a title with a specific one
+    /// is built fresh rather than mutated from a template.
+    private func steamGame(_ appID: Int, name: String) -> Game {
+        let blank = SteamGame(type: "game", name: name, steamAppID: appID, requiredAge: "0",
+                              isFree: false, controllerSupport: nil, dlc: nil,
+                              detailedDescription: "", aboutTheGame: "", shortDescription: "",
+                              supportedLanguages: nil, headerImage: "", capsuleImage: "",
+                              capsuleImageV5: nil, website: nil, pcRequirements: nil,
+                              macRequirements: nil, linuxRequirements: nil, legalNotice: nil,
+                              developers: nil, publishers: nil, priceOverview: nil, packages: nil,
+                              packageGroups: nil, platforms: Platforms(windows: true, mac: false, linux: false),
+                              metacritic: nil, categories: nil, genres: nil, screenshots: nil,
+                              movies: nil, recommendations: nil, achievements: nil,
+                              releaseDate: ReleaseDate(comingSoon: false, date: ""), supportInfo: nil,
+                              background: nil, backgroundRaw: nil, contentDescriptors: nil, ratings: nil)
+        return Game(from: blank, id: "id-\(appID)", isNative: false,
+                   downloadProgress: 100, isInstalled: true, appNames: [])
+    }
+
+    private func steamMeta(_ appID: Int) -> GamesMeta {
+        GamesMeta(appid: String(appID), installdir: "dir\(appID)", bytesDownloaded: "0", BytesTodownload: "0")
+    }
+
+    private func epicGame(triple: String, name: String) -> Game {
+        var g = Game(from: Game.steamEmptyGame, id: triple, isNative: false,
+                     downloadProgress: 100, isInstalled: true, appNames: [])
+        g.name = name
+        g.store = .epic
+        g.platforms = Platforms(windows: true, mac: false, linux: false)
+        return g
+    }
+
+    /// Steam's own owned-not-installed list is computed once, behind a flag
+    /// nothing resets when a title gets installed afterwards (GamesList.swift,
+    /// `ownedLoaded`). Reproduced directly here, without waiting for that
+    /// timing: an OwnedGame is put in `ownedGames` for a title that is, at
+    /// the same time, in `gamesMeta` as installed -- exactly what a stale
+    /// scan leaves behind.
+    @Test func aSteamTitleInstalledAfterTheOwnedScanIsNotDuplicated() {
+        let g = LibraryPageGlobals()
+        g.games = [steamGame(1_000_000, name: "Newly Installed")]
+        g.gamesMeta = [steamMeta(1_000_000)]
+        g.ownedGames = [OwnedGame(appID: "1000000", name: "Newly Installed",
+                                  platforms: ["windows"], lastPlayed: nil,
+                                  playtimeMinutes: nil, coverURL: nil, store: .steam)]
+
+        #expect(g.allOwnedGames.isEmpty, "installed, so not owned-and-not-installed")
+
+        g.tab = .all
+        let matches = g.rows.filter { $0.name == "Newly Installed" }
+        #expect(matches.count == 1, "one row, not one per list")
+        #expect(matches.first?.isInstalled == true)
+
+        g.tab = .notInstalled
+        #expect(g.rows.isEmpty)
+        #expect(g.tabTotal == 0)
+    }
+
+    /// The same defect, on Epic's side, with the triple id rather than a
+    /// numeric appid -- the two owned lists are keyed differently and both
+    /// have to be covered.
+    @Test func anEpicTitleInstalledAfterTheOwnedScanIsNotDuplicated() {
+        let triple = "epic:ns:item:app1"
+        let g = LibraryPageGlobals()
+        g.epicGames = [epicGame(triple: triple, name: "Epic Newly Installed")]
+        g.gamesMeta = [GamesMeta(appid: triple, installdir: "EpicGame", bytesDownloaded: "0", BytesTodownload: "0")]
+        g.epicOwnedGames = [OwnedGame(appID: triple, name: "Epic Newly Installed",
+                                      platforms: ["windows"], lastPlayed: nil,
+                                      playtimeMinutes: nil, coverURL: nil, store: .epic)]
+
+        #expect(g.allOwnedGames.isEmpty)
+        g.tab = .all
+        #expect(g.rows.filter { $0.name == "Epic Newly Installed" }.count == 1)
+    }
+
+    /// The exclusion is by identity, not by wiping the list: a title that
+    /// really is not installed keeps showing.
+    @Test func aTitleThatIsNotInstalledIsUnaffected() {
+        let g = LibraryPageGlobals()
+        g.gamesMeta = [steamMeta(1_000_000)]
+        g.ownedGames = [
+            OwnedGame(appID: "1000000", name: "Installed", platforms: ["windows"], lastPlayed: nil, playtimeMinutes: nil, coverURL: nil, store: .steam),
+            OwnedGame(appID: "2000000", name: "Actually Owned", platforms: ["windows"], lastPlayed: nil, playtimeMinutes: nil, coverURL: nil, store: .steam),
+        ]
+        #expect(g.allOwnedGames.map(\.name) == ["Actually Owned"])
+    }
+}

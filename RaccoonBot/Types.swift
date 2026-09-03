@@ -963,7 +963,28 @@ class LibraryPageGlobals: ObservableObject {
     var epicLoadGeneration = 0
     /// What the "not installed" tab shows: Steam's owned titles and Epic's,
     /// each from its own source, drawn by one list.
-    var allOwnedGames: [OwnedGame] { ownedGames + epicOwnedGames }
+    /// The identifiers a scan found installed, in the same shape OwnedGame's
+    /// own id uses: a Steam appid, or an Epic triple. `gamesMeta` is where
+    /// both live, because it is the one list a fresh install reaches without
+    /// waiting on anything -- it is rebuilt on every load(), where the two
+    /// owned lists are not.
+    var installedIDs: Set<String> { Set(gamesMeta.map(\.appid)) }
+
+    /// Steam's owned list and Epic's, each read once and each capable of
+    /// going stale in its own way -- see `ownedGames`'s and `epicOwnedGames`'s
+    /// own comments -- with nothing that resets either the moment a title
+    /// gets installed. Filtered here, at the one place both are read
+    /// together, rather than trusted: an owned list that still names an
+    /// installed title is wrong regardless of why, and a game that is
+    /// installed must never also read as not installed, in the not-installed
+    /// tab or folded into "All". This is the fix for that, not a report of
+    /// how it happened -- the staleness itself is left as it is, because a
+    /// title excluded here is excluded correctly no matter when either list
+    /// was last read.
+    var allOwnedGames: [OwnedGame] {
+        let installed = installedIDs
+        return (ownedGames + epicOwnedGames).filter { !installed.contains($0.appID) }
+    }
 
     var allGamesCount: Int {
         return self.games.count + self.customAddedGames.count + self.epicGames.count

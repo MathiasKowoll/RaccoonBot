@@ -31,8 +31,12 @@
 	     before removing: gamepolicyd had logged nothing in 24 hours, which
 	     was taken to mean Game Mode was not engaging at all. A gain that
 	     size says either that silence was not evidence of inaction, or the
-	     gain belongs to the controller change. Separating them is one build
-	     each way, and nobody has spent a session on it. -->
+	     gain belongs to the controller change.
+
+	     Which of the two it was stays unseparated, on Mathias's decision of
+	     2026-09-03: telling them apart means turning this back on for a
+	     session, and turning it back on has no upside to buy that answer
+	     with. So the credit is not assigned, and this key does not move. -->
 	<key>LSSupportsGameMode</key>
 	<false/>
 </dict>

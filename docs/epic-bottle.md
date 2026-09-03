@@ -150,3 +150,38 @@ What the launcher writes when it syncs is not measured yet: no game had run
 through the launcher here when this was written. The first real session's
 lines are put in RaccoonBot's console (`epic launcher: ...`); once read, the
 phrase that ends the sync belongs in `EpicSettle.isTerminal`.
+
+
+## Where the launcher keeps "installed" (5.5 and later)
+
+Copying a game's `.item` manifest into `Data\Manifests` used to be enough
+for the launcher to list it as installed. It is not any more. The launcher
+that updated itself to 5.5.x on 2026-09-02 hands the installation list to
+the Epic Online Services helper (EOSH) and, at every start, reconciles the
+manifests against what the helper reports:
+
+    EOSH reconciliation: removing installation not reported by EOSH '...\<guid>.item'
+
+Every manifest the helper does not know is deleted. The helper's own record
+of installations is
+
+    C:\ProgramData\Epic\EpicOnlineServices\InstallHelper\InstalledItems\
+
+one `<InstallationGuid>.egi` per installation (JSON, `v4`), a
+`Revision.json` (`timestamp` in .NET ticks, `number`), and a `ManifestCache`
+of build manifests named by their SHA-1. A record's `revision` is the
+timestamp as 16 hex digits followed by the number as 16 hex digits. The
+helper enumerates the folder at every start, so records written while the
+bottle is down are read at the next boot. `state` for a finished install is
+`Installed`; the helper's own log line says as much.
+
+So, to bring an installed game into a bottle: its `.item` into `Manifests`,
+a matching `.egi` into `InstalledItems`, and `Revision.json` bumped. The
+`.egstore\<guid>.manifest` beside the game files must exist; the `.egi`
+points at it.
+
+A trap on the way: when the launcher itself is asked to install into an
+existing folder, choose the PARENT folder. The launcher appends the game's
+mandatory folder name, so pointing it at `...\AlanWake2` prepares
+`...\AlanWake2\AlanWake2`, registers an incomplete installation there, and
+the real one becomes a "stale duplicate" and is removed.

@@ -129,11 +129,6 @@ struct GameThumbnail: View {
                         Spacer()
                         
                         if(!isDownloading && item.isInstalled) {
-                            if item.isEpic {
-                                Text("Play from the Epic launcher")
-                                    .font(.footnote).foregroundStyle(.white.opacity(0.8))
-                                    .frame(height: 30)
-                            } else {
                             Button {
                                 if (isPlaying) {
                                     if(item.isNative) {
@@ -144,6 +139,13 @@ struct GameThumbnail: View {
                                             // itself: ask Steam to go, let it finish, then close this
                                             // bottle -- not every bottle on the machine.
                                             if let cx = appGlobals.cxAppPath {
+                                                if item.isEpic {
+                                                    // The game is asked to close; its tracker then
+                                                    // waits for the launcher's sync and closes the bottle.
+                                                    let epic = EpicLaunch.target(settings: StoreConfig.settings(for: .epic), selectedBottle: appGlobals.selectedBottle)
+                                                    try? await stopEpicGame(appNames: item.appNames, cxAppPath: cx, bottle: epic?.bottle ?? appGlobals.selectedBottle)
+                                                    return
+                                                }
                                                 try? await quitSteam(cxAppPath: cx, bottle: appGlobals.selectedBottle, isNative: false)
                                                 try? await closeBottle(cxAppPath: cx, bottle: appGlobals.selectedBottle)
                                             }
@@ -158,7 +160,6 @@ struct GameThumbnail: View {
                             }
                             .background(.procyonSecondary)
                             .cornerRadius(20)
-                            }
                         } else if(item.isInstalled) {
                             ProgressView(value: item.downloadProgress, total: 100,
                                          label: { Text("Downloading...").font(.footnote)

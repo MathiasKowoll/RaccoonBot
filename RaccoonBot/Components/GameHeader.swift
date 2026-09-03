@@ -46,6 +46,13 @@ struct GameHeader: View {
                                 // itself: ask Steam to go, let it finish, then close this
                                 // bottle -- not every bottle on the machine.
                                 if let cx = appGlobals.cxAppPath {
+                                    if game!.isEpic {
+                                        // The game is asked to close; its tracker then waits
+                                        // for the launcher's sync and closes the bottle.
+                                        let epic = EpicLaunch.target(settings: StoreConfig.settings(for: .epic), selectedBottle: appGlobals.selectedBottle)
+                                        try? await stopEpicGame(appNames: game!.appNames, cxAppPath: cx, bottle: epic?.bottle ?? appGlobals.selectedBottle)
+                                        return
+                                    }
                                     try? await quitSteam(cxAppPath: cx, bottle: appGlobals.selectedBottle, isNative: false)
                                     try? await closeBottle(cxAppPath: cx, bottle: appGlobals.selectedBottle)
                                 }
@@ -139,8 +146,9 @@ struct GameHeader: View {
                         tObserver = nil
                     },
                      isNative: game!.isNative,
-                     steamID: game!.isCustom == true ? nil : game!.steamAppID,
-                     steamPath: appGlobals.windowsSteamFolder?.path(percentEncoded: false) ?? "")
+                     steamID: (game!.isCustom == true || game!.isEpic) ? nil : game!.steamAppID,
+                     steamPath: appGlobals.windowsSteamFolder?.path(percentEncoded: false) ?? "",
+                     isEpic: game!.isEpic)
                 }
                 // The saved settings, read here rather than trusted from the
                 // environment.
@@ -175,7 +183,17 @@ struct GameHeader: View {
                         return
                     }
                     let steamExePath = appGlobals.windowsSteamFolder?.appendingPathComponent("Steam.exe").path(percentEncoded: false) ?? "C:\\Program Files (x86)\\Steam\\Steam.exe"
-                    try await launchWindowsGame(id: String(game!.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: launchOptions.useArmBottle ? appGlobals.selectedArmBottle : appGlobals.selectedBottle, steamExePath: steamExePath, options: launchOptions, appExeURL: game!.appExeURL)
+                    // The same route the grid takes for an Epic title: the
+                    // launcher is the executable, the URI names the game.
+                    let epicPlan = game!.isEpic
+                        ? EpicLaunch.plan(for: game!, settings: StoreConfig.settings(for: .epic), selectedBottle: appGlobals.selectedBottle)
+                        : nil
+                    if game!.isEpic && epicPlan == nil {
+                        console.error("epic: no Epic Games Launcher in the bottle to start \(game!.name); set one up from the Epic panel")
+                        libraryPageGlobals.setLoader(state: false)
+                        return
+                    }
+                    try await launchWindowsGame(id: String(game!.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: epicPlan?.bottle ?? (launchOptions.useArmBottle ? appGlobals.selectedArmBottle : appGlobals.selectedBottle), steamExePath: steamExePath, options: launchOptions, appExeURL: epicPlan?.launcher ?? game!.appExeURL, launcherURI: epicPlan?.uri)
                 }
             } catch {
                 libraryPageGlobals.setLoader(state: false)

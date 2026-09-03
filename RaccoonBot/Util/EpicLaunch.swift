@@ -91,4 +91,46 @@ nonisolated enum EpicLaunch {
         guard let path = unixPath(of: target.clientPath, inBottle: target.bottle) else { return false }
         return fileManager.fileExists(atPath: path)
     }
+
+    /// What a Play on an Epic title runs: the launcher in its bottle, given
+    /// the URI that names the title.
+    struct Plan: Equatable {
+        let bottle: String
+        let launcher: URL
+        let uri: String
+    }
+
+    /// The launcher's own way of being asked to start a title, the one its
+    /// desktop shortcuts use. Measured in the 5.5.4 binary (2026-09-02): it
+    /// carries "com.epicgames.launcher://apps/" and "?action=launch&silent=true"
+    /// as literals, and the bottle's registry has it as the handler for the
+    /// scheme. `silent=true` keeps the launcher's window out of the way; it
+    /// is the launcher, signed in, that runs the game, so the game gets its
+    /// account, its overlay and its cloud saves, none of which running the
+    /// .exe directly would give it.
+    ///
+    /// The ids are the three from the manifest -- namespace, catalogue item,
+    /// AppName -- joined by an encoded colon; with only the AppName known the
+    /// short form still resolves.
+    static func launchURI(forID id: String) -> String? {
+        let parts = id.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
+        guard parts.count == 4, parts[0] == "epic", !parts[3].isEmpty else { return nil }
+        let ns = parts[1], item = parts[2], app = parts[3]
+        let path = (ns.isEmpty || item.isEmpty) ? app : "\(ns)%3A\(item)%3A\(app)"
+        return "com.epicgames.launcher://apps/\(path)?action=launch&silent=true"
+    }
+
+    /// Nil when the launcher is not in the bottle: then there is nothing that
+    /// can start the title, and Play says so instead of starting nothing.
+    static func plan(for game: Game, settings: StoreSettings, selectedBottle: String,
+                     fileManager: FileManager = .default) -> Plan? {
+        // `target` chooses a path; it does not say the launcher is there.
+        // Without this check a bottle with no launcher got a plan, and Play
+        // ran an executable that did not exist.
+        guard game.isEpic, let uri = launchURI(forID: game.id),
+              let target = target(settings: settings, selectedBottle: selectedBottle, fileManager: fileManager),
+              isInstalled(target, fileManager: fileManager),
+              let unix = unixPath(of: target.clientPath, inBottle: target.bottle) else { return nil }
+        return Plan(bottle: target.bottle, launcher: URL(fileURLWithPath: unix), uri: uri)
+    }
 }

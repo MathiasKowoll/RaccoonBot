@@ -22,8 +22,12 @@ import AppKit
 ///
 /// Save data is already safe by the time this runs: the caller waits for
 /// Steam's exit sync to finish before asking Steam to quit at all.
+/// `client` is the name prefix of the store client waited for: "steam" for
+/// Steam, "epic" for the Epic launcher, whose processes are EpicGamesLauncher,
+/// EpicWebHelper and EpicOnlineServices.
 func closeBottle(cxAppPath: String, bottle: String,
                  waitingUpTo settleTimeout: TimeInterval = 30,
+                 client: String = "steam",
                  decidedAt generation: Int = LaunchGeneration.shared.current) async throws {
     // Asked before every destructive step, not once at the top. The waits below
     // run for half a minute, and a launch inside that window was destroyed by a
@@ -57,16 +61,16 @@ func closeBottle(cxAppPath: String, bottle: String,
             console.log("the bottle closed on its own")
             return
         }
-        if !here.contains(where: { $0.name.lowercased().hasPrefix("steam") }) {
-            console.log("steam has gone; ending what wine keeps running")
+        if !here.contains(where: { $0.name.lowercased().hasPrefix(client) }) {
+            console.log("\(client) has gone; ending what wine keeps running")
             break
         }
         try await Task.sleep(nanoseconds: 500_000_000)
     }
 
     let left = BottleProcesses.running(inBottleAt: directory)
-    if left.contains(where: { $0.name.lowercased().hasPrefix("steam") }) {
-        console.warn("steam did not go in \(Int(settleTimeout))s: "
+    if left.contains(where: { $0.name.lowercased().hasPrefix(client) }) {
+        console.warn("\(client) did not go in \(Int(settleTimeout))s: "
                      + left.map(\.name).sorted().joined(separator: ", "))
     }
 
@@ -105,6 +109,38 @@ func quitSteam(cxAppPath: String, bottle: String, isNative: Bool) async throws -
             return
         }
         try safeShell("\(ref.environmentPrefix)\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \"\(ref.name)\" \"C:\\Program Files (x86)\\Steam\\Steam.exe\" -shutdown")
+    }
+}
+
+/// Ask the Epic launcher to leave. `taskkill` without /F sends WM_CLOSE, the
+/// same request the launcher's own close button makes; /F would be the kill
+/// that this whole path exists to avoid. The launcher has no `-shutdown` of
+/// Steam's kind (read from the 5.5.4 binary: it has -silent, -noselfupdate,
+/// -nullrhi, nothing to end it). If it stays in the tray anyway, closeBottle
+/// waits for it as it waits for Steam and then ends the prefix; by then the
+/// launcher has been given its time.
+func quitEpic(cxAppPath: String, bottle: String) async throws {
+    console.log("asking the epic launcher to leave...")
+    guard let ref = BottleReference(bottle) else {
+        console.error("cannot quit the epic launcher: \(bottle) does not name a bottle")
+        return
+    }
+    try safeShell("\(ref.environmentPrefix)\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \"\(ref.name)\" taskkill /IM EpicGamesLauncher.exe")
+}
+
+/// Stop an Epic title by hand: the GAME is asked to close, not the launcher.
+///
+/// Stopping a Steam title asks Steam to shut down, which takes the game with
+/// it and syncs on the way. The Epic launcher has no such request, and ending
+/// the bottle under a running game is a save lost. So the game itself gets
+/// WM_CLOSE -- most titles quit and save on it -- and the session's tracker
+/// then does what it does when a game exits on its own: waits for the
+/// launcher to finish syncing, asks it to leave, closes the bottle.
+func stopEpicGame(appNames: [String], cxAppPath: String, bottle: String) async throws {
+    guard let ref = BottleReference(bottle) else { return }
+    for name in appNames where name.lowercased().hasSuffix(".exe") {
+        console.log("asking \(name) to close...")
+        try safeShell("\(ref.environmentPrefix)\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \"\(ref.name)\" taskkill /IM \"\(name)\"")
     }
 }
 
@@ -244,7 +280,17 @@ func copyMoltenVK(cxAppPath: String, vulkanLibID: String) throws -> Void {
     }
 }
 
-func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, steamExePath: String, options: GameOptions? = nil, appExeURL: URL? = nil) async throws -> Void {
+/// `launcherURI`, when given, is handed to `appExeURL` as its one argument:
+/// that is how an Epic title starts -- the Epic launcher is the executable and
+/// the com.epicgames.launcher:// URI names the game -- so everything this
+/// function sets up for a Steam or a custom title (the winebus keys, the
+/// D3DMetal generation, the environment from the game's options, msync) is set
+/// up for the launcher, and the game inherits it from there. If a launcher is
+/// ALREADY running in the bottle, the new one hands the URI over and exits,
+/// and the game inherits the running launcher's environment instead: opened
+/// from the Epic panel, say, without any of this. That is the one case in
+/// which the game's options do not reach it.
+func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, steamExePath: String, options: GameOptions? = nil, appExeURL: URL? = nil, launcherURI: String? = nil) async throws -> Void {
     console.log("options: \(options.debugDescription)")
     if let vulkanLibID = options?.vulkanLib {
         try copyMoltenVK(cxAppPath: cxAppPath, vulkanLibID: vulkanLibID)
@@ -330,7 +376,14 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
     
 //    try cpyd8d9DLLs(to: bottleURL, enable: options!.dx9PatchEnabled)
     
-    let gameLaunchCommand = appExeURL != nil ? "\"\(appExeURL!.path(percentEncoded: false))\"" : "\"\(steamExePath)\" \(steamBootOptions) -applaunch \(String(id))"
+    let gameLaunchCommand: String
+    if let appExeURL, let launcherURI {
+        gameLaunchCommand = "\"\(appExeURL.path(percentEncoded: false))\" \"\(launcherURI)\""
+    } else if let appExeURL {
+        gameLaunchCommand = "\"\(appExeURL.path(percentEncoded: false))\""
+    } else {
+        gameLaunchCommand = "\"\(steamExePath)\" \(steamBootOptions) -applaunch \(String(id))"
+    }
     let cxAppURL = URL(fileURLWithPath: cxAppPath)
     // D3DMetal is x86 and an ARM bottle never loads it: there Direct3D goes
     // through DXMT. Copying ~60 MB of toolkit into the engine on every launch

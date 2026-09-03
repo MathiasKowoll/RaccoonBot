@@ -123,7 +123,35 @@ enum BottleProcesses {
         return names
     }
 
-    /// Anything running in this bottle that belongs to neither wine nor Steam.
+    /// The Epic launcher's own executables, by the same reasoning as Steam's:
+    /// the launcher, its web helper, the overlay and the EOS service all run
+    /// while a game does and after it, and none of them is the game. Left in
+    /// the count, the teardown after an Epic title would have refused forever
+    /// -- "EpicGamesLauncher.exe is running in this bottle" -- and the window
+    /// would never have been released.
+    static func launchersOwnExecutables(inBottleAt bottle: URL) -> Set<String> {
+        let key = "epic:" + bottle.path(percentEncoded: false)
+        steamCacheLock.lock()
+        if let known = steamCache[key] { steamCacheLock.unlock(); return known }
+        steamCacheLock.unlock()
+
+        let launcher = bottle.appendingPathComponent("drive_c/Program Files (x86)/Epic Games/Launcher")
+        var names: Set<String> = []
+        if let walker = FileManager.default.enumerator(
+            at: launcher, includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]) {
+            for case let file as URL in walker where file.pathExtension.lowercased() == "exe" {
+                names.insert(file.lastPathComponent.lowercased())
+            }
+        }
+        steamCacheLock.lock()
+        steamCache[key] = names
+        steamCacheLock.unlock()
+        return names
+    }
+
+    /// Anything running in this bottle that belongs to neither wine, nor
+    /// Steam, nor the Epic launcher.
     ///
     /// The last word before a teardown. Every judgement above this one is made
     /// from a log, and a log can be misread or be a minute out of date -- which
@@ -131,11 +159,12 @@ enum BottleProcesses {
     /// before it. This asks the machine instead of the record.
     static func gamesRunning(inBottleAt bottle: URL) -> [String] {
         let steams = steamsOwnExecutables(inBottleAt: bottle)
+        let launchers = launchersOwnExecutables(inBottleAt: bottle)
         return running(inBottleAt: bottle)
             .map(\.name)
             .filter { name in
                 let lower = name.lowercased()
-                return !wineFurniture.contains(lower) && !steams.contains(lower)
+                return !wineFurniture.contains(lower) && !steams.contains(lower) && !launchers.contains(lower)
             }
     }
 

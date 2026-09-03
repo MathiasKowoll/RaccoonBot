@@ -100,3 +100,53 @@ RaccoonBot does for you.
 - [Epic Games Store in RaccoonBot — Design Note](epic-design.md), for how
   Epic fits the library model and what was decided about saves, launch URLs
   and bottles.
+
+
+## Play, and the launcher's quiet start
+
+Play on an Epic title does not run the game's `.exe`. It runs the Epic
+launcher in its bottle with the launcher's own URI for the title:
+
+    com.epicgames.launcher://apps/<namespace>%3A<catalogItemId>%3A<AppName>?action=launch&silent=true
+
+That is the form the launcher's desktop shortcuts use, and the launcher is
+registered in the bottle as the handler for the scheme. `silent=true` keeps
+the launcher's window out of the way; the launcher, signed in, starts the
+game, so the game gets its account, the overlay and cloud saves. The three
+ids come from the title's `.item` manifest.
+
+Because RaccoonBot starts the launcher itself, the per-game options --
+graphics backend, D3DMetal generation, environment variables, msync -- are
+set on the launcher and inherited by the game. If a launcher is **already
+running** in the bottle (opened from the Epic panel, say), the new one hands
+the URI over and exits, and the game inherits the running launcher's
+environment instead. For the options to apply, let Play start the launcher.
+
+What the 5.5.4 launcher accepts on its command line, read from the binary
+(2026-09-02): `-silent` (start in the tray, no window; it registers itself
+at Windows start-up as `-silent -launchcontext=boot`), `-noselfupdate`,
+`-nullrhi` (no rendering at all -- the launcher then cannot show anything,
+which is not what a Play needs), `-forwarduri` and `-newinstancecommand`
+(how a second launcher hands a URI to the first). There is no fully headless
+mode that launches games without the launcher's session.
+
+
+## When the game ends
+
+The launcher uploads cloud saves after a game exits, as Steam does, and is
+just as easily killed in the middle of it. So after an Epic title exits
+RaccoonBot does, in this order: follow the launcher's own log
+(`AppData\Local\EpicGamesLauncher\Saved\Logs\EpicGamesLauncher.log`)
+until it has been quiet for a few seconds, bounded by a minute; ask the
+launcher to leave with `taskkill /IM EpicGamesLauncher.exe` (no `/F`: that is
+the close-button request, not a kill); wait for its processes to go as it
+waits for Steam's; and only then end the prefix. Steam's own shutdown is not
+sent: with no Steam running, `Steam.exe -shutdown` would start one.
+
+Stop on a running Epic title asks the **game** to close, not the launcher --
+most games save and quit on that request -- and the sequence above follows.
+
+What the launcher writes when it syncs is not measured yet: no game had run
+through the launcher here when this was written. The first real session's
+lines are put in RaccoonBot's console (`epic launcher: ...`); once read, the
+phrase that ends the sync belongs in `EpicSettle.isTerminal`.

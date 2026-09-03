@@ -739,7 +739,7 @@ func watchSteamSession(_ state: SteamAppState,
     }
 }
 
-func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoad: @escaping (_ appName: String) -> Void, onTerminate: @escaping () -> Void, isNative: Bool, steamID: Int?, steamPath: String) async throws -> TerminationObserver {
+func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoad: @escaping (_ appName: String) -> Void, onTerminate: @escaping () -> Void, isNative: Bool, steamID: Int?, steamPath: String, isEpic: Bool = false) async throws -> TerminationObserver {
     // `appNames` lists every executable a game is known by, and for a game with
     // a launcher that is two: the launcher, and the game the launcher starts.
     // The launcher exits as soon as it has handed off -- that is its whole job.
@@ -777,6 +777,12 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
         cloudSync = SteamCloudSyncWatcher(steamID: String(steamID), steamPath: steamPath)
         processLog = SteamGameProcessLog(steamPath: steamPath, steamID: String(steamID))
     }
+    // An Epic title has no Steam to ask; its launcher's log is followed
+    // instead, from now, for the same reason the Steam watcher is built now.
+    var epicLog: EpicLauncherLogWatcher? = nil
+    if isEpic, let dir = BottleReference(bottle)?.directory {
+        epicLog = EpicLauncherLogWatcher(bottle: dir)
+    }
 
     // The generation this tracker belongs to. A teardown decided here must not
     // arrive in the middle of a session started afterwards.
@@ -809,17 +815,29 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
         guard loaded.claimShutdown() else { return }
         console.log(reason)
         do {
-            // Steam uploads save data when a game exits. Killing it mid-upload
-            // leaves the cloud copy behind whatever was actually played, and it
-            // has already happened here.
-            if let cloudSync { // not for native steam games
-                try await cloudSync.waitForSteamCloudSync()
+            if isEpic {
+                // The Epic launcher uploads save data when a game exits, as
+                // Steam does, and is killed mid-upload just as easily. It is
+                // given its time, asked to leave, and only then is the
+                // prefix ended. Steam's own shutdown is NOT sent here: with
+                // no Steam running, "Steam.exe -shutdown" would start one.
+                try await epicLog?.waitForLauncherToSettle()
+                try await quitEpic(cxAppPath: cxAppPath, bottle: bottle)
+                try await closeBottle(cxAppPath: cxAppPath, bottle: bottle,
+                                      client: "epic", decidedAt: generation)
+            } else {
+                // Steam uploads save data when a game exits. Killing it mid-upload
+                // leaves the cloud copy behind whatever was actually played, and it
+                // has already happened here.
+                if let cloudSync { // not for native steam games
+                    try await cloudSync.waitForSteamCloudSync()
+                }
+                try await quitSteam(cxAppPath: cxAppPath, bottle: bottle, isNative: isNative)
+                // Steam has been asked, not told. Give it time to finish writing
+                // its own state before ending anything.
+                try await closeBottle(cxAppPath: cxAppPath, bottle: bottle,
+                                      decidedAt: generation)
             }
-            try await quitSteam(cxAppPath: cxAppPath, bottle: bottle, isNative: isNative)
-            // Steam has been asked, not told. Give it time to finish writing
-            // its own state before ending anything.
-            try await closeBottle(cxAppPath: cxAppPath, bottle: bottle,
-                                  decidedAt: generation)
         } catch {
             // Whatever failed on the way out, the game is over as far as the
             // window is concerned. Leaving the loader spinning helps nobody.

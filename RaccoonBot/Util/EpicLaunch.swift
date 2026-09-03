@@ -108,16 +108,39 @@ nonisolated enum EpicLaunch {
     /// is the launcher, signed in, that runs the game, so the game gets its
     /// account, its overlay and its cloud saves, none of which running the
     /// .exe directly would give it.
-    ///
-    /// The ids are the three from the manifest -- namespace, catalogue item,
-    /// AppName -- joined by an encoded colon; with only the AppName known the
-    /// short form still resolves.
     static func launchURI(forID id: String) -> String? {
+        uri(forID: id, query: "action=launch&silent=true")
+    }
+
+    /// The same door, asked to install rather than to start.
+    ///
+    /// Measured on 2026-09-03 against launcher 5.5.4, by firing each candidate
+    /// action at it and reading its own LogUriHandler: `install` is served
+    /// ("AppInstallUriHandler: Catalog item resolved ... Dispatching install
+    /// ...; will navigate to Library"), while `download`, `updatecheck` and
+    /// `uninstall` are all answered with "Was unable to find URI Handler".
+    /// That is why opening the launcher with no action at all -- what this
+    /// used to do -- opened Epic and then did nothing.
+    ///
+    /// Only the full triple was measured, so only the full triple is sent: a
+    /// launch resolves from the AppName alone, but an install has to find the
+    /// catalogue item and nothing here says the short form reaches it. No
+    /// `silent`: the install is the launcher's own dialog, and the user picks
+    /// the folder in it.
+    static func installURI(forID id: String) -> String? {
+        let parts = id.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
+        guard parts.count == 4, !parts[1].isEmpty, !parts[2].isEmpty else { return nil }
+        return uri(forID: id, query: "action=install")
+    }
+
+    /// The ids are the three from the manifest joined by an encoded colon;
+    /// with only the AppName known the short form still resolves for a launch.
+    private static func uri(forID id: String, query: String) -> String? {
         let parts = id.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
         guard parts.count == 4, parts[0] == "epic", !parts[3].isEmpty else { return nil }
         let ns = parts[1], item = parts[2], app = parts[3]
         let path = (ns.isEmpty || item.isEmpty) ? app : "\(ns)%3A\(item)%3A\(app)"
-        return "com.epicgames.launcher://apps/\(path)?action=launch&silent=true"
+        return "com.epicgames.launcher://apps/\(path)?\(query)"
     }
 
     /// Nil when the launcher is not in the bottle: then there is nothing that

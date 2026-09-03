@@ -17,6 +17,7 @@ struct GameOptionsView: View {
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
     @StateObject private var fix = MGVFCoordinator()
     @State private var confirmingInstall = false
+    @State private var confirmingUninstall = false
     @State private var autoconfigError: String?
 
     /// The controller, shared with the grid underneath and taken over while
@@ -331,6 +332,11 @@ struct GameOptionsView: View {
                             }
                         }.padding(.top, 4)
                     }
+
+                    if let route = Uninstall.route(for: current) {
+                        Divider()
+                        uninstallRow(route, game: current)
+                    }
                 }
                 
             }
@@ -355,6 +361,14 @@ struct GameOptionsView: View {
                 Verifying the game's files in Steam undoes this. It can be put back from here.
                 """)
             }
+        }
+        .confirmationDialog("Uninstall \(current.name)?",
+                            isPresented: $confirmingUninstall,
+                            titleVisibility: .visible) {
+            Button("Uninstall", role: .destructive) { runUninstall(for: current) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(Uninstall.warning(for: current))
         }
         .task(id: gameFolder) {
                     await fix.load(folder: gameFolder,
@@ -578,6 +592,55 @@ struct GameOptionsView: View {
     /// One place, for the button and for the pad. It configures, and if the
     /// title still needs its fix it asks to put it on -- the asking is not
     /// ceremony: that step renames a file in the user's game folder.
+    /// Removing a game belongs to the store that installed it -- see
+    /// `Uninstall` for why. This only knocks: the client asks for
+    /// confirmation in its own window and does the removal itself.
+    ///
+    /// Deliberately outside the pad's focus ring. While this panel is up the
+    /// controller belongs to it, and the confirmation this opens is a dialog
+    /// the pad cannot answer: a control reachable with the stick that leads
+    /// somewhere the stick cannot leave. It is a rare, destructive step, and
+    /// the pointer is the way into it.
+    private func uninstallRow(_ route: Uninstall.Route, game: Game) -> some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Uninstall").font(.callout)
+                Text(Uninstall.explanation(route)).font(.footnote).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button(Uninstall.buttonTitle(route), role: .destructive) {
+                if Uninstall.needsConfirmation(route) {
+                    confirmingUninstall = true
+                } else {
+                    runUninstall(for: game)
+                }
+            }
+        }.padding(.top, 4)
+    }
+
+    private func runUninstall(for game: Game) {
+        guard let route = Uninstall.route(for: game) else { return }
+        switch route {
+        case .steam(let appID):
+            let steamX86AppPath = appGlobals.windowsSteamFolder?
+                .appendingPathComponent("Steam.exe").path(percentEncoded: false)
+                ?? "C:\\Program Files (x86)\\Steam\\Steam.exe"
+            console.log("uninstall: asking Steam for \(game.name) (\(appID))")
+            uninstallSteamGame(id: appID, cxAppPath: appGlobals.cxAppPath,
+                               selectedBottle: appGlobals.selectedBottle,
+                               SteamX86AppPath: steamX86AppPath)
+        case .epic(let uri):
+            guard let epic = EpicLaunch.target(settings: StoreConfig.settings(for: .epic),
+                                               selectedBottle: appGlobals.selectedBottle) else {
+                console.error("uninstall: no bottle configured for the Epic launcher")
+                return
+            }
+            console.log("uninstall: opening the Epic library for \(game.name)")
+            openEpic(cxAppPath: appGlobals.cxAppPath, bottle: epic.bottle,
+                     clientPath: epic.clientPath, uri: uri)
+        }
+    }
+
     private func runAutoconfigure() async {
         isLoading = true
         do {

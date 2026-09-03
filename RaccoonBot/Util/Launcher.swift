@@ -196,7 +196,10 @@ func openSteam(cxAppPath: String?, selectedBottle: String?, SteamX86AppPath: Str
 /// with a different engine, and with an older engine that is a downgrade of
 /// the bottle's system files -- the one way to take a working Epic bottle and
 /// leave it like ours.
-func openEpic(cxAppPath: String?, bottle: String, clientPath: String) {
+/// `uri`, when given, is handed to the launcher as its one argument, the way
+/// its own shortcuts do it: that is how the client is asked to install a
+/// title. With no argument the launcher just opens.
+func openEpic(cxAppPath: String?, bottle: String, clientPath: String, uri: String? = nil) {
     guard let cxAppPath, !cxAppPath.isEmpty, let bottleURL = URL(string: bottle) else { return }
     if let made = EpicLaunch.bottleVersion(of: bottle),
        let engine = (NSDictionary(contentsOfFile: cxAppPath + "/Contents/Info.plist")?["CFBundleVersion"] as? String),
@@ -209,6 +212,7 @@ func openEpic(cxAppPath: String?, bottle: String, clientPath: String) {
     let command = "CX_BOTTLE_PATH=\"\(bottleRoot)\" MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=0 "
         + "CX_GRAPHICS_BACKEND=\"d3dmetal\" "
         + "\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \"\(clientPath)\""
+        + (uri.map { " \"\($0)\"" } ?? "")
     do {
         try safeShell(command)
         console.log(command)
@@ -230,12 +234,21 @@ enum SteamAction {
     /// Verifies the files and repairs what is wrong, which is also how a title
     /// that failed to update gets fixed.
     case validate(String)
+    /// Steam's own way out, not ours: for every installed title Steam writes
+    /// `UninstallString = "steam.exe" steam://uninstall/<appid>` under
+    /// Uninstall in the bottle's registry, so this is the exact command
+    /// Windows would run from Add/Remove Programs. The client asks for
+    /// confirmation itself and removes the files, the manifest and the
+    /// shortcut together -- which is what deleting the folder by hand does
+    /// not do.
+    case uninstall(String)
 
     var url: String {
         switch self {
-        case .install(let id):  return "steam://install/\(id)"
-        case .run(let id):      return "steam://run/\(id)"
-        case .validate(let id): return "steam://validate/\(id)"
+        case .install(let id):   return "steam://install/\(id)"
+        case .run(let id):       return "steam://run/\(id)"
+        case .validate(let id):  return "steam://validate/\(id)"
+        case .uninstall(let id): return "steam://uninstall/\(id)"
         }
     }
 }
@@ -467,5 +480,41 @@ func launchNativeGame(id: String, cxAppPath: String, selectedBottle: String, opt
 /// wants nothing, and Steam asks the user itself.
 func installGame(id: String, cxAppPath: String?, selectedBottle: String?, SteamX86AppPath: String) {
     runSteamAction(.install(id), cxAppPath: cxAppPath,
+                   selectedBottle: selectedBottle, SteamX86AppPath: SteamX86AppPath)
+}
+
+/// Carry out an install, whichever client it belongs to.
+///
+/// One function for both lists: the not-installed tab and the mixed grid both
+/// offer Install, and each used to work it out for itself.
+func runInstall(_ route: Install.Route, cxAppPath: String?, selectedBottle: String,
+                windowsSteamFolder: URL?) {
+    switch route {
+    case .steamOnMac(let appID):
+        guard let url = URL(string: "steam://install/\(appID)") else { return }
+        NSWorkspace.shared.open(url)
+    case .steamInBottle(let appID):
+        let steamX86AppPath = windowsSteamFolder?
+            .appendingPathComponent("Steam.exe").path(percentEncoded: false)
+            ?? "C:\\Program Files (x86)\\Steam\\Steam.exe"
+        installGame(id: appID, cxAppPath: cxAppPath, selectedBottle: selectedBottle,
+                    SteamX86AppPath: steamX86AppPath)
+    case .epicInBottle(let uri):
+        guard let epic = EpicLaunch.target(settings: StoreConfig.settings(for: .epic),
+                                           selectedBottle: selectedBottle) else {
+            console.error("epic: no bottle configured for the launcher; nothing can install this")
+            return
+        }
+        if uri == nil {
+            console.error("epic: the id is missing the namespace or the catalogue item, so there is no install URI; opening the launcher instead")
+        }
+        openEpic(cxAppPath: cxAppPath, bottle: epic.bottle, clientPath: epic.clientPath, uri: uri)
+    }
+}
+
+/// Asks Steam to uninstall the title. The removal, and the confirmation in
+/// front of it, are the client's: this only knocks on the door.
+func uninstallSteamGame(id: String, cxAppPath: String?, selectedBottle: String?, SteamX86AppPath: String) {
+    runSteamAction(.uninstall(id), cxAppPath: cxAppPath,
                    selectedBottle: selectedBottle, SteamX86AppPath: SteamX86AppPath)
 }

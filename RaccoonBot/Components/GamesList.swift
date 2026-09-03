@@ -335,18 +335,10 @@ struct GamesList: View {
 
     private func sendInstall(_ game: OwnedGame, toMac: Bool) {
         installChoice = nil
-        if toMac {
-            if let url = URL(string: "steam://install/\(game.appID)") {
-                NSWorkspace.shared.open(url)
-            }
-            return
-        }
-        let steamX86AppPath = appGlobals.windowsSteamFolder?
-            .appendingPathComponent("Steam.exe").path(percentEncoded: false)
-            ?? "C:\\Program Files (x86)\\Steam\\Steam.exe"
-        installGame(id: game.appID, cxAppPath: appGlobals.cxAppPath,
-                    selectedBottle: appGlobals.selectedBottle,
-                    SteamX86AppPath: steamX86AppPath)
+        runInstall(Install.route(for: game, toMac: toMac),
+                   cxAppPath: appGlobals.cxAppPath,
+                   selectedBottle: appGlobals.selectedBottle,
+                   windowsSteamFolder: appGlobals.windowsSteamFolder)
     }
 
     /// Play from the list, through the same launcher the cards use -- fix

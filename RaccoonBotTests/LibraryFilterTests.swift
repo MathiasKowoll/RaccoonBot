@@ -229,4 +229,70 @@ struct InstalledExcludesOwnedTests {
         ]
         #expect(g.allOwnedGames.map(\.name) == ["Actually Owned"])
     }
+
+}
+
+/// "All" used to draw two blocks -- every installed card, then every owned
+/// card, each in its own visual style and its own sort order -- which is what
+/// two lists glued together looks like, because that is what it was. It is
+/// one sorted, interleaved list now, and this is that merge, exercised
+/// directly rather than through the view it feeds.
+@MainActor
+struct MixedGridCardTests {
+
+    private func game(_ name: String) -> Game {
+        var g = Game(from: Game.steamEmptyGame, id: "g-\(name)", isNative: false,
+                     downloadProgress: 100, isInstalled: true, appNames: [])
+        g.name = name
+        return g
+    }
+
+    private func owned(_ name: String) -> OwnedGame {
+        OwnedGame(appID: "o-\(name)", name: name, platforms: ["windows"], lastPlayed: nil,
+                  playtimeMinutes: nil, coverURL: nil, store: .steam)
+    }
+
+    /// The point of the change: installed and owned titles take turns by
+    /// name, rather than every installed title first and every owned title
+    /// after it.
+    @Test func installedAndOwnedInterleaveByName() {
+        let cards = GamesList.GridCard.merged(
+            installed: [game("Charlie"), game("Alpha")],
+            owned: [owned("Bravo"), owned("Delta")])
+        #expect(cards.map(\.sortName) == ["Alpha", "Bravo", "Charlie", "Delta"],
+                "not [Alpha, Charlie, Bravo, Delta] -- the two lists concatenated and each sorted on its own")
+    }
+
+    @Test func eachCardKeepsWhatKindItIs() {
+        let cards = GamesList.GridCard.merged(installed: [game("Only Installed")], owned: [owned("Only Owned")])
+        guard case .installed(let g) = cards.first(where: { $0.sortName == "Only Installed" })! else {
+            Issue.record("installed title lost its kind"); return
+        }
+        #expect(g.name == "Only Installed")
+        guard case .owned(let o) = cards.first(where: { $0.sortName == "Only Owned" })! else {
+            Issue.record("owned title lost its kind"); return
+        }
+        #expect(o.name == "Only Owned")
+    }
+
+    @Test func idsAreUniqueAcrossBothKinds() {
+        let cards = GamesList.GridCard.merged(
+            installed: [game("A"), game("B")],
+            owned: [owned("C"), owned("D")])
+        #expect(Set(cards.map(\.id)).count == cards.count)
+    }
+
+    @Test func emptyEitherSideStillMerges() {
+        #expect(GamesList.GridCard.merged(installed: [], owned: [owned("Solo")]).map(\.sortName) == ["Solo"])
+        #expect(GamesList.GridCard.merged(installed: [game("Solo")], owned: []).map(\.sortName) == ["Solo"])
+        #expect(GamesList.GridCard.merged(installed: [], owned: []).isEmpty)
+    }
+
+    /// Case sensitivity must not scatter a shelf that would otherwise read
+    /// as alphabetical: an all-caps owned title should not jump ahead of
+    /// every lowercase-starting installed one.
+    @Test func sortIsCaseInsensitive() {
+        let cards = GamesList.GridCard.merged(installed: [game("banana")], owned: [owned("Apple")])
+        #expect(cards.map(\.sortName) == ["Apple", "banana"])
+    }
 }

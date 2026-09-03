@@ -156,8 +156,14 @@ struct OwnedGameCard: View {
     }
 }
 
-/// Just the cards, with their actions. Used on its own by the All tab, which
-/// shows them under the installed ones, and by OwnedGamesList in grid mode.
+/// Just the cards, with their actions. Used by OwnedGamesList in grid mode --
+/// the "Not installed" tab's whole screen.
+///
+/// The "All" tab no longer renders this as a block: since 2026-09-03 it
+/// builds the same OwnedGameCard one at a time, interleaved with installed
+/// cards in one sorted grid (GamesList.mixedGrid), rather than showing this
+/// component's whole grid glued beneath the installed one -- which is what
+/// made "All" look like two lists pasted together, because it was.
 ///
 /// It carries install and open rather than taking them as closures: a first
 /// version passed `install: {}` and `open: {}` here, which is a card whose

@@ -45,3 +45,21 @@ extension View {
         modifier(OptionFocusRing(control: control, current: current, shown: shown))
     }
 }
+
+/// The same selection ring GameThumbnail draws on itself, offered to a card
+/// that has no ring of its own -- so a pad selection looks identical whether
+/// it lands on an installed card or an owned one in the same mixed grid.
+extension View {
+    func gridSelectionRing(_ isSelected: Bool) -> some View {
+        self
+            .overlay(
+                RoundedRectangle(cornerRadius: 30)
+                    .strokeBorder(.white, lineWidth: 3)
+                    .opacity(isSelected ? 1 : 0)
+            )
+            .scaleEffect(isSelected ? 1.04 : 1)
+            .shadow(color: .black.opacity(isSelected ? 0.45 : 0), radius: 14, y: 6)
+            .zIndex(isSelected ? 1 : 0)
+            .animation(.easeOut(duration: 0.12), value: isSelected)
+    }
+}

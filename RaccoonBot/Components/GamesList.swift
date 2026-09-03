@@ -75,6 +75,9 @@ struct GamesList: View {
     @State private var focus = GridFocus()
     @State private var gridWidth: CGFloat = 0
     @State private var installChoice: OwnedGame?
+    /// Which owned card, if any, is fetching its detail page right now --
+    /// the same spinner `OwnedGamesGrid` shows, for the same reason.
+    @State private var opening: String?
     @StateObject private var fixes = MGVFLibrary.shared
     
     var load: @Sendable () async -> Void
@@ -109,6 +112,106 @@ struct GamesList: View {
         })
     }
 
+    /// One card in a mixed grid: a title that is installed, or one that is
+    /// only owned. The tag both "All"'s grid and its pad focus are built
+    /// from, so a press lands on the card actually under the ring rather
+    /// than on whatever a stale index happened to mean.
+    ///
+    /// Not private: the merge is pure -- two lists in, one sorted list of
+    /// cards out, nothing about a window or an environment -- and a test
+    /// reaches it directly rather than standing up the view to exercise it.
+    enum GridCard: Identifiable {
+        case installed(Game)
+        case owned(OwnedGame)
+        var id: String {
+            switch self {
+            case .installed(let g): return g.id
+            case .owned(let g): return g.id
+            }
+        }
+        var sortName: String {
+            switch self {
+            case .installed(let g): return g.name
+            case .owned(let g): return g.displayName
+            }
+        }
+
+        /// Every card in one order: installed and owned interleaved and
+        /// sorted together by name, rather than concatenated as two blocks.
+        ///
+        /// Name, regardless of whatever the sort menu is set to: an owned
+        /// title carries no release date, publisher or developer to sort the
+        /// other options by, and a shared order needs the one field both
+        /// kinds actually have. `installed` and `owned` arrive each already
+        /// sorted by their own tab's rule -- name by default for both, which
+        /// is why this mostly reads as "the obvious order" -- but
+        /// concatenating two pre-sorted lists is not one sorted list, so it
+        /// is sorted again here, together.
+        static func merged(installed: [Game], owned: [OwnedGame]) -> [GridCard] {
+            (installed.map(GridCard.installed) + owned.map(GridCard.owned))
+                .sorted { $0.sortName.localizedCaseInsensitiveCompare($1.sortName) == .orderedAscending }
+        }
+    }
+
+    /// Every card the "All" tab draws, in one order.
+    private var mixedCards: [GridCard] {
+        GridCard.merged(installed: libraryPageGlobals.filteredGames, owned: libraryPageGlobals.filteredOwnedGames)
+    }
+
+    /// What is actually on screen right now, for whichever tab put it there --
+    /// the one list `syncFocusShape`, `scrolling` and the pad's press handler
+    /// all read, so none of the three can disagree about which card index
+    /// means what.
+    ///
+    /// Empty for "Not installed": that tab draws `OwnedGamesList`, a
+    /// different view the pad has never been wired into, and before this
+    /// existed the pad's owner -- registered once, for the life of this view,
+    /// not per tab -- still answered a press with `filteredGames[index]`,
+    /// which on that tab is an INSTALLED title with no visible selection
+    /// ring anywhere on screen. A press there could Play something
+    /// unrelated to anything the pad's owner could see. Answering "nothing
+    /// is showing" for that tab is what a correct model of the screen says,
+    /// and it is what closes that door: with `visibleCards` empty, `focus`
+    /// selects nothing and a press has nothing to act on.
+    private var visibleCards: [GridCard] {
+        switch libraryPageGlobals.tab {
+        case .installed:    return libraryPageGlobals.filteredGames.map(GridCard.installed)
+        case .all:           return mixedCards
+        case .notInstalled: return []
+        }
+    }
+
+    /// The "All" tab's grid: every card, interleaved and sorted together,
+    /// each drawn by the same component its own tab already uses -- so a
+    /// title looks the same whichever tab you found it from.
+    @ViewBuilder
+    private var mixedGrid: some View {
+        LazyVGrid(columns: columns, spacing: cardSpacing) {
+            ForEach(Array(mixedCards.enumerated()), id: \.element.id) { index, card in
+                let selected = gamepad.showsFocus && focus.index == index
+                switch card {
+                case .installed(let item):
+                    GameThumbnail(item: item, isResizable: appWindowResizable, isSelected: selected)
+                        .id(card.id)
+                case .owned(let game):
+                    OwnedGameCard(game: game,
+                                  isOpening: opening == game.appID,
+                                  install: { install(game) },
+                                  hide: { libraryPageGlobals.hide(appID: game.appID) },
+                                  open: { Task { await open(game) } })
+                        .gridSelectionRing(selected)
+                        .id(card.id)
+                }
+            }
+        }
+        .padding(.horizontal)
+        .background(GeometryReader { geometry in
+            Color.clear
+                .onAppear { gridWidth = geometry.size.width }
+                .onChange(of: geometry.size.width) { _, new in gridWidth = new }
+        })
+    }
+
     /// A scroller that follows the selection.
     @ViewBuilder
     private func scrolling<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
@@ -118,9 +221,10 @@ struct GamesList: View {
         return ScrollViewReader { proxy in
             ScrollView { inner }
                 .onChange(of: focus.index) { _, new in
-                    guard let new, new < libraryPageGlobals.filteredGames.count else { return }
+                    let cards = visibleCards
+                    guard let new, new < cards.count else { return }
                     withAnimation(.easeOut(duration: 0.15)) {
-                        proxy.scrollTo(libraryPageGlobals.filteredGames[new].id, anchor: .center)
+                        proxy.scrollTo(cards[new].id, anchor: .center)
                     }
                 }
         }
@@ -128,7 +232,7 @@ struct GamesList: View {
 
     /// Tell the selection what shape the grid is now.
     private func syncFocusShape() {
-        focus.update(count: libraryPageGlobals.filteredGames.count,
+        focus.update(count: visibleCards.count,
                      columns: gridColumnCount(forWidth: gridWidth))
     }
 
@@ -167,16 +271,20 @@ struct GamesList: View {
             }
             guard optionsGame == nil else { return }
             syncFocusShape()
-            guard let index = focus.index,
-                  index < libraryPageGlobals.filteredGames.count else {
+            let cards = visibleCards
+            guard let index = focus.index, index < cards.count else {
                 focus.selectFirstIfNeeded()
                 return
             }
-            let game = libraryPageGlobals.filteredGames[index]
-            switch press {
-            case .select:  play(game)
-            case .options: optionsGame = game
-            case .back:    focus.clear()
+            switch (press, cards[index]) {
+            case (.select, .installed(let game)):  play(game)
+            case (.select, .owned(let game)):       Task { await open(game) }
+            case (.options, .installed(let game)):  optionsGame = game
+            // An owned title has nothing installed to configure -- its card
+            // carries no options button either -- so the options press is
+            // simply not answered, the same as pressing it over empty space.
+            case (.options, .owned):                break
+            case (.back, _):                        focus.clear()
             }
         })
     }
@@ -187,28 +295,42 @@ struct GamesList: View {
             libraryPageGlobals.showDetailView = true
             return
         }
-        guard let owned = libraryPageGlobals.ownedGames.first(where: { $0.appID == row.appID })
+        // Every store's, not Steam's alone: `ownedGames` here used to be the
+        // whole answer, so opening or installing an Epic not-installed row
+        // from the list -- which is drawn from `allOwnedGames`, and has been
+        // showing Epic rows since the not-installed list was finished for
+        // Epic -- looked up a title that was never in this list and quietly
+        // did nothing.
+        guard let owned = libraryPageGlobals.allOwnedGames.first(where: { $0.appID == row.appID })
         else { return }
-        Task {
-            guard let info = try? await api.fetchGameInfo(appID: owned.appID) else { return }
-            libraryPageGlobals.selectedGame = Game(from: info, id: owned.appID,
-                                                   isNative: owned.runsOnMac && !owned.runsOnWindows,
-                                                   downloadProgress: 0, isInstalled: false,
-                                                   appNames: [])
-            libraryPageGlobals.showDetailView = true
-        }
+        Task { await open(owned) }
+    }
+
+    /// The detail page for a title that is not installed, fetched fresh:
+    /// nothing on disk describes a game this machine has never had.
+    private func open(_ game: OwnedGame) async {
+        guard let info = try? await api.fetchGameInfo(appID: game.appID) else { return }
+        libraryPageGlobals.selectedGame = Game(from: info, id: game.appID,
+                                               isNative: game.runsOnMac && !game.runsOnWindows,
+                                               downloadProgress: 0, isInstalled: false,
+                                               appNames: [])
+        libraryPageGlobals.showDetailView = true
     }
 
     /// Hand the title to Steam's own install dialog, asking first only when the
     /// title genuinely ships for both platforms.
     private func installRow(_ row: LibraryRow) {
-        guard let owned = libraryPageGlobals.ownedGames.first(where: { $0.appID == row.appID })
+        guard let owned = libraryPageGlobals.allOwnedGames.first(where: { $0.appID == row.appID })
         else { return }
-        if owned.isCrossPlatform {
-            installChoice = owned
+        install(owned)
+    }
+
+    private func install(_ game: OwnedGame) {
+        if game.isCrossPlatform {
+            installChoice = game
             return
         }
-        sendInstall(owned, toMac: owned.runsOnMac && !owned.runsOnWindows)
+        sendInstall(game, toMac: game.runsOnMac && !game.runsOnWindows)
     }
 
     private func sendInstall(_ game: OwnedGame, toMac: Bool) {
@@ -273,16 +395,25 @@ struct GamesList: View {
                 case .notInstalled:
                     OwnedGamesList()
                 case .all:
-                    scrolling {
-                        installedGrid
-                        OwnedGamesGrid().padding(.bottom, dockClearance)
-                    }
+                    // One grid, one order -- not the installed block glued
+                    // above the owned one, which is what this drew until
+                    // 2026-09-03 and reads exactly like what it was: two
+                    // lists pasted together, in two different card styles,
+                    // sorted by two different rules nobody chose to differ.
+                    scrolling { mixedGrid.padding(.bottom, dockClearance) }
                 }
             }
         }
         .onAppear { wireGamepad() }
         .onDisappear { if let padToken { gamepad.release(padToken); self.padToken = nil } }
-        .onChange(of: libraryPageGlobals.filteredGames.count) { _, _ in syncFocusShape() }
+        // One signal, not filteredGames' count and filteredOwnedGames' count as
+        // two separate modifiers: this chain is already the kind of giant
+        // SwiftUI expression the compiler times out on, and a second .onChange
+        // here was what tipped it over -- "unable to type-check this
+        // expression in reasonable time" pointed at an unrelated line several
+        // modifiers down, which is where these errors always point, not at
+        // the modifier that actually caused it.
+        .onChange(of: visibleCards.count) { _, _ in syncFocusShape() }
         .onChange(of: gridWidth) { _, _ in syncFocusShape() }
         .onChange(of: libraryPageGlobals.playingID) { _, _ in syncSuspension() }
         .onChange(of: libraryPageGlobals.isLaunchingGame) { _, _ in syncSuspension() }

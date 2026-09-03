@@ -33,12 +33,16 @@ import AppKit
 func closeBottle(cxAppPath: String, bottle: String,
                  waitingUpTo settleTimeout: TimeInterval = 30,
                  clients: [String] = ["steam"],
-                 decidedAt generation: Int = LaunchGeneration.shared.current) async throws {
+                 decidedAt generation: Int? = nil) async throws {
+    // Taken here rather than as a default argument: the generation belongs to
+    // a bottle now, and Swift will not let one default argument read another
+    // parameter.
+    let generation = generation ?? LaunchGeneration.shared.current(for: bottle)
     // Asked before every destructive step, not once at the top. The waits below
     // run for half a minute, and a launch inside that window was destroyed by a
     // decision taken before it existed.
     func superseded() -> Bool {
-        if LaunchGeneration.shared.supersedes(generation) {
+        if LaunchGeneration.shared.supersedes(generation, for: bottle) {
             console.log("a game has been launched since this was decided; leaving the bottle up")
             return true
         }
@@ -355,7 +359,7 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
     let bottleName = URL(string: selectedBottle)?.lastPathComponent ?? ""
     // From here on, any teardown decided before this moment is about a session
     // that no longer exists.
-    LaunchGeneration.shared.launched()
+    LaunchGeneration.shared.launched(bottle: selectedBottle)
     console.warn("attempting to run steam.exe on game id \(id)")
     let arguments = options != nil ? " " + options!.gameArguments : ""
     // A guard for an engine configured before the block existed, or chosen

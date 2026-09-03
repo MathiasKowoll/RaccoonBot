@@ -876,10 +876,10 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
 
     // The generation this tracker belongs to. A teardown decided here must not
     // arrive in the middle of a session started afterwards.
-    let generation = LaunchGeneration.shared.current
+    let generation = LaunchGeneration.shared.current(for: bottle)
 
     func shutDown(because reason: String) async {
-        if LaunchGeneration.shared.supersedes(generation) {
+        if LaunchGeneration.shared.supersedes(generation, for: bottle) {
             console.log("not closing down: a game has been launched since (\(reason))")
             return
         }

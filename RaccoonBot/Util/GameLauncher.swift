@@ -105,11 +105,25 @@ final class GameLauncher {
                                   + "launching on defaults, which may not be what is configured")
                 }
 
+                // Where this title actually runs, decided once.
+                //
+                // The launch below worked this out for itself and the watcher
+                // above was given something else: for a title with the ARM
+                // toggle on, the game started in the ARM bottle while the
+                // watcher polled, closed and quit the other one. Since the
+                // launch generation began counting per bottle, a disagreement
+                // here also means a teardown comparing a counter its own
+                // launch never bumped -- which reads as "nothing has been
+                // launched since" and is the answer that kills a running
+                // game. One value, both places.
+                let launchBottle = epicPlan?.bottle
+                    ?? (gameOptions.useArmBottle ? appGlobals.selectedArmBottle : appGlobals.selectedBottle)
+
                 Task(priority: .background) {
                     let observer = try await getGameTracker(
                         appNames: updatedItem.appNames,
                         cxAppPath: appGlobals.cxAppPath!,
-                        bottle: epicPlan?.bottle ?? appGlobals.selectedBottle,
+                        bottle: launchBottle,
                         onLoad: { appName in
                             libraryPageGlobals.playingID = item.id
                             DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
@@ -142,8 +156,7 @@ final class GameLauncher {
                     try await launchWindowsGame(id: String(item.steamAppID),
                                                 cxAppPath: appGlobals.cxAppPath ?? "",
                                                 // An Epic title runs where its launcher is.
-                                                selectedBottle: epicPlan?.bottle
-                                                    ?? (gameOptions.useArmBottle ? appGlobals.selectedArmBottle : appGlobals.selectedBottle),
+                                                selectedBottle: launchBottle,
                                                 steamExePath: steamExePath,
                                                 options: gameOptions,
                                                 appExeURL: epicPlan?.launcher ?? item.appExeURL,

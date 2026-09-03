@@ -289,3 +289,56 @@ language tags, release date, background. One fetch per title, cached in
 `~/Library/Caches/RaccoonBotEpicStoreCache.json`; a miss is kept a week.
 Ratings come back empty and `customReleaseDate` is free text, so neither is
 shown.
+
+
+## Still to build
+
+Two pieces agreed on 2026-09-03, neither built.
+
+### The whole Epic library, not the part the launcher happened to cache
+
+The "not installed" tab shows Epic titles taken from the launcher's catalogue
+cache: 258 items here, 50 of them base games, 46 not installed. That cache is
+whatever the launcher wrote when it last signed in and showed the library. It
+is not a statement about the account, and nothing measured here says the two
+are the same list.
+
+A complete list needs a source that answers for the account, and the ones
+that would are shut to anyone without the launcher's own session, measured
+2026-09-02: the catalogue API answers 401 and the store's GraphQL 403, both
+with a browser's user agent. The store's content endpoint answers by slug and
+knows one product at a time, so it can fill a page but cannot enumerate.
+What is left, in rough order of how much they cost:
+
+- Read the launcher's cache after making the launcher refresh it. Cheap, and
+  it is what already happens; the open question is whether a full library
+  browse in the launcher makes the cache complete, which one session with the
+  launcher would answer.
+- Reuse the launcher's own signed-in session. Its tokens live in the bottle;
+  using them is a decision about touching the user's account credentials, not
+  a technical problem, and it should be taken deliberately rather than
+  discovered in a diff.
+- A third-party client (Legendary) as a separate, opt-in path. The design
+  note already weighs this and puts it after v1.
+
+Decide first what "the games that can be installed" means: the account's own
+titles, which is the list above finished properly, or the store's whole
+catalogue, which is a different feature with a different source and a
+different screen.
+
+### A filter by store
+
+The library now mixes Steam and Epic in one grid, with nothing to say "only
+Epic". The pattern to copy is the platform filter, which already does exactly
+this shape: `platformFilter: Set<String>` on `LibraryPageGlobals`
+(`Types.swift:902`), applied in `filteredGames`, `rows` and `ownedRows`, and
+drawn as a menu of toggles with a badge showing what is on
+(`GamesList.swift:416-456`).
+
+A store filter is `Set<Store>` over `Game.store`, which every card already
+carries (nil means Steam, from before the field existed), and over the
+not-installed rows, whose Epic entries are the ones whose id begins `epic:`.
+Two things worth deciding while building it: whether it belongs beside the
+platform filter or in the same menu, and whether to show it at all when only
+one store is configured (`StoreConfig.configured.count > 1`), so a
+Steam-only machine does not grow a control that filters nothing.

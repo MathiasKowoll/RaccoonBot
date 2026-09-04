@@ -209,6 +209,15 @@ struct OwnedGamesGrid: View {
     private func open(_ game: OwnedGame) async {
         opening = game.appID
         defer { opening = nil }
+        if game.store == .epic || game.appID.hasPrefix("epic:") {
+            libraryPageGlobals.selectedGame = await EpicDetail.game(
+                for: game,
+                bottleDirectory: EpicLaunch.target(settings: StoreConfig.settings(for: .epic),
+                                                   selectedBottle: appGlobals.selectedBottle)
+                    .flatMap { BottleReference($0.bottle)?.directory })
+            libraryPageGlobals.showDetailView = true
+            return
+        }
         guard let info = try? await api.fetchGameInfo(appID: game.appID) else { return }
         libraryPageGlobals.selectedGame = Game(from: info,
                                                id: game.appID,

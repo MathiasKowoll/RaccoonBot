@@ -666,6 +666,23 @@ extension Game {
     /// A title the Epic launcher has installed, as a card. No store page, no
     /// art, no description: Epic keeps none of that locally, and the card
     /// shows what is known rather than pretending.
+    /// The same card for a title the account owns and nobody has installed
+    /// here. There is no manifest and no folder, so the name comes from the
+    /// catalogue and the id is the triple the owned list already carries.
+    ///
+    /// It exists because the alternative was asking Steam. Both lists sent the
+    /// Epic triple to Steam's store endpoint, which of course had never heard
+    /// of it: the card opened nothing at all, and the failed lookup put the
+    /// Epic id into the Steam blacklist on its way out.
+    static func epicOwned(id: String, name: String, catalog item: EpicCatalogItem? = nil,
+                          store: EpicStoreContent? = nil, cover: URL? = nil) -> Game {
+        let blank = epicBlank(name: name, catalog: item, store: store, cover: cover)
+        var game = Game(from: blank, id: id, isNative: false, downloadProgress: 0,
+                        isInstalled: false, appNames: [])
+        game.store = .epic
+        return game
+    }
+
     static func epic(_ title: EpicInstalled, catalog item: EpicCatalogItem? = nil, store: EpicStoreContent? = nil) -> Game {
         // The launcher's catalogue, when it has been cached, is the only place
         // Epic keeps a title's art and description. The NAME comes from the
@@ -684,13 +701,26 @@ extension Game {
         let screenshots: [Screenshot]? = store.map { s in
             s.screenshots.enumerated().map { Screenshot(id: $0.offset, pathThumbnail: $0.element, pathFull: $0.element) }
         }.flatMap { $0.isEmpty ? nil : $0 }
-        let blank = SteamGame(type: "game", name: name, steamAppID: 0, requiredAge: "0",
+        return epicBlankGame(name: name, id: title.id, title: title, catalog: item, store: store)
+    }
+
+    /// Everything an Epic card knows that does not come from a manifest.
+    private static func epicBlank(name: String, catalog item: EpicCatalogItem?,
+                                  store: EpicStoreContent?, cover: URL? = nil) -> SteamGame {
+        let developer = store?.developer ?? item?.developer
+        let requirements: Requirements? = store?.minimumRequirements.map {
+            Requirements(minimum: $0, recommended: store?.recommendedRequirements)
+        }
+        let screenshots: [Screenshot]? = store.map { s in
+            s.screenshots.enumerated().map { Screenshot(id: $0.offset, pathThumbnail: $0.element, pathFull: $0.element) }
+        }.flatMap { $0.isEmpty ? nil : $0 }
+        return SteamGame(type: "game", name: name, steamAppID: 0, requiredAge: "0",
                               isFree: false, controllerSupport: nil, dlc: nil,
                               detailedDescription: store?.description ?? item?.description ?? "", aboutTheGame: "",
                               shortDescription: store?.shortDescription ?? item?.description ?? "",
                               supportedLanguages: store?.languages,
                               headerImage: item?.cover?.absoluteString ?? store?.background ?? "",
-                              capsuleImage: item?.tallCover?.absoluteString ?? "",
+                              capsuleImage: item?.tallCover?.absoluteString ?? cover?.absoluteString ?? "",
                               capsuleImageV5: nil, website: nil, pcRequirements: requirements,
                               macRequirements: nil, linuxRequirements: nil, legalNotice: nil,
                               developers: developer.map { [$0] }, publishers: store?.publisher.map { [$0] },
@@ -700,7 +730,12 @@ extension Game {
                               movies: nil, recommendations: nil, achievements: nil,
                               releaseDate: ReleaseDate(comingSoon: false, date: store?.releaseDate ?? ""), supportInfo: nil,
                               background: store?.background, backgroundRaw: nil, contentDescriptors: nil, ratings: nil)
-        var game = Game(from: blank, id: title.id, isNative: false, downloadProgress: 100,
+    }
+
+    private static func epicBlankGame(name: String, id: String, title: EpicInstalled,
+                                      catalog item: EpicCatalogItem?, store: EpicStoreContent?) -> Game {
+        let blank = epicBlank(name: name, catalog: item, store: store)
+        var game = Game(from: blank, id: id, isNative: false, downloadProgress: 100,
                         isInstalled: title.presence == .installed,
                         appNames: title.executable.map { [$0.lastPathComponent] } ?? [])
         game.store = .epic

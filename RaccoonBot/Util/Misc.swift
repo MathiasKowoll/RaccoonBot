@@ -1129,7 +1129,30 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
             if found == nil {
                 console.warn("epic: nothing started in this bottle in 180s; releasing the window, still watching")
                 await MainActor.run { onTerminate() }
-                while !Task.isCancelled, found == nil {
+                // Still watching, but not for ever and not for anyone.
+                //
+                // This is a detached task nobody holds, so `Task.isCancelled`
+                // is never true and the loop below was literally endless. An
+                // abandoned launch -- the launcher closed, a sign-in or EULA
+                // cancelled, a cold start that failed -- left it polling lsof
+                // for the life of the application, and the first game started
+                // in this bottle afterwards satisfied it: a title the user
+                // launched later would pin the ABANDONED card as playing, with
+                // no way to clear it.
+                //
+                // Two ways out, then. A launch of something else in this bottle
+                // means this watcher is watching for a game nobody is waiting
+                // for -- and by now this launch's own generation is three
+                // minutes old, so a change can only be somebody else's. And a
+                // half hour of nothing is nothing: whatever this was, it is not
+                // still starting.
+                let mine = LaunchGeneration.shared.current(for: bottle)
+                let giveUpAt = Date().addingTimeInterval(1800)
+                while found == nil, Date() < giveUpAt {
+                    if LaunchGeneration.shared.supersedes(mine, for: bottle) {
+                        console.log("epic: another launch has taken this bottle; standing down")
+                        return
+                    }
                     if let named = await epicLog?.launchedExecutableInNewLines() {
                         found = named
                     } else if let seen = BottleProcesses.gamesRunning(inBottleAt: dir).first {
@@ -1137,6 +1160,10 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
                     } else {
                         try? await Task.sleep(nanoseconds: 2_000_000_000)
                     }
+                }
+                if found == nil {
+                    console.warn("epic: nothing started in this bottle in half an hour; standing down")
+                    return
                 }
             }
             guard let exe = found else { return }

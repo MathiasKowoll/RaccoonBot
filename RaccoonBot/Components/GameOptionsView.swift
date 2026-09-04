@@ -415,7 +415,7 @@ struct GameOptionsView: View {
         // a conditional SwiftUI is free to rebuild -- so a second take
         // replaces the first rather than stacking on top of it.
         if let padToken { gamepad.release(padToken) }
-        padToken = gamepad.take(onMove: { direction in
+        padToken = gamepad.take(inSheet: true, onMove: { direction in
             // An open popup is a column of its own: up and down walk it, and
             // nothing reaches the panel behind it until it closes.
             if var open = menu {
@@ -629,6 +629,13 @@ struct GameOptionsView: View {
             uninstallSteamGame(id: appID, cxAppPath: appGlobals.cxAppPath,
                                selectedBottle: appGlobals.selectedBottle,
                                SteamX86AppPath: steamX86AppPath)
+        case .steamOnMac(let appID):
+            // The Mac's own Steam, through the system handler -- not the one in
+            // the bottle, which never installed this and must not be asked to
+            // remove it.
+            guard let url = URL(string: "steam://uninstall/\(appID)") else { return }
+            console.log("uninstall: asking the Mac Steam for \(game.name) (\(appID))")
+            NSWorkspace.shared.open(url)
         case .epic(let uri):
             guard let epic = EpicLaunch.target(settings: StoreConfig.settings(for: .epic),
                                                selectedBottle: appGlobals.selectedBottle) else {

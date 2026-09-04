@@ -309,6 +309,15 @@ struct GamesList: View {
     /// The detail page for a title that is not installed, fetched fresh:
     /// nothing on disk describes a game this machine has never had.
     private func open(_ game: OwnedGame) async {
+        if game.store == .epic || game.appID.hasPrefix("epic:") {
+            libraryPageGlobals.selectedGame = await EpicDetail.game(
+                for: game,
+                bottleDirectory: EpicLaunch.target(settings: StoreConfig.settings(for: .epic),
+                                                   selectedBottle: appGlobals.selectedBottle)
+                    .flatMap { BottleReference($0.bottle)?.directory })
+            libraryPageGlobals.showDetailView = true
+            return
+        }
         guard let info = try? await api.fetchGameInfo(appID: game.appID) else { return }
         libraryPageGlobals.selectedGame = Game(from: info, id: game.appID,
                                                isNative: game.runsOnMac && !game.runsOnWindows,

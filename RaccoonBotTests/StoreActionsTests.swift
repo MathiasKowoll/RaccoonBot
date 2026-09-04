@@ -60,6 +60,29 @@ struct UninstallTests {
         #expect(!Uninstall.needsConfirmation(.epic(uri: Uninstall.epicLibraryURI)))
     }
 
+    /// A native title was installed by the Mac's Steam and lives outside the
+    /// bottle. Asking the bottle's Steam to remove it is, at best, a dialog
+    /// about a game it does not have -- and where the same appid is installed
+    /// on both sides, it deletes the copy the user did not choose.
+    @Test func aNativeSteamTitleIsUninstalledByTheMacsSteam() {
+        let blank = SteamGame(type: "game", name: "A Game", steamAppID: 620, requiredAge: "0",
+                              isFree: false, controllerSupport: nil, dlc: nil,
+                              detailedDescription: "", aboutTheGame: "", shortDescription: "",
+                              supportedLanguages: nil, headerImage: "", capsuleImage: "",
+                              capsuleImageV5: nil, website: nil, pcRequirements: nil,
+                              macRequirements: nil, linuxRequirements: nil, legalNotice: nil,
+                              developers: nil, publishers: nil, priceOverview: nil, packages: nil,
+                              packageGroups: nil, platforms: Platforms(windows: false, mac: true, linux: false),
+                              metacritic: nil, categories: nil, genres: nil, screenshots: nil,
+                              movies: nil, recommendations: nil, achievements: nil,
+                              releaseDate: ReleaseDate(comingSoon: false, date: ""), supportInfo: nil,
+                              background: nil, backgroundRaw: nil, contentDescriptors: nil, ratings: nil)
+        let native = Game(from: blank, id: "id-620", isNative: true,
+                          downloadProgress: 100, isInstalled: true, appNames: [])
+        #expect(Uninstall.route(for: native) == .steamOnMac(appID: "620"))
+        #expect(Uninstall.route(for: steamGame(620)) == .steam(appID: "620"))
+    }
+
     /// Added by hand, never installed by Steam: `steam://uninstall/0` would
     /// open a dialog about a game the client has never heard of.
     @Test func aTitleWithNoSteamIDHasNoRoute() {
@@ -175,5 +198,53 @@ struct EpicReadinessTests {
         let answer = await EpicReadiness.waitUntilInstallable(log: missing, after: nil,
                                                              deadline: 0.3, poll: 0.05)
         #expect(answer == false)
+    }
+}
+
+
+/// An Epic title has to be findable by the id its card carries.
+@MainActor
+struct EpicMetaLookupTests {
+
+    /// The card's id is the launcher's triple; the meta's own `id` is the
+    /// library folder plus that, so the two never matched and every Epic title
+    /// was invisible -- no video-fix badge, no launch gate, and "Could not work
+    /// out where this game is installed" on every Epic options sheet.
+    @Test func anEpicTitleIsFoundByItsTriple() {
+        let triple = "epic:ns:item:AppName"
+        let meta = GamesMeta(appid: triple, installdir: "AlanWake2",
+                             gameURL: URL(fileURLWithPath: "/Volumes/X/Games/AlanWake2"),
+                             isNative: false,
+                             libraryFolder: URL(fileURLWithPath: "/Volumes/X/Games"),
+                             bytesDownloaded: "0", BytesTodownload: "0", appNames: [])
+        #expect(meta.id != triple, "the premise: the ids genuinely differ")
+        #expect(getMeta([meta], byID: triple)?.appid == triple)
+    }
+
+    /// The exact id still wins, and a Steam lookup is untouched: the fallback
+    /// only answers for an id that begins with "epic:", which digits cannot.
+    @Test func aSteamLookupIsUnaffected() {
+        let steam = GamesMeta(appid: "220", installdir: "Half-Life 2",
+                              bytesDownloaded: "0", BytesTodownload: "0")
+        #expect(getMeta([steam], byID: steam.id)?.appid == "220")
+        #expect(getMeta([steam], byID: "220") == nil)
+    }
+}
+
+/// The page for an Epic title nobody has installed here.
+@MainActor
+struct EpicDetailTests {
+
+    /// With no bottle and no catalogue there is still a card, because the
+    /// alternative shipped for a day: the click did nothing at all.
+    @Test func withoutACatalogueTheOwnedListsOwnNameIsEnough() async {
+        let owned = OwnedGame(appID: "epic:::AppName", name: "Some Game",
+                              platforms: ["windows"], lastPlayed: nil, playtimeMinutes: nil,
+                              coverURL: URL(string: "https://example.invalid/cover.png"), store: .epic)
+        let game = await EpicDetail.game(for: owned, bottleDirectory: nil)
+        #expect(game.name == "Some Game")
+        #expect(game.store == .epic)
+        #expect(game.id == "epic:::AppName")
+        #expect(game.isInstalled == false)
     }
 }

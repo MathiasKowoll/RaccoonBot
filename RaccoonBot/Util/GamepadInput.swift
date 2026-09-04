@@ -104,14 +104,20 @@ final class GamepadInput: ObservableObject {
         let onMove: (GridFocus.Direction) -> Void
         let onPress: (Press) -> Void
     }
-    private var owners: [(id: UUID, handlers: Handlers)] = []
+    private var owners: [(id: UUID, handlers: Handlers, inSheet: Bool)] = []
 
     /// Listen, on top of whoever is listening now. Keep the token.
+    ///
+    /// `inSheet` says this listener is itself the panel in front. Only the
+    /// game-options sheet is: everything else that takes the pad is the
+    /// library behind. The keyboard monitor reads it to know whose keys these
+    /// are -- see the monitor for what went wrong without it.
     @discardableResult
-    func take(onMove: @escaping (GridFocus.Direction) -> Void,
+    func take(inSheet: Bool = false,
+              onMove: @escaping (GridFocus.Direction) -> Void,
               onPress: @escaping (Press) -> Void) -> UUID {
         let id = UUID()
-        owners.append((id, Handlers(onMove: onMove, onPress: onPress)))
+        owners.append((id, Handlers(onMove: onMove, onPress: onPress), inSheet))
         return id
     }
 
@@ -184,6 +190,18 @@ final class GamepadInput: ObservableObject {
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, !self.suspended else { return event }
             if let responder = NSApp.keyWindow?.firstResponder, responder is NSTextView { return event }
+            // Step aside for a panel in front that does not drive the pad
+            // itself. Only the grid and the game-options sheet ever take it, so
+            // in settings, tools, the detail page, a custom game or the Epic
+            // import these keys belong to the sheet: Escape closes it, Return
+            // presses its button. Taking them made every one of those a trap --
+            // and worse, the press still reached the grid underneath, which
+            // launched a game from behind the sheet the user was reading.
+            //
+            // The key window is the sheet while a sheet is up; the main window
+            // stays the library beneath it.
+            if let key = NSApp.keyWindow, key !== NSApp.mainWindow,
+               self.owners.last?.inSheet != true { return event }
             guard let action = Self.action(for: event) else { return event }
             self.keyboardUsed = true
             switch action {

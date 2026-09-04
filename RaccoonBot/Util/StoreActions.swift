@@ -70,6 +70,14 @@ nonisolated enum Uninstall {
         /// Uninstall in the bottle's registry, so this is exactly what
         /// Windows would run from Add/Remove Programs.
         case steam(appID: String)
+        /// The same command, to the Steam on this Mac. A native title was
+        /// installed by that client and lives outside the bottle, so asking
+        /// the bottle Steam to remove it is at best a dialog about a game it
+        /// does not have -- and at worst, when the same appid is installed on
+        /// both sides, the deletion of the copy the user did not choose. The
+        /// library really can hold both at once: ids carry the library folder,
+        /// and both Steams are read.
+        case steamOnMac(appID: String)
         /// Epic has no such command, so this opens the launcher on the
         /// Library and the user presses Uninstall on the card. Measured
         /// today against 5.5.4: `?action=uninstall` is answered "Was unable
@@ -87,14 +95,14 @@ nonisolated enum Uninstall {
     /// confirmation in front of that would be a confirmation to open a page.
     static func needsConfirmation(_ route: Route) -> Bool {
         switch route {
-        case .steam: return true
+        case .steam, .steamOnMac: return true
         case .epic: return false
         }
     }
 
     static func buttonTitle(_ route: Route) -> String {
         switch route {
-        case .steam: return "Uninstall\u{2026}"
+        case .steam, .steamOnMac: return "Uninstall\u{2026}"
         case .epic: return "Open Epic\u{2026}"
         }
     }
@@ -108,7 +116,8 @@ nonisolated enum Uninstall {
             // has never heard of it and would answer steam://uninstall/0 with
             // a dialog about a game that does not exist.
             guard game.steamAppID > 0 else { return nil }
-            return .steam(appID: String(game.steamAppID))
+            let id = String(game.steamAppID)
+            return game.isNative ? .steamOnMac(appID: id) : .steam(appID: id)
         case .epic:
             return .epic(uri: epicLibraryURI)
         }
@@ -117,7 +126,7 @@ nonisolated enum Uninstall {
     /// The line under the button: who is going to do it.
     static func explanation(_ route: Route) -> String {
         switch route {
-        case .steam:
+        case .steam, .steamOnMac:
             return "Steam removes the game and its files. It asks you to confirm first."
         case .epic:
             return "Epic has no uninstall command, so this opens the launcher on your Library. Uninstall it from the card there."
@@ -128,7 +137,7 @@ nonisolated enum Uninstall {
     /// client does the removal, and asks again on its own side.
     static func warning(for game: Game) -> String {
         switch route(for: game) {
-        case .steam:
+        case .steam, .steamOnMac:
             return "Steam does the removal in its own window, and asks you to confirm there too."
         case .epic, nil:
             return ""

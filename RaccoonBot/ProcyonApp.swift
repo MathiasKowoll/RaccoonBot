@@ -27,9 +27,15 @@ let windowHeight: CGFloat = 820
 ///
 /// Raised 15% (2026-09-03) because fitting is not the same as being usable: at
 /// 1024 the toolbar fits by squeezing the one control that yields, the search
-/// field, down to its own floor, and the grid runs three columns. The extra 156
+/// field, down to its own floor, and the grid runs three columns. The extra
 /// points go to the field and to a fourth column.
-let windowMinWidth: CGFloat = 1180
+///
+/// 1182, not the round 1180 first chosen: the fourth column arrives when the
+/// grid itself is 1150 wide (four cards at their minimum and three gaps), and
+/// the grid is the window less `gridInset` a side. At 1180 the promise above
+/// was two points short, and the test that checked it assumed a different
+/// inset and passed anyway.
+let windowMinWidth: CGFloat = 1182
 let windowMinHeight: CGFloat = 690
 
 /// Resizable, and therefore able to go full screen.

@@ -17,6 +17,14 @@ let cardMinWidth: CGFloat = 280
 let cardMaxWidth: CGFloat = 420
 let cardSpacing: CGFloat = 10
 
+/// The grid's own horizontal inset, on each side.
+///
+/// Named because the pad has to know it. SwiftUI's `.padding(.horizontal)`
+/// with no value is "a platform-specific default amount" and no more --
+/// measured on this machine (2026-09-04) with NSHostingController, 16 a side.
+/// A test that assumed 20 passed anyway, which is the problem with assuming.
+let gridInset: CGFloat = 16
+
 let columns = [
     GridItem(.adaptive(minimum: cardMinWidth, maximum: cardMaxWidth), spacing: cardSpacing),
 ]
@@ -75,8 +83,7 @@ struct GamesList: View {
     @State private var focus = GridFocus()
     @State private var gridWidth: CGFloat = 0
     @State private var installChoice: OwnedGame?
-    /// Which owned card, if any, is fetching its detail page right now --
-    /// the same spinner `OwnedGamesGrid` shows, for the same reason.
+    /// Which owned card, if any, is fetching its detail page right now.
     @State private var opening: String?
     @StateObject private var fixes = MGVFLibrary.shared
     
@@ -89,27 +96,52 @@ struct GamesList: View {
 
     // MARK: - The grid, and the two ways of moving around it
 
-    /// The installed cards. One definition, used by both tabs that show them,
-    /// so the selection cannot be wired into one and not the other.
+    /// The one grid, for every tab. It draws `visibleCards` -- the same list
+    /// the pad's focus, the scroller and the press handler read -- so the card
+    /// under the ring is always the card a press lands on, whichever tab put
+    /// it there. Three grids used to exist (installed, mixed, and the owned
+    /// tab's own, which the pad could not see at all); the selection was wired
+    /// into two of them.
     @ViewBuilder
-    private var installedGrid: some View {
+    private var cardGrid: some View {
         LazyVGrid(columns: columns, spacing: cardSpacing) {
-            ForEach(Array(libraryPageGlobals.filteredGames.enumerated()), id: \.element.id) { index, item in
-                GameThumbnail(item: item,
-                              isResizable: appWindowResizable,
-                              isSelected: gamepad.showsFocus && focus.index == index)
-                    .id(item.id)
+            ForEach(Array(visibleCards.enumerated()), id: \.element.id) { index, card in
+                let selected = gamepad.showsFocus && focus.index == index
+                switch card {
+                case .installed(let item):
+                    GameThumbnail(item: item, isResizable: appWindowResizable, isSelected: selected)
+                        .id(card.id)
+                case .owned(let game):
+                    OwnedGameCard(game: game,
+                                  isOpening: opening == game.appID,
+                                  install: { install(game) },
+                                  hide: { libraryPageGlobals.hide(appID: game.appID) },
+                                  open: { Task { await open(game) } })
+                        .gridSelectionRing(selected)
+                        .id(card.id)
+                }
             }
         }
-        .padding(.horizontal)
         // The width the cards are actually laid out in, read rather than
         // assumed: the column count follows the window, and so must the
         // meaning of "up" and "down".
+        //
+        // Read BEFORE the padding, not after. A background is sized to the
+        // view it is attached to, and attached after `.padding` it measured
+        // the padded box: 32 points wider than the grid. The adaptive grid
+        // counts columns as Int((width + spacing) / (minimum + spacing)) --
+        // measured, boundary exact -- so at every width where those 32 points
+        // cross a boundary, one in nine, the pad believed in a column the
+        // grid did not draw. The window's own minimum was one of those widths.
+        // With a phantom column, right from the last card of a row jumped to
+        // the next row, right from the first refused with cards plainly
+        // beside it, and down walked a diagonal, skipping rows.
         .background(GeometryReader { geometry in
             Color.clear
                 .onAppear { gridWidth = geometry.size.width }
                 .onChange(of: geometry.size.width) { _, new in gridWidth = new }
         })
+        .padding(.horizontal, gridInset)
     }
 
     /// One card in a mixed grid: a title that is installed, or one that is
@@ -163,53 +195,21 @@ struct GamesList: View {
     /// all read, so none of the three can disagree about which card index
     /// means what.
     ///
-    /// Empty for "Not installed": that tab draws `OwnedGamesList`, a
-    /// different view the pad has never been wired into, and before this
-    /// existed the pad's owner -- registered once, for the life of this view,
-    /// not per tab -- still answered a press with `filteredGames[index]`,
-    /// which on that tab is an INSTALLED title with no visible selection
-    /// ring anywhere on screen. A press there could Play something
-    /// unrelated to anything the pad's owner could see. Answering "nothing
-    /// is showing" for that tab is what a correct model of the screen says,
-    /// and it is what closes that door: with `visibleCards` empty, `focus`
-    /// selects nothing and a press has nothing to act on.
+    /// Empty in list mode. The table draws no ring and follows no index, so
+    /// a move there changed a selection nobody could see, and a press acted
+    /// on it: Play on a card the eye had no way to find. Answering "nothing
+    /// is showing" is what a correct model of the screen says, and with
+    /// `visibleCards` empty `focus` selects nothing and a press has nothing to
+    /// act on. The same door was once closed this way for "Not installed",
+    /// which drew a view of its own the pad could not see; that tab draws
+    /// `cardGrid` now, and is on the pad like the other two.
     private var visibleCards: [GridCard] {
+        guard libraryPageGlobals.viewMode != .list else { return [] }
         switch libraryPageGlobals.tab {
         case .installed:    return libraryPageGlobals.filteredGames.map(GridCard.installed)
         case .all:           return mixedCards
-        case .notInstalled: return []
+        case .notInstalled: return libraryPageGlobals.filteredOwnedGames.map(GridCard.owned)
         }
-    }
-
-    /// The "All" tab's grid: every card, interleaved and sorted together,
-    /// each drawn by the same component its own tab already uses -- so a
-    /// title looks the same whichever tab you found it from.
-    @ViewBuilder
-    private var mixedGrid: some View {
-        LazyVGrid(columns: columns, spacing: cardSpacing) {
-            ForEach(Array(mixedCards.enumerated()), id: \.element.id) { index, card in
-                let selected = gamepad.showsFocus && focus.index == index
-                switch card {
-                case .installed(let item):
-                    GameThumbnail(item: item, isResizable: appWindowResizable, isSelected: selected)
-                        .id(card.id)
-                case .owned(let game):
-                    OwnedGameCard(game: game,
-                                  isOpening: opening == game.appID,
-                                  install: { install(game) },
-                                  hide: { libraryPageGlobals.hide(appID: game.appID) },
-                                  open: { Task { await open(game) } })
-                        .gridSelectionRing(selected)
-                        .id(card.id)
-                }
-            }
-        }
-        .padding(.horizontal)
-        .background(GeometryReader { geometry in
-            Color.clear
-                .onAppear { gridWidth = geometry.size.width }
-                .onChange(of: geometry.size.width) { _, new in gridWidth = new }
-        })
     }
 
     /// A scroller that follows the selection.
@@ -393,17 +393,17 @@ struct GamesList: View {
                              install: { row in installRow(row) })
             } else {
                 switch libraryPageGlobals.tab {
-                case .installed:
-                    scrolling { installedGrid.padding(.bottom, dockClearance) }
+                case .installed, .all:
+                    // One grid, one order -- for "All", not the installed
+                    // block glued above the owned one, which is what this
+                    // drew until 2026-09-03 and reads exactly like what it
+                    // was: two lists pasted together, in two card styles,
+                    // sorted by two rules nobody chose to differ.
+                    scrolling { cardGrid.padding(.bottom, dockClearance) }
                 case .notInstalled:
-                    OwnedGamesList()
-                case .all:
-                    // One grid, one order -- not the installed block glued
-                    // above the owned one, which is what this drew until
-                    // 2026-09-03 and reads exactly like what it was: two
-                    // lists pasted together, in two different card styles,
-                    // sorted by two different rules nobody chose to differ.
-                    scrolling { mixedGrid.padding(.bottom, dockClearance) }
+                    // The same grid, behind the owned tab's own loading and
+                    // empty states.
+                    OwnedGamesList { scrolling { cardGrid.padding(.bottom, dockClearance) } }
                 }
             }
         }

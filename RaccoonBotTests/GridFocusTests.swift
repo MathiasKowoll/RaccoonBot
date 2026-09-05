@@ -159,11 +159,16 @@ struct GridColumnCountTests {
         #expect(gridColumnCount(forWidth: cardMinWidth * 3 + cardSpacing * 2) == 3)
     }
 
-    /// The window's own minimum has to give a usable grid: this is the
-    /// narrowest RaccoonBot can be, so it is the case most likely to be wrong.
-    @Test func theSmallestWindowStillHasSeveralColumns() {
-        let usable = windowMinWidth - 40   // the grid's horizontal padding
-        #expect(gridColumnCount(forWidth: usable) >= 3)
+    /// The window's own minimum has to give the grid its constant promises:
+    /// this is the narrowest RaccoonBot can be, so it is the case most likely
+    /// to be wrong. The inset is the named one the grid actually uses -- an
+    /// earlier version of this test assumed 40 where the real figure was 32,
+    /// asked for "at least three", and so could not see that the fourth
+    /// column the constant promised arrived two points above the floor.
+    @Test func theSmallestWindowHasTheFourthColumnItPromises() {
+        let grid = windowMinWidth - 2 * gridInset
+        #expect(gridColumnCount(forWidth: grid) == 4)
+        #expect(gridColumnCount(forWidth: grid - 1) == 3, "the floor is exactly where the column arrives")
     }
 
     /// Cards grow with the window rather than only multiplying, which is what

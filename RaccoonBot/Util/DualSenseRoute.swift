@@ -67,10 +67,18 @@ nonisolated enum SonyPads {
 ///
 /// winebus's SDL backend does not have the problem: SDL's PS5 driver reads
 /// the transport from IOKit and builds the 0x31 with its CRC itself, and
-/// bus_sdl.c forces enhanced mode on Apple. The price of that route is that
-/// the guest sees a wine gamepad rather than a DualSense: no touchpad, gyro,
-/// adaptive triggers or lightbar. Over USB the raw path works and keeps all
-/// of that, so the route is chosen per transport, and only for these pads.
+/// bus_sdl.c forces enhanced mode on Apple. Measured the same day, it is a
+/// partial answer, not a whole one: Mortal Shell II rumbles over Bluetooth
+/// this way, weakly; Onimusha rumbled once and then not at all, which fits
+/// wine's own xinput sending only on change and winebus cutting every rumble
+/// at 1000ms (hid.c cutoff_time_ms); and the guest sees a wine gamepad rather
+/// than a DualSense -- no touchpad, gyro, adaptive triggers, lightbar or PS
+/// button, the last two lost by construction in winexinput.sys's ten-button
+/// PDO and bus_sdl.c's mapping. Rebuilding SDL 2.30.12 with upstream's
+/// Bluetooth report-format fix (129627068) changed nothing here and was
+/// reverted. Over USB the raw path works and keeps everything, so the route
+/// is chosen per transport, and only for these pads. The real repair is in
+/// wine, and is where the work goes next: let hidapi learn the transport.
 ///
 /// winebus honours it through
 /// `HKLM\System\CurrentControlSet\Services\winebus\Devices\<vid>/<pid>`,
@@ -115,7 +123,7 @@ nonisolated enum DualSenseRoute {
         return mine.map { pad in
             let name = pad.productID == SonyPads.dualSenseEdge ? "DualSense Edge" : "DualSense"
             let route = !pad.isBluetooth ? "raw, with all its features"
-                      : sdlEnabled ? "through SDL, so it rumbles"
+                      : sdlEnabled ? "through SDL: an Xbox-class pad, some rumble, no touchpad, gyro or PS button"
                       : "raw, and it will not rumble: turn Enable SDL on for this title"
             return "\(name) on \(pad.transport): \(route)"
         }.joined(separator: "; ")

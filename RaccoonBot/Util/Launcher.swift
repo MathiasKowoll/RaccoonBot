@@ -362,6 +362,26 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
                 changed = true
             }
         }
+        // A DualSense goes through SDL when it is on Bluetooth and stays raw
+        // when it is not -- see DualSenseRoute for the measurement behind it.
+        // Written the same way as the two keys above, into the same file, on
+        // the same condition: only when something would change.
+        let pads = SonyPads.attached()
+        let sdlEnabled = options!.enableSDL
+        if let summary = DualSenseRoute.summary(for: pads, sdlEnabled: sdlEnabled) { console.log("controller: \(summary)") }
+        for override in DualSenseRoute.overrides(for: pads, sdlEnabled: sdlEnabled) {
+            let section: WineRegSection
+            if let existing = registry.section(forPath: override.path) {
+                section = existing
+            } else {
+                section = WineRegSection(header: "[\(override.path)] \(Int(Date().timeIntervalSince1970))")
+                registry.sections.append(section)
+            }
+            if section.addOrSetDword(forKey: "Hidraw", value: override.hidraw) {
+                console.log("setting \(override.path) Hidraw to \(override.hidraw)")
+                changed = true
+            }
+        }
         if changed { try registry.save() }
     } else {
         console.error("\\\\winebus section not found in system.reg file for the bottle \(selectedBottle)")

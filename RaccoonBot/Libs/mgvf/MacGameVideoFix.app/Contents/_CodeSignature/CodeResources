@@ -46,7 +46,7 @@
 		</data>
 		<key>Resources/dstorage-ng4.dll</key>
 		<data>
-		Zg40WDZvVP9rtktQ+mqYTaMiJmw=
+		ZwAXz/EjS+Y5wuppps3AaHnPs1c=
 		</data>
 		<key>Resources/engine-built-for-stock.json</key>
 		<data>
@@ -55,6 +55,22 @@
 		<key>Resources/engine-built-for.json</key>
 		<data>
 		eh4FP7ez2uMOMePsrEISsIxgkEg=
+		</data>
+		<key>Resources/engine-controller-built-for.json</key>
+		<data>
+		7ujs7Q4QmBenipbyZXTE4uf+2y8=
+		</data>
+		<key>Resources/engine-controller-ntoskrnl.exe</key>
+		<data>
+		Wx/7QtrG8a3E18IrvygI3oe8UJQ=
+		</data>
+		<key>Resources/engine-controller-setupapi.dll</key>
+		<data>
+		4Y4t7JrdwAEgYrvmxkdegsYP/zs=
+		</data>
+		<key>Resources/engine-controller-winebus.sys</key>
+		<data>
+		ftuI4x0vz3GabERwPGYQm4G8YA4=
 		</data>
 		<key>Resources/engine-winegstreamer-stock.dll</key>
 		<data>
@@ -79,6 +95,10 @@
 		<key>Resources/install-dwo-bridge.sh</key>
 		<data>
 		9UhzAATLLAyfxS3DabCo+Q8y4sc=
+		</data>
+		<key>Resources/install-engine-controller.sh</key>
+		<data>
+		bDkH5NhEubA06RwU2YGSvNSpAR4=
 		</data>
 		<key>Resources/install-engine-media.sh</key>
 		<data>
@@ -190,7 +210,7 @@
 		</data>
 		<key>Resources/manifest.json</key>
 		<data>
-		j3rNgdf3yl7VzSbUGY7Q7El2zx4=
+		YyjKpqQv62KM3cLn3UnIvX0zk78=
 		</data>
 		<key>Resources/ng3-THIRD-PARTY-LICENCES.md</key>
 		<data>
@@ -305,7 +325,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			HLhrlRImzEDdYU28b6deAQonhx1lc6EYb6oLrQb+BIk=
+			L/gBZvQr3SOQKj1QfFcYnycuJ9QDOLjokm1Zf4XA4G8=
 			</data>
 		</dict>
 		<key>Resources/engine-built-for-stock.json</key>
@@ -320,6 +340,34 @@
 			<key>hash2</key>
 			<data>
 			HTU7hJF0T+3fJderEdFOFGuGpJcbmzkkuDT7bgNQXlg=
+			</data>
+		</dict>
+		<key>Resources/engine-controller-built-for.json</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			HTvuYhbx0ZZZCwUkwdWxleJ5f+V6IjXqH3ao6iYWT58=
+			</data>
+		</dict>
+		<key>Resources/engine-controller-ntoskrnl.exe</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			OkCGY+yTkcE0CIzxJj1X4YZ3XyNStHbgmSGhbaPQ8Q8=
+			</data>
+		</dict>
+		<key>Resources/engine-controller-setupapi.dll</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			BIy0sxJSN2QCRml0p3Udjvig9LL+KoCvbCY3YIoV4jE=
+			</data>
+		</dict>
+		<key>Resources/engine-controller-winebus.sys</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			v8hOI7xg2l9Sv+GwmwlWQuaQIuP0SQbjCXXSfAIU0uo=
 			</data>
 		</dict>
 		<key>Resources/engine-winegstreamer-stock.dll</key>
@@ -362,6 +410,13 @@
 			<key>hash2</key>
 			<data>
 			vxS7O/6Yuu+VbzwIIgq8g0gcGUthu8CToOSK+dmWSA0=
+			</data>
+		</dict>
+		<key>Resources/install-engine-controller.sh</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			aIvhqyjVsyZlYzCgTKzfHr1VfZjOHHG5YhI6c97RJ94=
 			</data>
 		</dict>
 		<key>Resources/install-engine-media.sh</key>
@@ -557,7 +612,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			xvQP3j3dD1evR26BqGuY7xoltSuw5ej38E0n7e4dNig=
+			qwfT0Svg6w33HNmmAOr5rmpiqi5entBE0PUSGmk2YEY=
 			</data>
 		</dict>
 		<key>Resources/ng3-THIRD-PARTY-LICENCES.md</key>

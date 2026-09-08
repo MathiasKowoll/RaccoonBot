@@ -129,6 +129,21 @@ func readUsrDefOptionString(key: String) -> String? {
     return UserDefaults(suiteName: suiteName)!.value(forKey: key) as? String
 }
 
+/// A switch, kept the same way the strings are.
+///
+/// Absent is not false. Every switch added after the first release has a
+/// "before it existed" behaviour, and the reader says what that was, because
+/// `bool(forKey:)` answers false for a key nobody has set and would turn a
+/// default of on into off on every install that predates the switch.
+func persistUsrDefOptionBool(key: String, value: Bool) {
+    UserDefaults(suiteName: suiteName)!.set(value, forKey: key)
+}
+
+func readUsrDefOptionBool(key: String, unset: Bool) -> Bool {
+    let defaults = UserDefaults(suiteName: suiteName)!
+    return defaults.object(forKey: key) == nil ? unset : defaults.bool(forKey: key)
+}
+
 func deleteUsrDefOption(key: String) {
     UserDefaults(suiteName: suiteName)?.removeObject(forKey: key)
 }

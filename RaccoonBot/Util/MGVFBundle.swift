@@ -450,7 +450,10 @@ final class MGVFBundle: @unchecked Sendable {
     }
 
     /// Where the embedded MacGameVideoFix keeps its installers and manifest.
-    static var embeddedDirectory: URL? {
+    ///
+    /// Nonisolated: it answers a question about the bundle on disk, and the
+    /// engine checks that ask it run in Task.detached.
+    nonisolated static var embeddedDirectory: URL? {
         guard let app = Bundle.main.resourceURL?
             .appendingPathComponent("mgvf/MacGameVideoFix.app/Contents/Resources")
         else { return nil }

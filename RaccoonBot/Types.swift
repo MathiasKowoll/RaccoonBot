@@ -1301,7 +1301,17 @@ final class AppGlobals: ObservableObject {
     /// consequence should be a choice on screen, not a constant in a patcher.
     @Published var bottlesRoot: String = ""
     @Published var windowsSteamFolder: URL?
-    
+
+    /// Whether the engine carries MacGameVideoFix's controller-bus set: the
+    /// winebus, setupapi and ntoskrnl that tell a Windows client which bus a
+    /// controller is on, so a DualSense on Bluetooth rumbles. An improvement
+    /// rather than a fix -- no title needs it -- so it is a switch, and off
+    /// puts CrossOver's own three files back. On by default for an engine the
+    /// set was built for, decided 2026-09-08. What the engine actually holds
+    /// is read separately; see `ControllerBusSwitch`.
+    @Published var controllerBusEnabled: Bool
+    static let controllerBusKey = "controllerBus"
+
     /// The bottles this application is configured with -- the one set anything
     /// that writes into a bottle is allowed to touch. One question, one place
     /// that answers it; see `ConfiguredBottles`.
@@ -1316,6 +1326,9 @@ final class AppGlobals: ObservableObject {
         // Falls back to where they have always lived, so an existing install
         // keeps working and simply starts showing what it was already doing.
         self.bottlesRoot = readUsrDefOptionString(key: "bottlesRoot") ?? DEFAULT_BOTTLES_ROOT
+        // Unset means on: the set is the better answer for a pad, and an
+        // install that predates the switch should get it, not lose it.
+        self.controllerBusEnabled = readUsrDefOptionBool(key: Self.controllerBusKey, unset: true)
     }
 }
 

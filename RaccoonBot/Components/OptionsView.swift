@@ -54,6 +54,10 @@ struct OptionsView: View {
     @State private var gstStatus: GStreamerStatus?
     @StateObject private var patchAll = PatchAll()
     @StateObject private var fixLibrary = MGVFLibrary.shared
+    /// The controller-bus set: what is wanted, what the engine holds, and
+    /// the script's refusal when it would not write. Read off the main actor
+    /// like `gstStatus`, for the same reason.
+    @StateObject private var controllerBus = ControllerBusSwitch()
     
     var body: some View {
         Modal(
@@ -117,6 +121,16 @@ struct OptionsView: View {
                                 appGlobals.cxAppPath = patchedAppURL.path(percentEncoded: false)
                                 persistUsrDefOptionString(key: "cxAppPath", value: patchedAppURL.relativePath)
                                 persistUsrDefOptionString(key: "cxCompleteAppPath", value: patchedAppURL.path(percentEncoded: false))
+                                // The optional set goes in after the copy is made
+                                // and signed -- the media set is already in, from
+                                // the script's step [3/6] -- and only when the
+                                // switch says so. The installer re-signs. A refusal
+                                // (a bottle up, an engine the set was not built
+                                // for) is a sentence in the controller-bus row,
+                                // not a failed engine: the copy is made and usable.
+                                if appGlobals.controllerBusEnabled {
+                                    await controllerBus.apply(.install, engine: patchedAppURL.path(percentEncoded: false))
+                                }
                                 if !bottles.isEmpty {
                                     shouldShowBottleSelector = true
                                 }
@@ -145,6 +159,56 @@ struct OptionsView: View {
                 Toggle("Use a game controller", isOn: $gamepad.enabled)
                     .font(.footnote)
                     .help("Off: RaccoonBot does not touch the controller at all. Arrow keys still navigate.")
+                // Which bus a pad is on, told to the games: MacGameVideoFix's
+                // controller-bus set, an improvement rather than a fix. No title
+                // needs it, so it is a switch, and off puts CrossOver's own three
+                // files back. The switch is what is wanted; the row under it is
+                // what the engine holds, read from the engine, and the two are
+                // allowed to disagree out loud -- see ControllerBusSwitch.
+                Toggle("Tell games which bus a controller is on", isOn: $appGlobals.controllerBusEnabled)
+                    .font(.footnote)
+                    .disabled(controllerBus.busy || !(controllerBus.status?.isBundled ?? true))
+                    .help("On: the engine carries MacGameVideoFix's winebus, setupapi and ntoskrnl, and a DualSense on Bluetooth keeps rumble, the touchpad and the PS button. Off: CrossOver's own three files are put back.")
+                    .onChange(of: appGlobals.controllerBusEnabled) { _, on in
+                        persistUsrDefOptionBool(key: AppGlobals.controllerBusKey, value: on)
+                        Task { await controllerBus.apply(on ? .install : .remove, engine: appGlobals.cxAppPath) }
+                    }
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .top, spacing: 6) {
+                        if let bus = controllerBus.status {
+                            let light = bus.light(enabled: appGlobals.controllerBusEnabled)
+                            Image(systemName: light == .good ? "checkmark.circle"
+                                            : light == .warning ? "exclamationmark.triangle" : "circle.dashed")
+                                .foregroundStyle(light == .good ? Color.green
+                                                 : light == .warning ? Color.orange : Color.secondary)
+                            Text(bus.summary(enabled: appGlobals.controllerBusEnabled))
+                                .font(.footnote)
+                                .foregroundStyle(light == .warning ? Color.primary : Color.secondary)
+                            Spacer()
+                            if controllerBus.busy {
+                                ProgressView().controlSize(.small)
+                            } else if let action = bus.wantsAction(enabled: appGlobals.controllerBusEnabled) {
+                                // The one action that makes the engine agree with
+                                // the switch. Its own verb, not the switch's value:
+                                // a half-installed set is removed first even with
+                                // the switch on.
+                                Button(action == .install ? "Install" : "Remove") {
+                                    Task { await controllerBus.apply(action, engine: appGlobals.cxAppPath) }
+                                }
+                            }
+                        } else {
+                            ProgressView().controlSize(.small)
+                            Text("Checking the engine's controller bus…").font(.footnote).foregroundStyle(.secondary)
+                        }
+                    }
+                    // Refused rather than attempted: not an error, a reason.
+                    if let refused = controllerBus.refusedReason {
+                        Text(refused).font(.footnote).foregroundStyle(.orange)
+                    }
+                }
+                .task(id: appGlobals.cxAppPath ?? "") {
+                    await controllerBus.refresh(engine: appGlobals.cxAppPath)
+                }
                 if(downloading){
                     ProgressView(value: progress, total: 100) {
                         Text(progressLabel).font(.footnote)

@@ -368,8 +368,11 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
         // the same condition: only when something would change.
         let pads = SonyPads.attached()
         let sdlEnabled = options!.enableSDL
-        if let summary = DualSenseRoute.summary(for: pads, sdlEnabled: sdlEnabled) { console.log("controller: \(summary)") }
-        for override in DualSenseRoute.overrides(for: pads, sdlEnabled: sdlEnabled) {
+        let tellsTheBus = DualSenseRoute.engineTellsTheBus(cxAppPath: cxAppPath)
+        if let summary = DualSenseRoute.summary(for: pads, sdlEnabled: sdlEnabled, engineTellsTheBus: tellsTheBus) {
+            console.log("controller: \(summary)")
+        }
+        for override in DualSenseRoute.overrides(for: pads, sdlEnabled: sdlEnabled, engineTellsTheBus: tellsTheBus) {
             let section: WineRegSection
             if let existing = registry.section(forPath: override.path) {
                 section = existing

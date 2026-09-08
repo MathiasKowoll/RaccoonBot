@@ -109,20 +109,39 @@ nonisolated enum DualSenseRoute {
     /// Only with SDL enabled: the override does not create the SDL copy, it
     /// only stops the raw one, and with "Enable SDL" off a Bluetooth pad would
     /// simply vanish. Then raw is the lesser evil, and the console says why.
-    static func overrides(for pads: [SonyPads.Pad], sdlEnabled: Bool) -> [Override] {
+    ///
+    /// And only on an engine that cannot tell the guest the transport. With
+    /// MacGameVideoFix's controller-bus set installed (mgvf-0002/3/4), Steam
+    /// learns "bluetooth 1" on the raw route and speaks the pad's own protocol
+    /// -- measured 2026-09-08 -- so the raw route keeps every feature there and
+    /// the SDL detour would only take them away.
+    static func overrides(for pads: [SonyPads.Pad], sdlEnabled: Bool, engineTellsTheBus: Bool) -> [Override] {
         SonyPads.models.map { model in
             let onBluetooth = pads.contains { $0.productID == model && $0.isBluetooth }
-            return Override(path: sectionPath(productID: model), hidraw: (onBluetooth && sdlEnabled) ? 0 : 1)
+            let viaSDL = onBluetooth && sdlEnabled && !engineTellsTheBus
+            return Override(path: sectionPath(productID: model), hidraw: viaSDL ? 0 : 1)
         }
     }
 
+    /// Whether the engine carries mgvf-0002: winebus that names the bus in its
+    /// compatible ids. Read from the binary rather than from a version, the way
+    /// this project reads everything: the literal is a UTF-16 string in the PE.
+    static func engineTellsTheBus(cxAppPath: String?) -> Bool {
+        guard let cxAppPath, !cxAppPath.isEmpty else { return false }
+        let sys = cxAppPath + "/Contents/SharedSupport/CrossOver/lib/wine/x86_64-windows/winebus.sys"
+        guard let data = FileManager.default.contents(atPath: sys) else { return false }
+        let marker = Data("BTHENUM\\{00001124-0000-1000-8000-00805f9b34fb}".utf16.flatMap { [UInt8($0 & 0xff), UInt8($0 >> 8)] })
+        return data.range(of: marker) != nil
+    }
+
     /// What the console says about it, or nil when no DualSense is attached.
-    static func summary(for pads: [SonyPads.Pad], sdlEnabled: Bool) -> String? {
+    static func summary(for pads: [SonyPads.Pad], sdlEnabled: Bool, engineTellsTheBus: Bool) -> String? {
         let mine = pads.filter { SonyPads.models.contains($0.productID) }
         guard !mine.isEmpty else { return nil }
         return mine.map { pad in
             let name = pad.productID == SonyPads.dualSenseEdge ? "DualSense Edge" : "DualSense"
             let route = !pad.isBluetooth ? "raw, with all its features"
+                      : engineTellsTheBus ? "raw, and the engine tells Steam it is on Bluetooth"
                       : sdlEnabled ? "through SDL: an Xbox-class pad, some rumble, no touchpad, gyro or PS button"
                       : "raw, and it will not rumble: turn Enable SDL on for this title"
             return "\(name) on \(pad.transport): \(route)"

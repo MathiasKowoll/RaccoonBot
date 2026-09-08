@@ -26,21 +26,21 @@ struct DualSenseRouteTests {
 
     /// Measured: over Bluetooth the raw path never rumbles, the SDL one does.
     @Test func aBluetoothDualSenseGoesThroughSDL() {
-        let o = DualSenseRoute.overrides(for: [pad(SonyPads.dualSenseEdge, "Bluetooth")], sdlEnabled: true)
+        let o = DualSenseRoute.overrides(for: [pad(SonyPads.dualSenseEdge, "Bluetooth")], sdlEnabled: true, engineTellsTheBus: false)
         #expect(hidraw(o, SonyPads.dualSenseEdge) == 0)
         #expect(hidraw(o, SonyPads.dualSense) == 1, "the model that is not here stays raw")
     }
 
     /// Over USB the raw path works and keeps touchpad, gyro and triggers.
     @Test func aUSBDualSenseStaysRaw() {
-        let o = DualSenseRoute.overrides(for: [pad(SonyPads.dualSense, "USB")], sdlEnabled: true)
+        let o = DualSenseRoute.overrides(for: [pad(SonyPads.dualSense, "USB")], sdlEnabled: true, engineTellsTheBus: false)
         #expect(hidraw(o, SonyPads.dualSense) == 1)
     }
 
     /// Explicit state, always: with nothing attached both models are written
     /// raw, so a 0 left by an earlier Bluetooth session cannot linger.
     @Test func nothingAttachedWritesRawForBothModels() {
-        let o = DualSenseRoute.overrides(for: [], sdlEnabled: true)
+        let o = DualSenseRoute.overrides(for: [], sdlEnabled: true, engineTellsTheBus: false)
         #expect(o.count == 2)
         #expect(o.allSatisfy { $0.hidraw == 1 })
     }
@@ -48,9 +48,9 @@ struct DualSenseRouteTests {
     /// The override only stops the raw copy; it does not make the SDL one.
     /// With SDL off a Bluetooth pad would vanish, so it stays raw.
     @Test func withSDLOffTheOverrideIsNeverWritten() {
-        let o = DualSenseRoute.overrides(for: [pad(SonyPads.dualSenseEdge, "Bluetooth")], sdlEnabled: false)
+        let o = DualSenseRoute.overrides(for: [pad(SonyPads.dualSenseEdge, "Bluetooth")], sdlEnabled: false, engineTellsTheBus: false)
         #expect(hidraw(o, SonyPads.dualSenseEdge) == 1)
-        #expect(DualSenseRoute.summary(for: [pad(SonyPads.dualSenseEdge, "Bluetooth")], sdlEnabled: false)?
+        #expect(DualSenseRoute.summary(for: [pad(SonyPads.dualSenseEdge, "Bluetooth")], sdlEnabled: false, engineTellsTheBus: false)?
                     .contains("turn Enable SDL on") == true)
     }
 
@@ -58,11 +58,27 @@ struct DualSenseRouteTests {
     /// apart, and the one that would otherwise be silent wins.
     @Test func bluetoothWinsWhenTheSameModelIsOnBoth() {
         let o = DualSenseRoute.overrides(for: [pad(SonyPads.dualSense, "USB"), pad(SonyPads.dualSense, "BluetoothLowEnergy")],
-                                         sdlEnabled: true)
+                                         sdlEnabled: true, engineTellsTheBus: false)
         #expect(hidraw(o, SonyPads.dualSense) == 0)
     }
 
+    /// With MacGameVideoFix's controller-bus set in the engine, Steam learns
+    /// the transport on the raw route and keeps every feature: no detour.
+    @Test func anEngineThatTellsTheBusKeepsTheRawRoute() {
+        let o = DualSenseRoute.overrides(for: [pad(SonyPads.dualSenseEdge, "Bluetooth")], sdlEnabled: true, engineTellsTheBus: true)
+        #expect(hidraw(o, SonyPads.dualSenseEdge) == 1)
+        #expect(DualSenseRoute.summary(for: [pad(SonyPads.dualSenseEdge, "Bluetooth")], sdlEnabled: true, engineTellsTheBus: true)?
+                    .contains("tells Steam") == true)
+    }
+
+    /// The capability is read from the engine's own winebus.sys, and a missing
+    /// engine reads as not having it.
+    @Test func aMissingEngineDoesNotTellTheBus() {
+        #expect(DualSenseRoute.engineTellsTheBus(cxAppPath: nil) == false)
+        #expect(DualSenseRoute.engineTellsTheBus(cxAppPath: "/nonexistent.app") == false)
+    }
+
     @Test func somebodyElsesPadIsNotMentioned() {
-        #expect(DualSenseRoute.summary(for: [pad(0x05C4, "Bluetooth")], sdlEnabled: true) == nil)
+        #expect(DualSenseRoute.summary(for: [pad(0x05C4, "Bluetooth")], sdlEnabled: true, engineTellsTheBus: false) == nil)
     }
 }

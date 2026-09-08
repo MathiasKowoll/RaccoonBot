@@ -26,10 +26,24 @@ struct OptionFocusTests {
         #expect(all.suffix(4) == [.save, .undo, .reset, .autoconfigure])
     }
 
+    /// The pad picker sits with the other controller controls, and a
+    /// controller has to be able to reach it: this application is driven with
+    /// one, and a control that is on screen and not in this list is one nobody
+    /// holding a pad can change.
+    @Test func theControllerCanReachThePadPicker() {
+        let all = OptionFocus.visibleControls(for: windows)
+        #expect(all.contains(.padSeenAs))
+        #expect(all.firstIndex(of: .padSeenAs) == all.firstIndex(of: .hidraw).map { $0 + 1 },
+                "it is drawn under Disable Hidraw, and the list is the order on screen")
+        #expect(OptionControl.padSeenAs.opensMenu, "three choices in a popup, as the backend picker is")
+        #expect(!OptionControl.padSeenAs.isButton)
+    }
+
     @Test func aNativeTitleHasNoWineControls() {
         let list = OptionFocus.visibleControls(for: OptionPanelState(isNative: true))
         #expect(!list.contains(.backend))
         #expect(!list.contains(.msync))
+        #expect(!list.contains(.padSeenAs), "a native title has no bottle to write a pad option into")
         #expect(list.contains(.mtlHud))
         #expect(list.contains(.save))
     }

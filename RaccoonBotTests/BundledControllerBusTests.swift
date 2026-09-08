@@ -105,7 +105,9 @@ struct BundledControllerBusTests {
     @Test func theStampNamesTheEngineTheMediaSetNames() throws {
         let ours = try stamp
         #expect(ours.app == "CrossOver.app")
-        #expect(ours.patches == "mgvf-0002 mgvf-0003 mgvf-0004")
+        // Four now: mgvf-0005 added the USB emulation a game's own options can
+        // ask for, and it travels in the same winebus as the other three.
+        #expect(ours.patches == "mgvf-0002 mgvf-0003 mgvf-0004 mgvf-0005")
         let media = try JSONDecoder().decode(BundledControllerBus.Stamp.self,
                                              from: Data(contentsOf: payload.appendingPathComponent("engine-built-for-stock.json")))
         #expect(ours.version == media.version)

@@ -189,6 +189,10 @@ struct GameOptionsData: Codable, Equatable { // this is used for reading saved p
     var envVariables: String?
     var enableSDL: Bool?
     var disableHidraw: Bool?
+    /// What a DualSense should look like to this title -- a
+    /// `DualSensePresentation` raw value. Stored as its string rather than as
+    /// the case, so renaming a case cannot silently reinterpret a saved record.
+    var dualSensePresentation: String?
     var ue4Hack: Bool?
     var mvkArgBuff: Bool?
     var vulkanLib: String?
@@ -221,6 +225,7 @@ struct GameOptionsData: Codable, Equatable { // this is used for reading saved p
         self.envVariables = data.envVariables
         self.enableSDL = data.enableSDL
         self.disableHidraw = data.disableHidraw
+        self.dualSensePresentation = data.dualSensePresentation
         self.ue4Hack = data.ue4Hack
         self.mvkArgBuff = data.mvkArgBuff
         self.vulkanLib = data.vulkanLib
@@ -263,6 +268,13 @@ class GameOptions: ObservableObject { // this is used as form state
     @Published var envVariables: String
     @Published var enableSDL: Bool
     @Published var disableHidraw: Bool
+    /// What a DualSense looks like to this title.
+    ///
+    /// Not in the initialiser on purpose, as the HUD's detail is not: every
+    /// existing call site keeps working, and a title nobody has told otherwise
+    /// gets the pad as it is -- which is what this application did for every
+    /// title before the option existed.
+    @Published var dualSensePresentation: String = DualSensePresentation.byDefault.rawValue
     @Published var ue4Hack: Bool
     @Published var mvkArgBuff: Bool
     @Published var vulkanLib: String
@@ -317,6 +329,10 @@ class GameOptions: ObservableObject { // this is used as form state
         self.envVariables = data.envVariables ?? ""
         self.enableSDL = data.enableSDL ?? true
         self.disableHidraw = data.disableHidraw ?? false
+        // Folded through the enum rather than taken as written: a raw value
+        // this build cannot show would leave the menu blank while the launch
+        // quietly used the default, and one question would have two answers.
+        self.dualSensePresentation = DualSensePresentation.pickable(data.dualSensePresentation)
         self.ue4Hack = data.ue4Hack ?? true
         self.mvkArgBuff = data.mvkArgBuff ?? true
         self.vulkanLib = data.vulkanLib ?? "standard"
@@ -354,6 +370,7 @@ class GameOptions: ObservableObject { // this is used as form state
         if let v = data.envVariables { self.envVariables = v }
         if let v = data.enableSDL { self.enableSDL = v }
         if let v = data.disableHidraw { self.disableHidraw = v }
+        if let v = data.dualSensePresentation { self.dualSensePresentation = DualSensePresentation.pickable(v) }
         if let v = data.ue4Hack { self.ue4Hack = v }
         if let v = data.mvkArgBuff { self.mvkArgBuff = v }
         if let v = data.vulkanLib { self.vulkanLib = v }

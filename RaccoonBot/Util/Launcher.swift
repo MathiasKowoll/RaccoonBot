@@ -347,47 +347,84 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
     
     let registryURL = bottleURL.appendingPathComponent("system.reg")
     let registry = WineRegistryFile(fileURL: registryURL)
-    try registry.load()
-    if let controllersSection = registry.section(forPath: "System\\\\CurrentControlSet\\\\Services\\\\winebus") {
-        // Written only when it would change something. This rewrites the
-        // bottle's entire system.reg -- 160,000 lines on this machine -- and
-        // after a bottle's first launch these two values already hold what we
-        // are about to set, so every launch after the first was a rewrite for
-        // nothing. A file not written is a file not at risk.
-        var changed = false
-        regOptionsDictionary.keys.forEach { key in
-            let value = regOptionsDictionary[key]!
-            if controllersSection.addOrSetDword(forKey: key, value: value) {
-                console.log("setting \(key) to \(value)")
-                changed = true
-            }
-        }
-        // A DualSense goes through SDL when it is on Bluetooth and stays raw
-        // when it is not -- see DualSenseRoute for the measurement behind it.
-        // Written the same way as the two keys above, into the same file, on
-        // the same condition: only when something would change.
-        let pads = SonyPads.attached()
-        let sdlEnabled = options!.enableSDL
-        let tellsTheBus = DualSenseRoute.engineTellsTheBus(cxAppPath: cxAppPath)
-        if let summary = DualSenseRoute.summary(for: pads, sdlEnabled: sdlEnabled, engineTellsTheBus: tellsTheBus) {
-            console.log("controller: \(summary)")
-        }
-        for override in DualSenseRoute.overrides(for: pads, sdlEnabled: sdlEnabled, engineTellsTheBus: tellsTheBus) {
-            let section: WineRegSection
-            if let existing = registry.section(forPath: override.path) {
-                section = existing
-            } else {
-                section = WineRegSection(header: "[\(override.path)] \(Int(Date().timeIntervalSince1970))")
-                registry.sections.append(section)
-            }
-            if section.addOrSetDword(forKey: "Hidraw", value: override.hidraw) {
-                console.log("setting \(override.path) Hidraw to \(override.hidraw)")
-                changed = true
-            }
-        }
-        if changed { try registry.save() }
+    // Not while the bottle is up. Before the per-game pad option, these two
+    // or three values changed only when the pad's transport did, so this file
+    // was almost never written; now a value is written for both DualSense
+    // models on every launch, and alternating between a title set to wired and
+    // one set to as-is would rewrite all 160,000 lines of it every time --
+    // possibly under a wineserver that holds its own copy and flushes it on
+    // shutdown, which would both lose our write and put the file at risk. So
+    // the bottle that is up keeps its registry, and the console says so: a
+    // running bottle read these values when it booted and cannot be told
+    // otherwise from here anyway.
+    if !BottleProcesses.registryIsOursToWrite(inBottleAt: bottleURL) {
+        console.warn("this bottle is already running, so its registry was left alone: the controller settings for this title -- Enable SDL, Disable Hidraw and what a DualSense is seen as -- were not written. A bottle reads them when it boots, so close what is running in it (the launcher and its games) and start this title again.")
     } else {
-        console.error("\\\\winebus section not found in system.reg file for the bottle \(selectedBottle)")
+        try registry.load()
+        if let controllersSection = registry.section(forPath: "System\\\\CurrentControlSet\\\\Services\\\\winebus") {
+            // Written only when it would change something. This rewrites the
+            // bottle's entire system.reg -- 160,000 lines on this machine -- and
+            // after a bottle's first launch these two values already hold what we
+            // are about to set, so every launch after the first was a rewrite for
+            // nothing. A file not written is a file not at risk.
+            var changed = false
+            regOptionsDictionary.keys.forEach { key in
+                let value = regOptionsDictionary[key]!
+                if controllersSection.addOrSetDword(forKey: key, value: value) {
+                    console.log("setting \(key) to \(value)")
+                    changed = true
+                }
+            }
+            // A DualSense goes through SDL when it is on Bluetooth and stays raw
+            // when it is not -- see DualSenseRoute for the measurement behind it --
+            // and, on an engine that can do it, is presented to this title the way
+            // this title's own options ask for. Written the same way as the two
+            // keys above, into the same file, on the same condition: only when
+            // something would change.
+            //
+            // All three values are written for both models on every launch, zeros
+            // included, and whatever is attached at this moment. That is what
+            // makes the presentation per game -- the title that wants the pad as
+            // it is clears what the last title set rather than inheriting it --
+            // and it is what lets the console's own advice work: winebus reads
+            // them as the pad arrives, so the pad plugged in or woken up after
+            // this finds them already there.
+            let pads = SonyPads.attached()
+            let sdlEnabled = options!.enableSDL
+            let tellsTheBus = DualSenseRoute.engineTellsTheBus(cxAppPath: cxAppPath)
+            let presentation = DualSensePresentation(rawValue: options!.dualSensePresentation) ?? .byDefault
+            let canEmulateUSB = DualSenseRoute.engineCanEmulateUSB(cxAppPath: cxAppPath)
+            if let summary = DualSenseRoute.summary(for: pads, sdlEnabled: sdlEnabled, engineTellsTheBus: tellsTheBus,
+                                                    presentation: presentation, engineCanEmulateUSB: canEmulateUSB) {
+                console.log("controller: \(summary)")
+            }
+            for override in DualSenseRoute.overrides(for: pads, sdlEnabled: sdlEnabled, engineTellsTheBus: tellsTheBus,
+                                                     presentation: presentation, engineCanEmulateUSB: canEmulateUSB) {
+                let section: WineRegSection
+                if let existing = registry.section(forPath: override.path) {
+                    section = existing
+                } else {
+                    section = WineRegSection(header: "[\(override.path)] \(Int(Date().timeIntervalSince1970))")
+                    registry.sections.append(section)
+                }
+                let values: [(String, UInt32)] = [
+                    (DualSenseRoute.hidrawValue, override.hidraw),
+                    (DualSenseRoute.usbEmulationValue, override.usbEmulation),
+                    (DualSenseRoute.productIDValue, override.askedProductID),
+                ]
+                for (key, value) in values {
+                    // The call is the write; keeping it out of a `where` clause so
+                    // that what changes the bottle is on a line of its own.
+                    if section.addOrSetDword(forKey: key, value: value) {
+                        console.log("setting \(override.path) \(key) to \(value)")
+                        changed = true
+                    }
+                }
+            }
+            if changed { try registry.save() }
+        } else {
+            console.error("\\\\winebus section not found in system.reg file for the bottle \(selectedBottle)")
+        }
     }
     
     console.warn("applying config changes to the bottle \(selectedBottle)...")

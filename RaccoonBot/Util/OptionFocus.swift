@@ -23,7 +23,7 @@ import Foundation
 
 nonisolated enum OptionControl: String, CaseIterable, Hashable {
     // Generic
-    case backend, x87, mtlHud, advertiseAVX, msync, sdl, hidraw, ue4Hack, mvkArgBuff
+    case backend, x87, mtlHud, advertiseAVX, msync, sdl, hidraw, padSeenAs, ue4Hack, mvkArgBuff
     // DXMT
     case dxmtCap, dxmtMaxFPS, dxmtMetalFX, dxmtUpscale
     // Metal HUD
@@ -45,7 +45,7 @@ nonisolated enum OptionControl: String, CaseIterable, Hashable {
     /// screen, and cycling is what a click does there too.
     var opensMenu: Bool {
         switch self {
-        case .backend, .hudAlignment: return true
+        case .backend, .hudAlignment, .padSeenAs: return true
         default: return false
         }
     }
@@ -130,7 +130,7 @@ nonisolated struct OptionFocus: Equatable {
         // Nothing for the two text fields.
         if !state.isNative { list.append(.x87) }
         list += [.mtlHud, .advertiseAVX]
-        if !state.isNative { list += [.msync, .sdl, .hidraw, .ue4Hack, .mvkArgBuff] }
+        if !state.isNative { list += [.msync, .sdl, .hidraw, .padSeenAs, .ue4Hack, .mvkArgBuff] }
         if state.backend == "dxmt" {
             list.append(.dxmtCap)
             if state.dxmtCapOn { list.append(.dxmtMaxFPS) }

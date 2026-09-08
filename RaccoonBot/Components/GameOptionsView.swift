@@ -146,6 +146,15 @@ struct GameOptionsView: View {
                                         .optionFocus(.sdl, current: focus.current, shown: gamepad.showsFocus)
                                     Toggle("Disable Hidraw", isOn: $gameOptions.disableHidraw)
                                         .optionFocus(.hidraw, current: focus.current, shown: gamepad.showsFocus)
+                                    DropDown(options: DualSensePresentation.dropdownOptions,
+                                             label: "Pad seen as",
+                                             value: $gameOptions.dualSensePresentation)
+                                        .pickerStyle(.menu)
+                                        .help("What a DualSense looks like to this game. Needs the engine controller set built with the USB-emulation patch, in Options. It applies when the pad next arrives, not at once: start with Steam closed, or reconnect the pad afterwards. For a title whose own Sony library only accepts a wired pad -- and Steam Input must be off for that title, or Steam hands the game an Xbox pad whatever this says. Both DualSense models are served, so an Edge asked to look like a plain DualSense is created as one. The choice is written whether or not a pad is attached at launch, so it is already there when the pad comes back; the console says what each pad actually got.")
+                                        .optionFocus(.padSeenAs, current: focus.current, shown: gamepad.showsFocus)
+                                        .popover(isPresented: Binding(get: { menu?.control == .padSeenAs },
+                                                                      set: { if !$0 { menu = nil } }),
+                                                 arrowEdge: .bottom) { menuPopover(for: .padSeenAs) }
                                     Divider()
                                     Text("Vulkan options")
                                     Toggle("Enable UE4 Hack", isOn: $gameOptions.ue4Hack)
@@ -489,6 +498,11 @@ struct GameOptionsView: View {
             gameOptions.cxGraphicsBackend = OptionAdjust.cycle(gameOptions.cxGraphicsBackend,
                                                                 in: OptionAdjust.backends, forward: forward)
             return .changed
+        case .padSeenAs:
+            gameOptions.dualSensePresentation = OptionAdjust.cycle(gameOptions.dualSensePresentation,
+                                                                    in: DualSensePresentation.allCases.map(\.rawValue),
+                                                                    forward: forward)
+            return .changed
         case .x87:          return flip(\.x87PatchEnabled)
         case .mtlHud:       return flip(\.mtlHudEnabled)
         case .advertiseAVX: return flip(\.advertiseAVX)
@@ -535,6 +549,10 @@ struct GameOptionsView: View {
             menu = MenuFocus(control: control,
                              options: MetalHudAlignment.allCases.map { corner in (id: corner.rawValue, label: corner.label) },
                              selected: gameOptions.mtlHudAlignment)
+        case .padSeenAs:
+            menu = MenuFocus(control: control,
+                             options: DualSensePresentation.dropdownOptions,
+                             selected: gameOptions.dualSensePresentation)
         default:
             break
         }
@@ -544,6 +562,7 @@ struct GameOptionsView: View {
         switch control {
         case .backend:      gameOptions.cxGraphicsBackend = id
         case .hudAlignment: gameOptions.mtlHudAlignment = id
+        case .padSeenAs:    gameOptions.dualSensePresentation = id
         default: break
         }
     }

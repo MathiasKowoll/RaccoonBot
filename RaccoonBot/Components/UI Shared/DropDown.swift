@@ -21,7 +21,12 @@ struct DropDown: View {
             }
         } else {
             HStack {
-                Text("Graphics Backend").lineLimit(1)
+                // The label this was given, not the name of the first control
+                // that ever used one. It was written here as a literal, so on
+                // macOS 27 and later every dropdown in the application called
+                // itself "Graphics Backend" -- the Vulkan library picker did,
+                // and so would any picker added beside it.
+                Text(label).lineLimit(1)
                 Menu {
                     ForEach(options, id: \.id) { (id, label) in
                         Button {

@@ -213,6 +213,26 @@ enum BottleProcesses {
         running(inBottleAt: bottle).contains { $0.name.contains("wineserver") }
     }
 
+    /// May this launch rewrite the bottle's registry files?
+    ///
+    /// Not while a wineserver is alive in the bottle. wineserver holds its own
+    /// copy of the registry in memory and flushes it when it shuts down, so a
+    /// write underneath it is lost at best -- its copy wins -- and at worst
+    /// lands in the middle of that flush, on a file of 160,000 lines that the
+    /// bottle cannot be repaired without. It is the same rule the fix installer
+    /// keeps (`EpicImport` refuses a live bottle outright), and it costs
+    /// nothing: winebus reads the values we set when the bottle boots, so a
+    /// bottle that is already up is using what it booted with whatever we
+    /// write. The answer for the owner is to close the launcher and start
+    /// again, not for us to write harder.
+    static func registryIsOursToWrite(inBottleAt bottle: URL) -> Bool {
+        registryIsOursToWrite(serverIsAlive: serverIsAlive(inBottleAt: bottle))
+    }
+
+    /// The rule itself, taking the measurement rather than making it, so both
+    /// of its answers can be read and tested without a live bottle.
+    static func registryIsOursToWrite(serverIsAlive alive: Bool) -> Bool { !alive }
+
     /// End what is left of a bottle, and nothing outside it.
     ///
     /// Asks first, then insists. Returns what would not go.

@@ -440,6 +440,29 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
         }
     }
     
+    // An Unreal title reads its own Engine.ini at startup, so whatever it needs
+    // from us has to be on disk before the process exists. Today that is one
+    // console variable: D3DMetal presents the adapter as "AMD Compatibility
+    // Mode" with NVIDIA's vendor id and a driver version of "10.00", Unreal
+    // matches its NVIDIA deny-list, and every Unreal title opens with a
+    // graphics-driver warning that has nothing to do with the title.
+    //
+    // Written on every launch rather than once, because a title can delete an
+    // Engine.ini it did not write -- Beast of Reincarnation does, on exit --
+    // and making the file read-only does not stop it: unlink needs write
+    // permission on the directory, not on the file.
+    //
+    // A Steam launch has no executable path here, only the app id, so the two
+    // stores are answered from different sources. Quiet when it cannot name a
+    // directory: nothing is guessed into one that might be another title's.
+    UnrealConfig.applyAtLaunch(
+        bottle: bottleURL,
+        steamAppID: Int(id) != nil ? id : nil,
+        steamRoot: bottleURL.appendingPathComponent(DEFAULT_STEAM_WINE_PATH.hasPrefix("/")
+                                                    ? String(DEFAULT_STEAM_WINE_PATH.dropFirst())
+                                                    : DEFAULT_STEAM_WINE_PATH),
+        exe: appExeURL)
+
     console.warn("applying config changes to the bottle \(selectedBottle)...")
     
     let bottleName = URL(string: selectedBottle)?.lastPathComponent ?? ""

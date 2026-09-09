@@ -77,8 +77,8 @@ struct DualSenseRumbleTests {
         #expect(report[2] == 0x10, "the tag")
         #expect(report[3] == 0x03, "flag0: compatible vibration | disable audio haptics")
         #expect(report[4] == 0x00, "the second flag byte is left alone")
-        #expect(report[5] == 128, "right motor: the mid-scale request at 100%")
-        #expect(report[6] == 128, "left motor")
+        #expect(report[5] == 64, "right motor: the quarter-scale request at 100%")
+        #expect(report[6] == 64, "left motor")
         #expect(report[41] == 0x00, "byte 38 of the common block: the haptic path is NOT selected")
         // Nothing else is asked for: no lightbar, no triggers, no microphone.
         let untouched = Array(report[7..<41]) + Array(report[42..<74])
@@ -92,33 +92,44 @@ struct DualSenseRumbleTests {
         let report = DualSenseRumble.bluetoothReport(vibration: .asAsked, percent: 100, sequence: 1)
         #expect(report[3] == 0x02, "flag0: disable audio haptics only")
         #expect(report[41] == 0x04, "byte 38: the improved emulation on 2.24 firmware and newer")
-        #expect(report[5] == 128)
+        #expect(report[5] == 64)
     }
 
-    /// The percentage, and where it stops. 128 is what the pulse asks for
-    /// before the gain, so 200% is already the top of the scale.
+    /// The percentage, and where it stops. 64 is what the pulse asks for before
+    /// the gain, so the slider spends its whole range doing something: at half
+    /// scale it used to reach 255 at 200% and every step above that felt the
+    /// same, which is what the first person to use it reported.
     @Test func thePercentageScalesTheRequestAndSaturates() {
-        #expect(DualSenseRumble.motor(vibration: .asAsked, percent: 25) == 32)
-        #expect(DualSenseRumble.motor(vibration: .asAsked, percent: 100) == 128)
-        #expect(DualSenseRumble.motor(vibration: .asAsked, percent: 150) == 192)
-        #expect(DualSenseRumble.motor(vibration: .asAsked, percent: 200) == 255)
-        #expect(DualSenseRumble.motor(vibration: .asAsked, percent: 400) == 255,
+        // The percentage belongs to `custom` alone, in the panel and here.
+        // The other two buzz at the reference whatever the slider says, so a
+        // person switching between them feels the PATH change and nothing
+        // else -- which is the comparison the button exists to make.
+        #expect(DualSenseRumble.motor(vibration: .asAsked, percent: 25) == 64)
+        #expect(DualSenseRumble.motor(vibration: .asAsked, percent: 400) == 64)
+        #expect(DualSenseRumble.motor(vibration: .stronger, percent: 400) == 64,
+                "stronger is the same request through the other path, so the two pulses compare")
+        #expect(DualSenseRumble.motor(vibration: .custom, percent: 25) == 16)
+        #expect(DualSenseRumble.motor(vibration: .custom, percent: 100) == 64)
+        #expect(DualSenseRumble.motor(vibration: .custom, percent: 150) == 96)
+        #expect(DualSenseRumble.motor(vibration: .custom, percent: 200) == 128)
+        #expect(DualSenseRumble.motor(vibration: .custom, percent: 300) == 192)
+        #expect(DualSenseRumble.motor(vibration: .custom, percent: 400) == 255,
                 "it cannot go past the byte, which is the option's own warning")
         // A percentage from a record this build would not offer is folded into
         // the range first, exactly as the launch folds it.
-        #expect(DualSenseRumble.motor(vibration: .asAsked, percent: 100000) == 255)
-        #expect(DualSenseRumble.motor(vibration: .asAsked, percent: 0) == 32, "clamped up to the slider's floor")
+        #expect(DualSenseRumble.motor(vibration: .custom, percent: 100000) == 255)
+        #expect(DualSenseRumble.motor(vibration: .custom, percent: 0) == 0, "0 is silence, and the slider reaches it")
     }
 
-    /// "Off" is silence, and the report says so with the motors and not by
-    /// staying home: the enable bits are still set, because a block with no
+    /// Custom at 0 is silence, and the report says so with the motors and not
+    /// by staying home: the enable bits are still set, because a block with no
     /// enable bit asks the pad to change nothing at all.
-    @Test func offSendsZeroMotorsWithTheEnableBitsStillSet() {
-        let report = DualSenseRumble.bluetoothReport(vibration: .off, percent: 400, sequence: 1)
+    @Test func silenceSendsZeroMotorsWithTheEnableBitsStillSet() {
+        let report = DualSenseRumble.bluetoothReport(vibration: .custom, percent: 0, sequence: 1)
         #expect(report[5] == 0)
         #expect(report[6] == 0)
-        #expect(report[3] == 0x02, "still a valid request, for nothing")
-        #expect(DualSenseRumble.motor(vibration: .off, percent: 400) == 0)
+        #expect(report[3] == 0x03, "still a valid request, for nothing")
+        #expect(DualSenseRumble.motor(vibration: .custom, percent: 0) == 0)
     }
 
     /// The release that stops the pulse is the same report with the motors at
@@ -136,12 +147,12 @@ struct DualSenseRumbleTests {
 
     /// On a cable the pad takes the short report and checks no signature.
     @Test func aPadOnACableTakesReport0x02() {
-        let report = DualSenseRumble.usbReport(vibration: .stronger, percent: 200)
+        let report = DualSenseRumble.usbReport(vibration: .custom, percent: 200)
         #expect(report.count == 48)
         #expect(report[0] == 0x02)
         #expect(report[1] == 0x03, "flag0, one byte after the id this time")
-        #expect(report[3] == 255, "right motor, saturated")
-        #expect(report[4] == 255, "left motor")
+        #expect(report[3] == 128, "right motor")
+        #expect(report[4] == 128, "left motor")
         #expect(report[39] == 0x00, "byte 38 of the common block")
         #expect(report[40...].allSatisfy { $0 == 0 }, "and nothing after it -- no CRC on USB")
     }
@@ -161,7 +172,8 @@ struct DualSenseRumbleTests {
     @Test func onlyTheRewriteAsksForTheLegacyMotors() {
         #expect(DualSenseRumble.path(for: .stronger) == .legacyMotors)
         #expect(DualSenseRumble.path(for: .asAsked) == .haptic)
-        #expect(DualSenseRumble.path(for: .off) == .haptic)
+        #expect(DualSenseRumble.path(for: .custom) == .legacyMotors,
+                "custom is stronger with the strength chosen by hand, so it takes the same path")
         #expect(DualSenseRumble.Path.legacyMotors.flag0 == 0x03)
         #expect(DualSenseRumble.Path.legacyMotors.flag2 == 0x00)
         #expect(DualSenseRumble.Path.haptic.flag0 == 0x02)

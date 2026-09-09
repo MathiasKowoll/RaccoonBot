@@ -39,7 +39,7 @@
 //
 //  The percentage the driver applies multiplies what the GAME asks for. There
 //  is no game here, so the pulse multiplies `referenceRequest` instead -- a
-//  mid-scale request, chosen so the percentage is audible in the hand at all.
+//  quarter-scale request, chosen so the whole slider is audible in the hand.
 //  A test at 255 would feel identical at every percentage above 100, because
 //  the gain saturates, which is exactly the thing the option's own help text
 //  has to explain. So this is a taste of the choice, not a rehearsal of a
@@ -81,28 +81,45 @@ nonisolated enum DualSenseRumble {
         var flag2: UInt8 { self == .legacyMotors ? 0x00 : 0x04 }
     }
 
-    /// The path a choice asks for. `off` and `as asked` both keep the game's
-    /// own path; only `stronger` is the rewrite.
+    /// The path a choice asks for: the same one the driver takes, which is
+    /// what makes the pulse worth feeling. `as asked` keeps the game's own
+    /// path; `stronger` and `custom` are both the rewrite, because custom is
+    /// stronger with the strength chosen by hand.
     static func path(for vibration: DualSenseVibration) -> Path {
-        vibration == .stronger ? .legacyMotors : .haptic
+        vibration.modeValue == 1 ? .legacyMotors : .haptic
     }
 
     /// What the pulse asks for before the percentage is applied.
     ///
-    /// Half scale rather than the full 255, so the percentage does something
-    /// you can feel: 25% is 32, 100% is 128, and everything from 200% up is
-    /// the saturated 255. The corpus mgvf-0009 was written from has motor
-    /// values from 1 to 255, so no single number is "what a game asks"; this
-    /// one is chosen to make the control legible, and is said out loud in the
-    /// sentence the button reports.
-    static let referenceRequest: Double = 128
+    /// A quarter of full scale, so that the whole slider can be felt.
+    ///
+    /// A gain multiplies what a game asks for and saturates at 255, so the
+    /// reference this test scales decides how much of the slider does
+    /// anything at all. At half scale, 200% already reached 255 and every
+    /// percentage above it felt identical -- which is exactly what the first
+    /// person to try it reported. At a quarter, 100% is 64, 200% is 128 and
+    /// 400% is 255, so each step of the slider is a step in the hand.
+    ///
+    /// It stays a reference and not a promise: a game that already asks for
+    /// 255 cannot be made louder by any of this, and no test pulse can show
+    /// that. What the pulse shows is the shape of the multiplier.
+    static let referenceRequest: Double = 64
 
-    /// Both motor bytes, after the percentage, saturated at 255 the way the
-    /// driver saturates. `off` is zero: it is a percentage of nothing.
+    /// Both motor bytes, saturated at 255 the way the driver saturates.
+    ///
+    /// `asAsked` and `stronger` both buzz at the reference and are not
+    /// scaled -- the slider does not apply to them in the panel either --
+    /// because the pulse is there to be COMPARED: the same request through
+    /// the two paths, so the difference you feel is the path and nothing
+    /// else. `custom` carries the percentage, and at 0 it is silence.
     static func motor(vibration: DualSenseVibration, percent: Double) -> UInt8 {
-        guard vibration.usesGain else { return 0 }
-        let gain = Double(vibration.gainValue(percent: percent))
-        return UInt8(min(255, (referenceRequest * gain / 100).rounded()))
+        switch vibration {
+        case .asAsked, .stronger:
+            return UInt8(min(255, referenceRequest.rounded()))
+        case .custom:
+            let gain = Double(vibration.gainValue(percent: percent))
+            return UInt8(min(255, (referenceRequest * gain / 100).rounded()))
+        }
     }
 
     /// The 47-byte block both transports carry, the one field layout SDL's
@@ -296,10 +313,10 @@ nonisolated enum DualSenseRumble {
         _ = off.withUnsafeBufferPointer {
             IOHIDDeviceSetReport(pad.device, kIOHIDReportTypeOutput, reportID, $0.baseAddress!, $0.count)
         }
-        guard vibration != .off else { return .silent }
+        guard !(vibration == .custom && vibration.gainValue(percent: percent) == 0) else { return .silent }
         let name = pad.productID == SonyPads.dualSenseEdge ? "DualSense Edge" : "DualSense"
         let way = chosen == .legacyMotors ? "the legacy motors" : "the game's own haptic path"
         let gain = vibration.gainValue(percent: percent)
-        return .buzzed("Buzzed the \(name) on \(pad.transport) through \(way), at \(gain)% of a mid-scale request -- motors \(strength) of 255. A game's own request is what the setting scales; this one is \(Int(referenceRequest)).")
+        return .buzzed("Buzzed the \(name) on \(pad.transport) through \(way), at \(gain)% of a quarter-scale request -- motors \(strength) of 255. A game's own request is what the setting scales; this one is \(Int(referenceRequest)).")
     }
 }

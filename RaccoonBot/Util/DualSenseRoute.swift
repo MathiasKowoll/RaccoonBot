@@ -170,14 +170,21 @@ nonisolated enum DualSensePresentation: String, CaseIterable {
 /// every game at once, including the ones with no setting of their own.
 nonisolated enum DualSenseVibration: String, CaseIterable {
 
-    /// The pad buzzes the way the game drives it. With the percentage at 100
-    /// this writes the two values that mean "nothing asked for".
+    /// The pad buzzes the way the game drives it: the two values that mean
+    /// "nothing asked for" are written and the driver leaves every packet
+    /// alone.
     case asAsked = "as-asked"
     /// The game's choice of the haptic path is rewritten to the legacy
     /// motors, and the driver signs the packet again so the pad accepts it.
+    /// The strength is what the game asked for; only the path changes.
     case stronger = "stronger"
-    /// Silence, whatever the game asks for.
-    case off = "off"
+    /// The same rewrite, with the strength chosen here instead. It is the
+    /// only choice the slider belongs to, which is why there are three and
+    /// not two plus a number that sometimes applies. At 0 per cent it is
+    /// silence -- how somebody who does not want the pad to buzz turns it
+    /// off for every game at once, including the ones with no setting of
+    /// their own -- so no fourth entry has to say the same thing.
+    case custom = "custom"
 
     /// What a title gets when nobody has said: the pad as the game drives it.
     static let byDefault = DualSenseVibration.asAsked
@@ -189,25 +196,31 @@ nonisolated enum DualSenseVibration: String, CaseIterable {
 
     /// What the slider offers. The driver clamps at 1000 and a byte of 26
     /// already saturates there, so a wider range would only be a longer way
-    /// to reach the same 255; below 100 is a quieter pad, which is a real
-    /// preference and is not the same as `off`.
-    static let gainRange: ClosedRange<Double> = 25...400
+    /// to reach the same 255. It starts at 0, which is silence and not a
+    /// quiet pad: the driver reads 0 as a request and every other value as a
+    /// multiplier.
+    static let gainRange: ClosedRange<Double> = 0...400
 
-    /// Whether the percentage means anything for this choice. It does not for
-    /// `off`, which IS a percentage -- zero -- and would otherwise be asking
-    /// the same question twice.
-    var usesGain: Bool { self != .off }
+    /// Whether the percentage means anything for this choice. Only for
+    /// `custom`, which exists to carry it: the other two are complete
+    /// sentences on their own, and a strength under "as the game asks" would
+    /// contradict its own name -- which is how the owner read it the first
+    /// time he saw the two together.
+    var usesGain: Bool { self == .custom }
 
     /// What goes into "VibrationMode": 1 only where the path is rewritten.
-    var modeValue: UInt32 { self == .stronger ? 1 : 0 }
+    var modeValue: UInt32 { self == .asAsked ? 0 : 1 }
 
     /// What goes into "VibrationGain", given the percentage this title asks
-    /// for. `off` is 0 and nothing else; the other two carry the slider,
+    /// for. `off` is 0 and nothing else; `asAsked` is 100, which the driver
+    /// reads as "leave every motor byte alone"; `stronger` carries the slider,
     /// clamped to the range the menu can show so a record from another build
     /// cannot write a number this one would not offer.
     func gainValue(percent: Double) -> UInt32 {
-        guard usesGain else { return 0 }
-        return UInt32(Self.pickableGain(percent).rounded())
+        switch self {
+        case .asAsked, .stronger: return Self.neutralGain
+        case .custom:             return UInt32(Self.pickableGain(percent).rounded())
+        }
     }
 
     /// Whether this asks the driver for anything at all. `asAsked` at 100 does
@@ -220,7 +233,7 @@ nonisolated enum DualSenseVibration: String, CaseIterable {
         switch self {
         case .asAsked: return "As the game asks"
         case .stronger: return "Stronger motors"
-        case .off: return "Off"
+        case .custom: return "Custom strength"
         }
     }
 
@@ -232,6 +245,10 @@ nonisolated enum DualSenseVibration: String, CaseIterable {
     /// A stored value the menu cannot show is not a choice, it is a leftover
     /// -- `DualSensePresentation.pickable`'s rule, for the same reason.
     static func pickable(_ raw: String?) -> String {
+        // "off" was a fourth entry for one afternoon; it is `custom` at 0 now,
+        // and a record that still says it must not read as the default, which
+        // would turn somebody's silence back on behind their back.
+        if raw == "off" { return DualSenseVibration.custom.rawValue }
         guard let raw, let known = DualSenseVibration(rawValue: raw) else { return byDefault.rawValue }
         return known.rawValue
     }
@@ -605,19 +622,19 @@ nonisolated enum DualSenseRoute {
         }
         let gain = vibration.gainValue(percent: percent)
         switch vibration {
-        case .off:
+        case .custom where gain == 0:
             return "the motors are silenced for this title, whatever the game asks for"
         case .stronger:
-            let strength = gain == DualSenseVibration.neutralGain ? ""
-                : ", at \(gain)% of what it asks for"
             // Said as a preference, because that is all it is: it was chosen by
             // one person's hand on a six-pulse ladder, not by a meter.
-            return "the motors: the game's haptic vibration is rewritten to the legacy motors\(strength), which one person here found stronger -- a DualSense on Bluetooth only"
-        case .asAsked:
+            return "the motors: the game's haptic vibration is rewritten to the legacy motors, which one person here found stronger at the same value -- a preference, not a measurement"
+        case .custom:
             // The saturation is worth one clause: somebody who asks for 400%
             // and feels nothing new in a game already asking for 255 should
             // read why here rather than conclude the option is broken.
-            return "the motors: the game's own vibration at \(gain)% -- it saturates at the top of the range, so a game already asking for everything cannot go louder"
+            return "the motors: the legacy motors at \(gain)% of what the game asks for -- it saturates at the top of the range, so a game already asking for everything cannot be made louder"
+        case .asAsked:
+            return "the motors: whatever the game asks for, on the path it chose, untouched"
         }
     }
 }

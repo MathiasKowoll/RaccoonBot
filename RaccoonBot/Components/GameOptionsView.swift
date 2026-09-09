@@ -240,15 +240,22 @@ struct GameOptionsView: View {
                                 .popover(isPresented: Binding(get: { menu?.control == .vibration },
                                                               set: { if !$0 { menu = nil } }),
                                          arrowEdge: .bottom) { menuPopover(for: .vibration) }
-                            // Held in place rather than removed. "Off" is a
-                            // percentage -- zero -- so the slider means
-                            // nothing there and is faded and dead; taking the
-                            // row away instead moved every section below it
-                            // each time the picker changed. The controller's
-                            // own list drops it while it is unusable, so a pad
-                            // cannot land on it.
+                            // Held in place rather than removed. The strength
+                            // belongs to "Custom" alone -- the other two
+                            // choices are complete sentences without a number,
+                            // and one under "As the game asks" would
+                            // contradict its own name -- so the row is faded
+                            // and dead there. Taking it away instead moved
+                            // every section below it each time the picker
+                            // changed. The controller's own list drops it
+                            // while it is unusable, so a pad cannot land on it.
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Rumble strength \(Int(gameOptions.dualSenseVibrationGain))%")
+                                // 0 is the end of the slider and it is not
+                                // "no vibration at 0%": it is off, and it says
+                                // so, because a number alone would read as a
+                                // very quiet pad rather than a silent one.
+                                Text(gameOptions.dualSenseVibrationGain == 0 ? "Rumble strength: off"
+                                     : "Rumble strength \(Int(gameOptions.dualSenseVibrationGain))%")
                                 Slider(value: $gameOptions.dualSenseVibrationGain,
                                        in: DualSenseVibration.gainRange,
                                        step: OptionAdjust.gainStep)

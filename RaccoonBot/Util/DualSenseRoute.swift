@@ -135,6 +135,116 @@ nonisolated enum DualSensePresentation: String, CaseIterable {
     }
 }
 
+/// What a title asks of a DualSense's motors.
+///
+/// One control and not two, because mode and percentage are one idea: which
+/// way the pad is asked to buzz, and how hard. MacGameVideoFix's mgvf-0009
+/// winebus reads them as two REG_DWORDs under the same key the presentation
+/// uses -- `VibrationMode` and `VibrationGain` -- and they are orthogonal
+/// there, but nobody chooses a vibration path and a percentage as separate
+/// questions. The picker says what the pad should do; the percentage is the
+/// detail two of the three answers need.
+///
+/// A PREFERENCE, NOT A REPAIR, and the only option here that is. Everything
+/// else this application writes for a pad repairs something measured to be
+/// wrong. This changes what a game asked for into something the person
+/// holding the pad likes better, so the default is the pad as the game drives
+/// it, byte for byte.
+///
+/// Where `stronger` comes from. A title measured here on 2026-09-08 asks for
+/// the full 255 and still feels soft: of 6493 output reports in a two-hour
+/// Bluetooth session, 335 carry a motor byte, and all 335 select the haptic
+/// path -- not most of them, all of them -- so there is no louder request for
+/// the game to make. On a six-pulse ladder, sending the same value down the
+/// legacy motors instead felt clearly stronger to the owner. That is one
+/// person's hand on one pad, not a measurement of anything: no meter was put
+/// on the motors, and the pad's firmware version was never read. It is
+/// offered because it was preferred, and it is off unless asked for.
+///
+/// Where the percentage stops. The gain multiplies the two motor bytes and
+/// saturates at 255, so a game already asking for everything cannot be made
+/// to ask for more: it helps the middle of the range and not the peaks. And
+/// 0 is not absence -- an absent value reads as 100 and changes nothing,
+/// while a 0 written on purpose forces every motor byte to zero. That is
+/// `off`: how somebody who does not want the pad to buzz turns it off for
+/// every game at once, including the ones with no setting of their own.
+nonisolated enum DualSenseVibration: String, CaseIterable {
+
+    /// The pad buzzes the way the game drives it. With the percentage at 100
+    /// this writes the two values that mean "nothing asked for".
+    case asAsked = "as-asked"
+    /// The game's choice of the haptic path is rewritten to the legacy
+    /// motors, and the driver signs the packet again so the pad accepts it.
+    case stronger = "stronger"
+    /// Silence, whatever the game asks for.
+    case off = "off"
+
+    /// What a title gets when nobody has said: the pad as the game drives it.
+    static let byDefault = DualSenseVibration.asAsked
+
+    /// The percentage that means "leave the motor bytes alone". Written
+    /// rather than left out, because every value under this key is written
+    /// explicitly -- see `overrides(for:)` for why.
+    static let neutralGain: UInt32 = 100
+
+    /// What the slider offers. The driver clamps at 1000 and a byte of 26
+    /// already saturates there, so a wider range would only be a longer way
+    /// to reach the same 255; below 100 is a quieter pad, which is a real
+    /// preference and is not the same as `off`.
+    static let gainRange: ClosedRange<Double> = 25...400
+
+    /// Whether the percentage means anything for this choice. It does not for
+    /// `off`, which IS a percentage -- zero -- and would otherwise be asking
+    /// the same question twice.
+    var usesGain: Bool { self != .off }
+
+    /// What goes into "VibrationMode": 1 only where the path is rewritten.
+    var modeValue: UInt32 { self == .stronger ? 1 : 0 }
+
+    /// What goes into "VibrationGain", given the percentage this title asks
+    /// for. `off` is 0 and nothing else; the other two carry the slider,
+    /// clamped to the range the menu can show so a record from another build
+    /// cannot write a number this one would not offer.
+    func gainValue(percent: Double) -> UInt32 {
+        guard usesGain else { return 0 }
+        return UInt32(Self.pickableGain(percent).rounded())
+    }
+
+    /// Whether this asks the driver for anything at all. `asAsked` at 100 does
+    /// not, and that is the case that has to stay silent everywhere.
+    func changesAnything(percent: Double) -> Bool {
+        modeValue != 0 || gainValue(percent: percent) != Self.neutralGain
+    }
+
+    var label: String {
+        switch self {
+        case .asAsked: return "As the game asks"
+        case .stronger: return "Stronger motors"
+        case .off: return "Off"
+        }
+    }
+
+    /// The list the menu shows, in the order it is declared.
+    static var dropdownOptions: DropdownOptions {
+        allCases.map { (id: $0.rawValue, label: $0.label) }
+    }
+
+    /// A stored value the menu cannot show is not a choice, it is a leftover
+    /// -- `DualSensePresentation.pickable`'s rule, for the same reason.
+    static func pickable(_ raw: String?) -> String {
+        guard let raw, let known = DualSenseVibration(rawValue: raw) else { return byDefault.rawValue }
+        return known.rawValue
+    }
+
+    /// The same for the percentage: a number the slider cannot reach is folded
+    /// into the range rather than shown as a slider pinned off its own scale
+    /// while the launch writes something else.
+    static func pickableGain(_ raw: Double?) -> Double {
+        guard let raw, raw.isFinite else { return Double(neutralGain) }
+        return min(max(raw, gainRange.lowerBound), gainRange.upperBound)
+    }
+}
+
 /// A DualSense on Bluetooth has to go through winebus's SDL backend; on USB it
 /// must not.
 ///
@@ -178,21 +288,25 @@ nonisolated enum DualSensePresentation: String, CaseIterable {
 /// The same key carries the two values mgvf-0005 added, `UsbEmulation` and
 /// `ProductId`, which say what the pad should look like rather than which way
 /// it goes -- see `DualSensePresentation` above for why a title would want
-/// that. Those two are read later than `Hidraw`: as the device arrives, on the
-/// bus thread, rather than at driver start. It comes to the same thing for
-/// anyone waiting for them to take effect, since a bottle booting is when both
-/// happen, but it is why the honest answer to "when does this apply" is the
-/// pad's next arrival and not the next launch.
+/// that -- and the two mgvf-0009 added, `VibrationMode` and `VibrationGain`,
+/// which say what its motors should do; see `DualSenseVibration`. Those four
+/// are read later than `Hidraw`: as the device arrives, on the bus thread,
+/// rather than at driver start. It comes to the same thing for anyone waiting
+/// for them to take effect, since a bottle booting is when both happen, but it
+/// is why the honest answer to "when does this apply" is the pad's next
+/// arrival and not the next launch.
 nonisolated enum DualSenseRoute {
 
     static let devicesPath = "System\\\\CurrentControlSet\\\\Services\\\\winebus\\\\Devices"
 
-    /// The three value names winebus reads under a device's key, spelled once.
+    /// The five value names winebus reads under a device's key, spelled once.
     /// Spelling one of them differently writes a value nothing ever reads, and
     /// the bottle looks configured.
     static let hidrawValue = "Hidraw"
     static let usbEmulationValue = "UsbEmulation"
     static let productIDValue = "ProductId"
+    static let vibrationModeValue = "VibrationMode"
+    static let vibrationGainValue = "VibrationGain"
 
     struct Override: Equatable {
         /// The registry section, in the doubled-backslash form the .reg file uses.
@@ -211,14 +325,26 @@ nonisolated enum DualSenseRoute {
         /// hidraw DualSense on Bluetooth, and refuses an id it has no
         /// descriptor for with a WARN in its own log rather than inventing one.
         let askedProductID: UInt32
+        /// What goes into "VibrationMode": 1 asks mgvf-0009 to rewrite a
+        /// packet that chose the haptic path so that it chooses the legacy
+        /// motors, 0 leaves every packet as the game wrote it.
+        let vibrationMode: UInt32
+        /// What goes into "VibrationGain": a percentage over the two motor
+        /// bytes. 100 is the value that changes nothing, which is why it and
+        /// not 0 is the default here -- 0 is silence, and the driver reads
+        /// the two differently on purpose.
+        let vibrationGain: UInt32
 
         /// Defaulted so that a caller who only cares about the route -- which
         /// is what this type meant before mgvf-0005 -- still reads the same.
-        init(path: String, hidraw: UInt32, usbEmulation: UInt32 = 0, askedProductID: UInt32 = 0) {
+        init(path: String, hidraw: UInt32, usbEmulation: UInt32 = 0, askedProductID: UInt32 = 0,
+             vibrationMode: UInt32 = 0, vibrationGain: UInt32 = DualSenseVibration.neutralGain) {
             self.path = path
             self.hidraw = hidraw
             self.usbEmulation = usbEmulation
             self.askedProductID = askedProductID
+            self.vibrationMode = vibrationMode
+            self.vibrationGain = vibrationGain
         }
     }
 
@@ -264,17 +390,34 @@ nonisolated enum DualSenseRoute {
     /// Everywhere else both values are written as zero rather than left alone,
     /// which is what makes this per game: the title that does not want the
     /// emulation clears what the last title set.
+    ///
+    /// The two vibration values ride in the same entries and under the same
+    /// rules, with one difference worth saying out loud: their "nothing asked
+    /// for" pair is 0 and 100, not 0 and 0. A `VibrationGain` of 0 is a
+    /// request -- silence -- and writing it where the title asked for nothing
+    /// would quietly take the rumble away from every game. They are gated on
+    /// the raw route for the reason the emulation is: the rewrite happens on
+    /// output reports winebus itself sends to the pad, and a pad handed to SDL
+    /// is a wine gamepad whose reports winebus never sees.
     static func overrides(for pads: [SonyPads.Pad], sdlEnabled: Bool, engineTellsTheBus: Bool,
                           presentation: DualSensePresentation = .byDefault,
-                          engineCanEmulateUSB: Bool = false) -> [Override] {
+                          engineCanEmulateUSB: Bool = false,
+                          vibration: DualSenseVibration = .byDefault,
+                          vibrationPercent: Double = Double(DualSenseVibration.neutralGain),
+                          engineCanRewriteVibration: Bool = false) -> [Override] {
         SonyPads.models.map { model in
             let onBluetooth = pads.contains { $0.productID == model && $0.isBluetooth }
             let viaSDL = onBluetooth && sdlEnabled && !engineTellsTheBus
             let emulating = presentation.presentsAsWired && engineCanEmulateUSB && !viaSDL
+            let rewriting = vibration.changesAnything(percent: vibrationPercent)
+                && engineCanRewriteVibration && !viaSDL
             return Override(path: sectionPath(productID: model),
                             hidraw: viaSDL ? 0 : 1,
                             usbEmulation: emulating ? 1 : 0,
-                            askedProductID: emulating ? presentation.productIDValue(for: model) : 0)
+                            askedProductID: emulating ? presentation.productIDValue(for: model) : 0,
+                            vibrationMode: rewriting ? vibration.modeValue : 0,
+                            vibrationGain: rewriting ? vibration.gainValue(percent: vibrationPercent)
+                                                     : DualSenseVibration.neutralGain)
         }
     }
 
@@ -306,6 +449,28 @@ nonisolated enum DualSenseRoute {
         contains(literal: usbEmulationValue, inWinebusOf: cxAppPath)
     }
 
+    /// Whether the engine carries mgvf-0009: the winebus that can rewrite a
+    /// DualSense's output reports. Asked exactly as mgvf-0005 is asked, of the
+    /// same binary, for the same reason -- the names of the two values it
+    /// reads are UTF-16 literals in the PE, and a winebus without the patch has
+    /// no reason to contain either word.
+    ///
+    /// Both names are required and not one. They arrive together in one patch
+    /// and a build with only one of them is not a build this project makes,
+    /// but the question asked here is "can this engine do what the option
+    /// promises", and the option promises both halves.
+    ///
+    /// The rewrite lives in winebus's unix half, and this reads the PE. That
+    /// is not a mismatch: mgvf-0009 puts the two names in the .sys, which is
+    /// where the registry is read, and the two halves are built from one
+    /// source tree and installed together -- the installer calls a set with
+    /// only one of them broken. Reading the .sys keeps every one of these
+    /// questions asked of one file.
+    static func engineCanRewriteVibration(cxAppPath: String?) -> Bool {
+        contains(literal: vibrationModeValue, inWinebusOf: cxAppPath)
+            && contains(literal: vibrationGainValue, inWinebusOf: cxAppPath)
+    }
+
     /// The engine's own winebus.sys, searched for a UTF-16 literal. A missing
     /// engine, or one that cannot be read, answers no -- never a guess.
     private static func contains(literal: String, inWinebusOf cxAppPath: String?) -> Bool {
@@ -330,17 +495,37 @@ nonisolated enum DualSenseRoute {
     /// both models whatever is here, and the pad that arrives afterwards is
     /// the one it was written for. Silence there would read as "nothing was
     /// done", which is the opposite of what happened.
+    ///
+    /// The motors get one clause at the end rather than a word inside each
+    /// pad's sentence: the choice is one per title, not one per pad, and it
+    /// is written for both models the way everything else here is.
     static func summary(for pads: [SonyPads.Pad], sdlEnabled: Bool, engineTellsTheBus: Bool,
                         presentation: DualSensePresentation = .byDefault,
-                        engineCanEmulateUSB: Bool = false) -> String? {
+                        engineCanEmulateUSB: Bool = false,
+                        vibration: DualSenseVibration = .byDefault,
+                        vibrationPercent: Double = Double(DualSenseVibration.neutralGain),
+                        engineCanRewriteVibration: Bool = false) -> String? {
         let mine = pads.filter { SonyPads.models.contains($0.productID) }
+        // Written the way overrides(for:) writes it: a pad that this same
+        // list hands to SDL is one winebus never sends an output report to,
+        // so the rewrite is neither asked for nor claimed for it. With nothing
+        // attached the route written is the raw one, so there is nothing in
+        // the way.
+        let allOnSDL = !mine.isEmpty && mine.allSatisfy { $0.isBluetooth && sdlEnabled && !engineTellsTheBus }
+        let motors = motorClause(vibration: vibration, percent: vibrationPercent,
+                                 engineCanRewriteVibration: engineCanRewriteVibration,
+                                 everyPadOnSDL: allOnSDL)
+        let rewriting = motors != nil && engineCanRewriteVibration && !allOnSDL
         guard !mine.isEmpty else {
             // Nothing attached and nothing asked for is the case this stayed
             // quiet about before the option existed, and it stays quiet.
-            guard presentation.presentsAsWired else { return nil }
-            return engineCanEmulateUSB
+            guard presentation.presentsAsWired || motors != nil else { return nil }
+            let head = !presentation.presentsAsWired
+                ? "no DualSense attached: the choice is written for both models all the same, and winebus reads it as the pad arrives"
+                : engineCanEmulateUSB
                 ? "no DualSense attached: the choice is written for both models all the same, so a pad that arrives over Bluetooth afterwards is presented as wired -- winebus reads it as the pad arrives"
                 : "no DualSense attached, and this engine's winebus has no USB emulation: install the controller set in Options"
+            return [head, motors].compactMap { $0 }.joined(separator: "; ")
         }
         var anythingPresented = false
         var anythingCleared = false
@@ -392,11 +577,47 @@ nonisolated enum DualSenseRoute {
             }
             return "\(name) on \(pad.transport): \(route), \(presented)"
         }
-        let when = anythingPresented
+        // The vibration values are read at the same moment as the other three,
+        // so a title that only asks for the motors earns the same warning.
+        let when = anythingPresented || rewriting
             ? "; it takes effect when the pad next arrives, so start with Steam closed or reconnect the pad"
             : anythingCleared
             ? "; asking for the pad as it is clears what the last title asked for, and that is read when the pad next arrives as well: a game started into a running Steam keeps whatever the bottle booted with"
             : ""
-        return sentences.joined(separator: "; ") + when
+        return ([sentences.joined(separator: "; ")] + [motors].compactMap { $0 }).joined(separator: "; ") + when
+    }
+
+    /// What the console says about the motors, or nil when the title asked for
+    /// nothing -- which is the default and has to stay silent.
+    ///
+    /// It never claims the rewrite happens. An engine whose winebus has no
+    /// mgvf-0009 reads neither value, and this application writes the neutral
+    /// pair there rather than a request, so the sentence says what is missing
+    /// and where to get it instead of describing an effect nobody will feel.
+    private static func motorClause(vibration: DualSenseVibration, percent: Double,
+                                    engineCanRewriteVibration: Bool, everyPadOnSDL: Bool) -> String? {
+        guard vibration.changesAnything(percent: percent) else { return nil }
+        guard engineCanRewriteVibration else {
+            return "the vibration setting is not applied: this engine's winebus has no vibration rewrite, install the controller set in Options"
+        }
+        guard !everyPadOnSDL else {
+            return "the vibration setting is not applied: a pad handed to SDL is a wine gamepad, and winebus never sees the output reports it would rewrite"
+        }
+        let gain = vibration.gainValue(percent: percent)
+        switch vibration {
+        case .off:
+            return "the motors are silenced for this title, whatever the game asks for"
+        case .stronger:
+            let strength = gain == DualSenseVibration.neutralGain ? ""
+                : ", at \(gain)% of what it asks for"
+            // Said as a preference, because that is all it is: it was chosen by
+            // one person's hand on a six-pulse ladder, not by a meter.
+            return "the motors: the game's haptic vibration is rewritten to the legacy motors\(strength), which one person here found stronger -- a DualSense on Bluetooth only"
+        case .asAsked:
+            // The saturation is worth one clause: somebody who asks for 400%
+            // and feels nothing new in a game already asking for 255 should
+            // read why here rather than conclude the option is broken.
+            return "the motors: the game's own vibration at \(gain)% -- it saturates at the top of the range, so a game already asking for everything cannot go louder"
+        }
     }
 }

@@ -30,6 +30,32 @@ struct GameOptionsView: View {
     @Environment(\.dismiss) private var dismiss
     @State var isLoading = false
 
+    /// The pending write. One at a time: every edit cancels the last one and
+    /// starts it again, so a slider dragged across its range is one write and
+    /// not one per frame. See `Autosave` for the rule it is following.
+    @State private var autosaveTask: Task<Void, Never>?
+
+    /// What the rumble test last said, and whether that was a complaint.
+    /// Never cleared back to nil: the panel keeps the last answer on screen,
+    /// because "it did nothing" is exactly the reading this button exists to
+    /// prevent.
+    @State private var rumbleSaid: String?
+    @State private var rumbleFailed = false
+    @State private var rumbleRunning = false
+
+    /// One width for every control in the controller section, so that
+    /// choosing a longer entry in a picker moves nothing beside it, and the
+    /// width for the sentence under the test button.
+    private static let controllerControlWidth: CGFloat = 330
+    private static let controllerSentenceWidth: CGFloat = 560
+
+    /// What the sentence under the test button says before it has been
+    /// pressed. It states the two things somebody would otherwise have to
+    /// guess: that this reaches the pad directly, and that it therefore says
+    /// nothing about what a game will feel.
+    private static let rumbleInvitation =
+        "Buzzes the attached pad now, through IOKit, with the choice and the percentage above. It does not go near the bottle, so it says what the setting feels like and not whether this engine would apply it to a game."
+
     /// The folder the game is installed in, from its metadata.
     ///
     /// Never GameDetailView.gameFolder: that one is built without the "common"
@@ -45,6 +71,13 @@ struct GameOptionsView: View {
     
     var d3dMaxFPS: String {
         $gameOptions.d3dMaxFPS.wrappedValue < 20.0 ? "Disabled" : "\($gameOptions.d3dMaxFPS.wrappedValue)"
+    }
+
+    /// The stored vibration choice, folded through the enum. A raw value this
+    /// build does not know reads as the default here as it does everywhere
+    /// else, so the slider cannot be hidden or shown by a leftover.
+    private var vibrationChoice: DualSenseVibration {
+        DualSenseVibration(rawValue: gameOptions.dualSenseVibration) ?? .byDefault
     }
     
     var body: some View {
@@ -142,19 +175,13 @@ struct GameOptionsView: View {
                                 if !current.isNative {
                                     Toggle("MSync", isOn: $gameOptions.wineMSync)
                                         .optionFocus(.msync, current: focus.current, shown: gamepad.showsFocus)
-                                    Toggle("Enable SDL", isOn: $gameOptions.enableSDL)
-                                        .optionFocus(.sdl, current: focus.current, shown: gamepad.showsFocus)
-                                    Toggle("Disable Hidraw", isOn: $gameOptions.disableHidraw)
-                                        .optionFocus(.hidraw, current: focus.current, shown: gamepad.showsFocus)
-                                    DropDown(options: DualSensePresentation.dropdownOptions,
-                                             label: "Pad seen as",
-                                             value: $gameOptions.dualSensePresentation)
-                                        .pickerStyle(.menu)
-                                        .help("What a DualSense looks like to this game. Needs the engine controller set built with the USB-emulation patch, in Options. It applies when the pad next arrives, not at once: start with Steam closed, or reconnect the pad afterwards. For a title whose own Sony library only accepts a wired pad -- and Steam Input must be off for that title, or Steam hands the game an Xbox pad whatever this says. Both DualSense models are served, so an Edge asked to look like a plain DualSense is created as one. The choice is written whether or not a pad is attached at launch, so it is already there when the pad comes back; the console says what each pad actually got.")
-                                        .optionFocus(.padSeenAs, current: focus.current, shown: gamepad.showsFocus)
-                                        .popover(isPresented: Binding(get: { menu?.control == .padSeenAs },
-                                                                      set: { if !$0 { menu = nil } }),
-                                                 arrowEdge: .bottom) { menuPopover(for: .padSeenAs) }
+                                    // Everything about the pad used to be here,
+                                    // under MSync. It has its own section now:
+                                    // five settings that describe a physical
+                                    // device rather than a rendering choice do
+                                    // not fit in a column of toggles, and the
+                                    // one that broke it was a picker whose
+                                    // label rendered as "Vibra...".
                                     Divider()
                                     Text("Vulkan options")
                                     Toggle("Enable UE4 Hack", isOn: $gameOptions.ue4Hack)
@@ -165,6 +192,93 @@ struct GameOptionsView: View {
                                     .pickerStyle(.menu)
                                 }
                             }
+                        }
+                    }
+                    if !current.isNative {
+                        Divider()
+                        // The pad's own section, in the idiom the DXMT and HUD
+                        // sections already use. Five settings and a button
+                        // that describe a physical device rather than a
+                        // rendering choice, and two of them are pickers whose
+                        // entries are sentences -- "Wired standard DualSense"
+                        // has nowhere to go in a column sized for the word
+                        // "MSync".
+                        //
+                        // Every control here is pinned to one width. A picker
+                        // that is as wide as whatever is selected moves its
+                        // neighbours every time the choice changes, which is
+                        // what this panel was doing; the strength slider keeps
+                        // its row whether or not the choice uses one, for the
+                        // same reason. Room is spent rather than saved: the
+                        // sheet is wider than it was, and it is wider in the
+                        // one place the width is decided.
+                        Section("Controller") {
+                            Toggle("Enable SDL", isOn: $gameOptions.enableSDL)
+                                .optionFocus(.sdl, current: focus.current, shown: gamepad.showsFocus)
+                            Toggle("Disable Hidraw", isOn: $gameOptions.disableHidraw)
+                                .optionFocus(.hidraw, current: focus.current, shown: gamepad.showsFocus)
+                            DropDown(options: DualSensePresentation.dropdownOptions,
+                                     label: "Pad seen as",
+                                     value: $gameOptions.dualSensePresentation)
+                                .pickerStyle(.menu)
+                                .frame(width: Self.controllerControlWidth, alignment: .leading)
+                                .help("What a DualSense looks like to this game. Needs the engine controller set built with the USB-emulation patch, in Options. It applies when the pad next arrives, not at once: start with Steam closed, or reconnect the pad afterwards. For a title whose own Sony library only accepts a wired pad -- and Steam Input must be off for that title, or Steam hands the game an Xbox pad whatever this says. Both DualSense models are served, so an Edge asked to look like a plain DualSense is created as one. The choice is written whether or not a pad is attached at launch, so it is already there when the pad comes back; the console says what each pad actually got.")
+                                .optionFocus(.padSeenAs, current: focus.current, shown: gamepad.showsFocus)
+                                .popover(isPresented: Binding(get: { menu?.control == .padSeenAs },
+                                                              set: { if !$0 { menu = nil } }),
+                                         arrowEdge: .bottom) { menuPopover(for: .padSeenAs) }
+                            // One control for one idea: which way the pad is
+                            // asked to buzz. The percentage below is the
+                            // detail two of the three answers need.
+                            DropDown(options: DualSenseVibration.dropdownOptions,
+                                     label: "Vibration",
+                                     value: $gameOptions.dualSenseVibration)
+                                .pickerStyle(.menu)
+                                .frame(width: Self.controllerControlWidth, alignment: .leading)
+                                .help("What this game's rumble does. A preference and not a repair -- the default sends every packet exactly as the game wrote it. \"Stronger motors\" rewrites the game's choice of the haptic vibration path to the legacy motors: a title measured here asks for the full 255 and still feels soft, and on a six-pulse ladder the legacy motors at the same value felt stronger to one person here, which is a hand and not a meter. \"Off\" silences the pad for this title whatever the game asks, including a game with no setting of its own. The percentage saturates at the top of the range, so a game already asking for everything cannot be made louder. It needs the engine controller set from Options, applies to a DualSense on Bluetooth, and takes effect when the pad next arrives: start with Steam closed, or reconnect the pad.")
+                                .optionFocus(.vibration, current: focus.current, shown: gamepad.showsFocus)
+                                .popover(isPresented: Binding(get: { menu?.control == .vibration },
+                                                              set: { if !$0 { menu = nil } }),
+                                         arrowEdge: .bottom) { menuPopover(for: .vibration) }
+                            // Held in place rather than removed. "Off" is a
+                            // percentage -- zero -- so the slider means
+                            // nothing there and is faded and dead; taking the
+                            // row away instead moved every section below it
+                            // each time the picker changed. The controller's
+                            // own list drops it while it is unusable, so a pad
+                            // cannot land on it.
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Rumble strength \(Int(gameOptions.dualSenseVibrationGain))%")
+                                Slider(value: $gameOptions.dualSenseVibrationGain,
+                                       in: DualSenseVibration.gainRange,
+                                       step: OptionAdjust.gainStep)
+                                    .optionFocus(.vibrationGain, current: focus.current, shown: gamepad.showsFocus)
+                            }
+                            .frame(width: Self.controllerControlWidth, alignment: .leading)
+                            .opacity(vibrationChoice.usesGain ? 1 : 0)
+                            .disabled(!vibrationChoice.usesGain)
+                            .accessibilityHidden(!vibrationChoice.usesGain)
+                            // Felt, not imagined. This is the one control in
+                            // the panel that does something to the hardware
+                            // now: it writes the pad's own report through
+                            // IOKit, with the choice and the percentage on
+                            // screen, and never touches the bottle -- so it
+                            // says nothing about whether the engine carries
+                            // the patch that would apply the same choice to a
+                            // game. See DualSenseRumble for what goes out.
+                            Button(rumbleRunning ? "Buzzing..." : "Test rumble now") { runRumbleTest() }
+                                .disabled(rumbleRunning)
+                                .optionFocus(.rumbleTest, current: focus.current, shown: gamepad.showsFocus)
+                            // Always there, three lines tall, whether it is
+                            // holding the invitation or the answer: a sentence
+                            // that appears when the button is pressed would
+                            // move the panel under the hand that pressed it.
+                            Text(rumbleSaid ?? Self.rumbleInvitation)
+                                .font(.footnote)
+                                .foregroundStyle(rumbleFailed ? .orange : .secondary)
+                                .lineLimit(3, reservesSpace: true)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: Self.controllerSentenceWidth, alignment: .leading)
                         }
                     }
                     if(gameOptions.cxGraphicsBackend == "dxmt") {
@@ -279,27 +393,37 @@ struct GameOptionsView: View {
                         }
                     }
                     HStack {
-                        // Save commits now and keeps editing; closing the panel commits
-                        // too, so this is for somebody who wants the file right before
-                        // running Auto configure, not a step that can be forgotten. Both
-                        // buttons say whether there is anything to do, which is the only
-                        // "unsaved changes" indicator: the state, on the thing that acts.
-                        Button(session.isDirty(gameOptions) ? "Save settings" : "Saved") {
+                        // "Saved", always, because it always is: an edit is
+                        // committed a quarter of a second after it is made,
+                        // and the panel no longer has an unsaved state worth
+                        // naming. A title that flipped between two words for
+                        // a fraction of a second on every keystroke would be
+                        // reporting the timer rather than the file.
+                        //
+                        // It stays a button, and pressing it still writes,
+                        // because that is what somebody about to press Auto
+                        // configure wants: the file now, not in a moment. It
+                        // cancels the pending write first, so the two cannot
+                        // both fire.
+                        Button("Saved") {
                             console.log("saving")
-                            session.save(gameOptions)
+                            commitNow()
                         }
                         .buttonStyle(.borderedProminent)
-                        .disabled(!session.isDirty(gameOptions))
                             .optionFocus(.save, current: focus.current, shown: gamepad.showsFocus)
-                        // Undo puts the form back to the file: the escape hatch before
-                        // closing, and a state that cannot be wrong. Reset, beside it,
-                        // goes to factory defaults -- a different and much larger step,
-                        // left as it was.
+                        // Undo goes back to what the file held when this panel
+                        // opened -- not to the last write, which autosave has
+                        // been moving all along. It is still the escape hatch
+                        // before closing, and it is still a state that cannot
+                        // be wrong; the undone form is then committed like any
+                        // other edit. Reset, beside it, goes to factory
+                        // defaults -- a different and much larger step, left
+                        // as it was.
                         Button("Undo") {
                             console.log("undoing")
                             session.undo(into: gameOptions)
                         }
-                        .disabled(!session.isDirty(gameOptions))
+                        .disabled(!session.canUndo(gameOptions))
                             .optionFocus(.undo, current: focus.current, shown: gamepad.showsFocus)
                         Button("Reset") {
                             console.log("resetting")
@@ -391,8 +515,22 @@ struct GameOptionsView: View {
         // The list of reachable controls follows the panel: a toggle that
         // hides a section changes what down means.
         .onChange(of: panelState(current)) { _, state in focus.update(for: state) }
+        // The whole edited record, not one field and not the dirty flag: the
+        // flag is already true on the second edit and would never fire again,
+        // and a per-field list is a list somebody adding a control forgets to
+        // join. GameOptionsData is what the file holds and what "different"
+        // means, so comparing it is comparing the thing that matters.
+        .onChange(of: GameOptionsData(data: gameOptions)) { _, _ in scheduleAutosave() }
         .onAppear { takeGamepad(current) }
-        .onDisappear { releaseGamepad() }
+        .onDisappear {
+            releaseGamepad()
+            // Dropped, not awaited. The sheet writes on the way out through
+            // `closing`, so an edit made in the last quarter-second is in the
+            // file either way; leaving the task alive would be a second writer
+            // for a panel that no longer exists.
+            autosaveTask?.cancel()
+            autosaveTask = nil
+        }
     }
             } else {
             EmptyView()
@@ -408,6 +546,7 @@ struct GameOptionsView: View {
         OptionPanelState(isNative: current.isNative,
                          backend: gameOptions.cxGraphicsBackend,
                          hudEnabled: gameOptions.mtlHudEnabled,
+                         vibrationGainShown: vibrationChoice.usesGain,
                          metalFXOn: gameOptions.dxmtMetalFXSpatial,
                          dxmtCapOn: gameOptions.dxmtPreferredMaxFrameRate > 20,
                          d3dCapOn: gameOptions.d3dMaxFPS > 20,
@@ -503,6 +642,13 @@ struct GameOptionsView: View {
                                                                     in: DualSensePresentation.allCases.map(\.rawValue),
                                                                     forward: forward)
             return .changed
+        case .vibration:
+            gameOptions.dualSenseVibration = OptionAdjust.cycle(gameOptions.dualSenseVibration,
+                                                                in: DualSenseVibration.allCases.map(\.rawValue),
+                                                                forward: forward)
+            return .changed
+        case .vibrationGain:
+            return step(\.dualSenseVibrationGain, by: OptionAdjust.gainStep, in: DualSenseVibration.gainRange)
         case .x87:          return flip(\.x87PatchEnabled)
         case .mtlHud:       return flip(\.mtlHudEnabled)
         case .advertiseAVX: return flip(\.advertiseAVX)
@@ -533,7 +679,7 @@ struct GameOptionsView: View {
             gameOptions.mtlHudAlignment = OptionAdjust.cycle(gameOptions.mtlHudAlignment,
                                                              in: MetalHudAlignment.allCases.map(\.rawValue), forward: forward)
             return .changed
-        case .save, .undo, .reset, .autoconfigure:
+        case .save, .undo, .reset, .autoconfigure, .rumbleTest:
             return adjust == .select ? .activate(control) : .nothing
         }
     }
@@ -553,6 +699,10 @@ struct GameOptionsView: View {
             menu = MenuFocus(control: control,
                              options: DualSensePresentation.dropdownOptions,
                              selected: gameOptions.dualSensePresentation)
+        case .vibration:
+            menu = MenuFocus(control: control,
+                             options: DualSenseVibration.dropdownOptions,
+                             selected: gameOptions.dualSenseVibration)
         default:
             break
         }
@@ -563,6 +713,7 @@ struct GameOptionsView: View {
         case .backend:      gameOptions.cxGraphicsBackend = id
         case .hudAlignment: gameOptions.mtlHudAlignment = id
         case .padSeenAs:    gameOptions.dualSensePresentation = id
+        case .vibration:    gameOptions.dualSenseVibration = id
         default: break
         }
     }
@@ -600,11 +751,65 @@ struct GameOptionsView: View {
     /// The buttons, run from the pad exactly as from a click.
     private func activate(_ control: OptionControl) {
         switch control {
-        case .save:          session.save(gameOptions)
+        case .save:          commitNow()
         case .undo:          session.undo(into: gameOptions)
         case .reset:         gameOptions.set(data: GameOptionsData(data: GameOptions()))
         case .autoconfigure: Task { await runAutoconfigure() }
+        case .rumbleTest:    runRumbleTest()
         default: break
+        }
+    }
+
+    // MARK: - Saving as it is edited
+
+    /// An edit happened. The write is put off until the edits stop, which is
+    /// what makes dragging a slider one write; `Autosave` says why.
+    ///
+    /// The rule about what deserves a write is not repeated here -- the
+    /// session asks `Autosave` when the moment comes, so a form put back to
+    /// where it was during the pause writes nothing at all.
+    @MainActor
+    private func scheduleAutosave() {
+        autosaveTask?.cancel()
+        autosaveTask = Task { @MainActor in
+            try? await Task.sleep(for: Autosave.quietPeriod)
+            guard !Task.isCancelled else { return }
+            if session.autosave(gameOptions) { console.log("options saved") }
+        }
+    }
+
+    /// Write it now, whatever the timer was going to do. The Save button and
+    /// the pad's own press both come here.
+    @MainActor
+    private func commitNow() {
+        autosaveTask?.cancel()
+        autosaveTask = nil
+        session.autosave(gameOptions)
+    }
+
+    // MARK: - The rumble test
+
+    /// Buzz the pad with what is on screen, and say what happened.
+    ///
+    /// Off the main thread, because the pulse is a send, a wait and a second
+    /// send: doing that here would freeze the panel for the length of it. The
+    /// choice and the percentage are read before leaving, so what is felt is
+    /// what was on screen when the button was pressed.
+    @MainActor
+    private func runRumbleTest() {
+        guard !rumbleRunning else { return }
+        rumbleRunning = true
+        let choice = vibrationChoice
+        let percent = gameOptions.dualSenseVibrationGain
+        Task {
+            let outcome = await Task.detached(priority: .userInitiated) {
+                DualSenseRumble.pulse(vibration: choice, percent: percent)
+            }.value
+            rumbleSaid = outcome.message
+            rumbleFailed = outcome.isProblem
+            rumbleRunning = false
+            if outcome.isProblem { console.error("rumble test: \(outcome.message)") }
+            else { console.log("rumble test: \(outcome.message)") }
         }
     }
 

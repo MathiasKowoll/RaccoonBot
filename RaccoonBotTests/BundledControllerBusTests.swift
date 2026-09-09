@@ -8,6 +8,11 @@
 //  anything: the script is only ever asked --status, of engines made in a
 //  temporary directory, and never of one under ~/Applications.
 //
+//  Four files now, not three: winebus's unix half joined the set, it is a
+//  Mach-O rather than a PE, and it lands in a directory of its own. Every
+//  count and every list here says four, because a test that still says three
+//  passes while the file nobody checked is the one that is missing.
+//
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
 
@@ -61,11 +66,16 @@ struct BundledControllerBusTests {
         return app
     }
 
-    /// The three destinations in an engine, so a test can leave the backups
-    /// the script's --status reads.
+    /// The four destinations in an engine, so a test can leave the backups
+    /// the script's --status reads. Three in x86_64-windows and one in
+    /// x86_64-unix: the directory is the half of this set that cannot be
+    /// guessed from the other three, so it is spelled out here rather than
+    /// derived.
     private func destinations(in app: URL) -> [URL] {
-        let dir = app.appendingPathComponent(SHARED_SUPPORT_COMPONENT).appendingPathComponent("lib/wine/x86_64-windows")
-        return ["winebus.sys", "setupapi.dll", "ntoskrnl.exe"].map { dir.appendingPathComponent($0) }
+        let lib = app.appendingPathComponent(SHARED_SUPPORT_COMPONENT).appendingPathComponent("lib/wine")
+        let windows = lib.appendingPathComponent("x86_64-windows")
+        return ["winebus.sys", "setupapi.dll", "ntoskrnl.exe"].map { windows.appendingPathComponent($0) }
+            + [lib.appendingPathComponent("x86_64-unix/winebus.so")]
     }
 
     private func emptyDirectory() throws -> URL {
@@ -87,14 +97,21 @@ struct BundledControllerBusTests {
         }
     }
 
-    /// Each of the three begins as a PE does, and the whole set reads.
-    @Test func everyFileWeCarryIsAWindowsBinary() throws {
+    /// Each of the three begins as a PE does, the unix half begins as a
+    /// 64-bit Mach-O does, and the whole set reads. Checked apart rather than
+    /// together: a .so that began with MZ would be a PE on its way into the
+    /// engine's x86_64-unix directory, and the script copies what it is given.
+    @Test func everyFileWeCarryIsTheKindOfBinaryItShouldBe() throws {
         let checked = try BundledControllerBus.verified(inDirectory: payload)
-        #expect(checked.files.count == 3)
-        for url in checked.files {
+        #expect(checked.files.count == 4)
+        for url in checked.files where url.lastPathComponent != BundledControllerBus.unixFile {
             #expect(BundledControllerBus.magic(of: url) == BundledControllerBus.peMagic,
                     "\(url.lastPathComponent) does not begin with MZ")
         }
+        let unix = payload.appendingPathComponent(BundledControllerBus.unixFile)
+        #expect(BundledControllerBus.magic(of: unix, count: 4) == BundledControllerBus.machOMagic)
+        #expect(BundledControllerBus.magic(of: unix) != BundledControllerBus.peMagic,
+                "the unix half is not a PE, and must not be checked as one")
     }
 
     /// The stamp names the ORIGIN, not the copy: a set for CrossOver.app
@@ -105,14 +122,30 @@ struct BundledControllerBusTests {
     @Test func theStampNamesTheEngineTheMediaSetNames() throws {
         let ours = try stamp
         #expect(ours.app == "CrossOver.app")
-        // Four now: mgvf-0005 added the USB emulation a game's own options can
-        // ask for, and it travels in the same winebus as the other three.
-        #expect(ours.patches == "mgvf-0002 mgvf-0003 mgvf-0004 mgvf-0005")
+        // Eight now. mgvf-0005 added the USB emulation a game's own options can
+        // ask for; mgvf-0006 to mgvf-0009 are in winebus's unix half, and the
+        // last of them is the vibration rewrite this application's per-game
+        // option asks for. The whole list is named rather than a count, so a
+        // build made from a shorter series fails here and not in a bottle.
+        #expect(ours.patches == "mgvf-0002 mgvf-0003 mgvf-0004 mgvf-0005 mgvf-0006 mgvf-0007 mgvf-0008 mgvf-0009")
         let media = try JSONDecoder().decode(BundledControllerBus.Stamp.self,
                                              from: Data(contentsOf: payload.appendingPathComponent("engine-built-for-stock.json")))
         #expect(ours.version == media.version)
         #expect(ours.wine == media.wine)
         #expect(ours.version != nil && ours.wine != nil)
+    }
+
+    /// The fourth file by name, and the fact about it this application cannot
+    /// derive: the installer puts it in x86_64-unix, not beside the three PE
+    /// files. Read from the script rather than asserted from memory -- the
+    /// script is the one that writes into the engine.
+    @Test func theUnixHalfTravelsAndGoesToItsOwnDirectory() throws {
+        #expect(BundledControllerBus.files.count == 4)
+        #expect(BundledControllerBus.files.contains(BundledControllerBus.unixFile))
+        #expect(BundledControllerBus.peFiles.contains(BundledControllerBus.unixFile) == false)
+        let script = try String(contentsOf: payload.appendingPathComponent(BundledControllerBus.script), encoding: .utf8)
+        #expect(script.contains(BundledControllerBus.unixFile))
+        #expect(script.contains("lib/wine/x86_64-unix/winebus.so"))
     }
 
     // MARK: checked before it runs
@@ -134,6 +167,23 @@ struct BundledControllerBusTests {
         defer { try? f.removeItem(at: mine) }
         try Data("not a PE at all".utf8).write(to: mine.appendingPathComponent("engine-controller-setupapi.dll"))
         #expect(throws: BundledControllerBus.Failure.notAPE("engine-controller-setupapi.dll")) {
+            try BundledControllerBus.verified(inDirectory: mine)
+        }
+    }
+
+    /// And the unix half is refused by its own name when it is not a Mach-O.
+    /// It would otherwise pass the loop above by not being in it, and the
+    /// script would copy whatever it is into the engine.
+    @Test func aUnixHalfThatIsNotAMachOIsRefusedByName() throws {
+        let f = FileManager.default
+        let mine = f.temporaryDirectory.appendingPathComponent("bus-\(UUID().uuidString)", isDirectory: true)
+        try f.copyItem(at: payload, to: mine)
+        defer { try? f.removeItem(at: mine) }
+        // MZ on purpose: a PE in the place of the unix half is exactly the
+        // mistake a shared magic check would let through.
+        try Data("MZ, which is the wrong kind of binary here".utf8)
+            .write(to: mine.appendingPathComponent(BundledControllerBus.unixFile))
+        #expect(throws: BundledControllerBus.Failure.notAMachO(BundledControllerBus.unixFile)) {
             try BundledControllerBus.verified(inDirectory: mine)
         }
     }
@@ -400,6 +450,10 @@ struct BundledControllerBusTests {
                     .contains("engine-controller-winebus.sys") == true)
         #expect(BundledControllerBus.Failure.notAPE("engine-controller-ntoskrnl.exe").errorDescription?
                     .contains("MZ") == true)
+        #expect(BundledControllerBus.Failure.notAMachO(BundledControllerBus.unixFile).errorDescription?
+                    .contains(BundledControllerBus.unixFile) == true)
+        #expect(BundledControllerBus.Failure.notAMachO(BundledControllerBus.unixFile).errorDescription?
+                    .contains("Mach-O") == true)
         let wrong = BundledControllerBus.Failure.wrongEngine(wanted: "CrossOver.app 26.3.0.39832",
                                                              found: "Other.app 27.0.0.1")
         #expect(wrong.errorDescription?.contains("CrossOver.app 26.3.0.39832") == true)

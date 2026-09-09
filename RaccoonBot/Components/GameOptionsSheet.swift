@@ -85,5 +85,13 @@ struct GameOptionsSheet: View {
             if !shown { session.closing(gameOptions) }
         }
         .onDisappear { session.closing(gameOptions) }
+        // The one place this screen's size is decided, for both the places it
+        // is opened from -- the games list and a title's own page. It had no
+        // size of its own at all: a macOS sheet takes the width its content
+        // asks for, and the content asked for as little as it could get away
+        // with, which is how the controller picker's label came to render as
+        // "Vibra...". A minimum rather than a width, so the sheet can still
+        // grow for a long game name in the title bar.
+        .frame(minWidth: 820)
     }
 }

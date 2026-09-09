@@ -72,9 +72,11 @@ nonisolated struct ControllerBusStatus: Sendable, Equatable {
 
     /// What would make the engine agree with the switch, or nil when it does.
     ///
-    /// Broken asks for a removal first: the three only work together, and
-    /// --restore returns whichever originals are there, after which install
-    /// puts all three in. Installed-but-silent -- the script's record says
+    /// Broken asks for a removal first: the four only work together -- the
+    /// three PE files were written for each other, and winebus's two halves
+    /// come from one source tree and share a struct -- and --restore returns
+    /// whichever originals are there, after which install puts all four in.
+    /// Installed-but-silent -- the script's record says
     /// installed and the winebus does not name the bus -- asks for an install,
     /// which replaces the file and keeps the original already set aside.
     func wantsAction(enabled: Bool) -> Action? {
@@ -119,11 +121,11 @@ nonisolated struct ControllerBusStatus: Sendable, Equatable {
         case .installed where tellsTheBus:
             return enabled
                 ? "This CrossOver tells games which bus a controller is on — a DualSense on Bluetooth keeps rumble, the touchpad and the PS button."
-                : "This CrossOver still carries the controller-bus set. Remove puts CrossOver's own three files back."
+                : "This CrossOver still carries the controller-bus set. Remove puts CrossOver's own four files back."
         case .installed:
-            return "The controller-bus set is recorded as installed, but this CrossOver's winebus does not name the bus. Install puts the three files in again."
+            return "The controller-bus set is recorded as installed, but this CrossOver's winebus does not name the bus. Install puts the four files in again."
         case .broken, .half:
-            return "The controller-bus set is half in this CrossOver, and the three files only work together. Remove it, then install it again."
+            return "The controller-bus set is half in this CrossOver, and the four files only work together. Remove it, then install it again."
         case .absent:
             return enabled
                 ? "This CrossOver has the stock controller bus — a DualSense on Bluetooth goes through SDL. Install puts the set in."

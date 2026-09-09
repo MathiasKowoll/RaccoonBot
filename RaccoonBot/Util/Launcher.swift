@@ -358,7 +358,7 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
     // running bottle read these values when it booted and cannot be told
     // otherwise from here anyway.
     if !BottleProcesses.registryIsOursToWrite(inBottleAt: bottleURL) {
-        console.warn("this bottle is already running, so its registry was left alone: the controller settings for this title -- Enable SDL, Disable Hidraw and what a DualSense is seen as -- were not written. A bottle reads them when it boots, so close what is running in it (the launcher and its games) and start this title again.")
+        console.warn("this bottle is already running, so its registry was left alone: the controller settings for this title -- Enable SDL, Disable Hidraw, what a DualSense is seen as and what its motors do -- were not written. A bottle reads them when it boots, so close what is running in it (the launcher and its games) and start this title again.")
     } else {
         try registry.load()
         if let controllersSection = registry.section(forPath: "System\\\\CurrentControlSet\\\\Services\\\\winebus") {
@@ -378,28 +378,39 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
             // A DualSense goes through SDL when it is on Bluetooth and stays raw
             // when it is not -- see DualSenseRoute for the measurement behind it --
             // and, on an engine that can do it, is presented to this title the way
-            // this title's own options ask for. Written the same way as the two
-            // keys above, into the same file, on the same condition: only when
-            // something would change.
+            // this title's own options ask for and its motors do what they ask
+            // for. Written the same way as the two keys above, into the same
+            // file, on the same condition: only when something would change.
             //
-            // All three values are written for both models on every launch, zeros
-            // included, and whatever is attached at this moment. That is what
-            // makes the presentation per game -- the title that wants the pad as
-            // it is clears what the last title set rather than inheriting it --
-            // and it is what lets the console's own advice work: winebus reads
+            // All five values are written for both models on every launch, the
+            // neutral ones included, and whatever is attached at this moment.
+            // That is what makes these per game -- the title that wants the pad
+            // as it is clears what the last title set rather than inheriting it
+            // -- and it is what lets the console's own advice work: winebus reads
             // them as the pad arrives, so the pad plugged in or woken up after
-            // this finds them already there.
+            // this finds them already there. Neutral is not all zeros: a
+            // VibrationGain of 0 is silence, and 100 is the value that leaves a
+            // game's rumble alone.
             let pads = SonyPads.attached()
             let sdlEnabled = options!.enableSDL
             let tellsTheBus = DualSenseRoute.engineTellsTheBus(cxAppPath: cxAppPath)
             let presentation = DualSensePresentation(rawValue: options!.dualSensePresentation) ?? .byDefault
             let canEmulateUSB = DualSenseRoute.engineCanEmulateUSB(cxAppPath: cxAppPath)
+            // The motors, asked of the same engine and by the same means: the
+            // name of a value in the binary, never a version number.
+            let vibration = DualSenseVibration(rawValue: options!.dualSenseVibration) ?? .byDefault
+            let vibrationPercent = options!.dualSenseVibrationGain
+            let canRewriteVibration = DualSenseRoute.engineCanRewriteVibration(cxAppPath: cxAppPath)
             if let summary = DualSenseRoute.summary(for: pads, sdlEnabled: sdlEnabled, engineTellsTheBus: tellsTheBus,
-                                                    presentation: presentation, engineCanEmulateUSB: canEmulateUSB) {
+                                                    presentation: presentation, engineCanEmulateUSB: canEmulateUSB,
+                                                    vibration: vibration, vibrationPercent: vibrationPercent,
+                                                    engineCanRewriteVibration: canRewriteVibration) {
                 console.log("controller: \(summary)")
             }
             for override in DualSenseRoute.overrides(for: pads, sdlEnabled: sdlEnabled, engineTellsTheBus: tellsTheBus,
-                                                     presentation: presentation, engineCanEmulateUSB: canEmulateUSB) {
+                                                     presentation: presentation, engineCanEmulateUSB: canEmulateUSB,
+                                                     vibration: vibration, vibrationPercent: vibrationPercent,
+                                                     engineCanRewriteVibration: canRewriteVibration) {
                 let section: WineRegSection
                 if let existing = registry.section(forPath: override.path) {
                     section = existing
@@ -411,6 +422,8 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
                     (DualSenseRoute.hidrawValue, override.hidraw),
                     (DualSenseRoute.usbEmulationValue, override.usbEmulation),
                     (DualSenseRoute.productIDValue, override.askedProductID),
+                    (DualSenseRoute.vibrationModeValue, override.vibrationMode),
+                    (DualSenseRoute.vibrationGainValue, override.vibrationGain),
                 ]
                 for (key, value) in values {
                     // The call is the write; keeping it out of a `where` clause so

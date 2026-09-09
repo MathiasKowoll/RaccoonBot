@@ -23,7 +23,22 @@ import Foundation
 
 nonisolated enum OptionControl: String, CaseIterable, Hashable {
     // Generic
-    case backend, x87, mtlHud, advertiseAVX, msync, sdl, hidraw, padSeenAs, ue4Hack, mvkArgBuff
+    case backend, x87, mtlHud, advertiseAVX, msync, ue4Hack, mvkArgBuff
+    // The controller, in its own section on screen and its own run here.
+    // Five settings and a button that describe a physical device rather than
+    // a rendering choice; they were a column of toggles until the vibration
+    // picker made the column too narrow to read a label in.
+    case sdl, hidraw, padSeenAs
+    // The vibration picker and the percentage the two of its three choices
+    // that use one are set with. Two entries because they are two controls on
+    // screen, one idea: the slider keeps its place whatever is chosen -- see
+    // `vibrationGainShown` -- but it is only in this list while the choice it
+    // belongs to actually uses it, so the pad cannot land on a control that
+    // would change a number nothing reads.
+    case vibration, vibrationGain
+    /// Buzzes the attached pad now, with what is on screen. A button, not a
+    /// setting: nothing is written and nothing is read back.
+    case rumbleTest
     // DXMT
     case dxmtCap, dxmtMaxFPS, dxmtMetalFX, dxmtUpscale
     // Metal HUD
@@ -35,7 +50,7 @@ nonisolated enum OptionControl: String, CaseIterable, Hashable {
 
     var isButton: Bool {
         switch self {
-        case .save, .undo, .reset, .autoconfigure: return true
+        case .save, .undo, .reset, .autoconfigure, .rumbleTest: return true
         default: return false
         }
     }
@@ -45,7 +60,7 @@ nonisolated enum OptionControl: String, CaseIterable, Hashable {
     /// screen, and cycling is what a click does there too.
     var opensMenu: Bool {
         switch self {
-        case .backend, .hudAlignment, .padSeenAs: return true
+        case .backend, .hudAlignment, .padSeenAs, .vibration: return true
         default: return false
         }
     }
@@ -94,6 +109,11 @@ nonisolated struct OptionPanelState: Equatable {
     var isNative = false
     var backend = "dxmt"
     var hudEnabled = false
+    /// Whether the vibration choice on screen is one that carries a
+    /// percentage. The slider's row is on screen either way -- it is held
+    /// there so that changing the choice does not move the rest of the panel
+    /// -- so this says whether it can be used, not whether it exists.
+    var vibrationGainShown = false
     var metalFXOn = false
     var dxmtCapOn = false
     var d3dCapOn = false
@@ -130,7 +150,15 @@ nonisolated struct OptionFocus: Equatable {
         // Nothing for the two text fields.
         if !state.isNative { list.append(.x87) }
         list += [.mtlHud, .advertiseAVX]
-        if !state.isNative { list += [.msync, .sdl, .hidraw, .padSeenAs, .ue4Hack, .mvkArgBuff] }
+        if !state.isNative { list += [.msync, .ue4Hack, .mvkArgBuff] }
+        // The controller section, which follows the generic one on screen. A
+        // native title has no bottle to write any of it into, so it has no
+        // section either.
+        if !state.isNative {
+            list += [.sdl, .hidraw, .padSeenAs, .vibration]
+            if state.vibrationGainShown { list.append(.vibrationGain) }
+            list.append(.rumbleTest)
+        }
         if state.backend == "dxmt" {
             list.append(.dxmtCap)
             if state.dxmtCapOn { list.append(.dxmtMaxFPS) }
@@ -192,6 +220,10 @@ nonisolated enum OptionAdjust {
     static let fpsStep: Double = 5
     static let opacityStep: Double = 0.05
     static let upscaleStep: Double = 0.125   // the slider's own step; anything else lands between its stops
+    /// The vibration percentage. 25 rather than 5: the range is 25 to 400, and
+    /// a step small enough to be lost in the motors is a press that does
+    /// nothing you can feel.
+    static let gainStep: Double = 25
 
     /// What the cap becomes when its switch is thrown. The launch line emits a
     /// cap only above 20, so 0 is off in the only sense that matters; 60 is

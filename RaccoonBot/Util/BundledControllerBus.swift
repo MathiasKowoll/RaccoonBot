@@ -5,19 +5,31 @@
 //  The controller-bus set this application carries, and how it goes into an
 //  engine and comes back out.
 //
-//  Three PE files MacGameVideoFix builds from the engine's own wine with
-//  mgvf-0002, mgvf-0003 and mgvf-0004 on top: winebus names the bus in its
-//  compatible ids, setupapi answers CM_Get_Parent for a HID child, and
-//  ntoskrnl refreshes a device's ids on every enumeration. With them a Windows
-//  client learns that a DualSense is on Bluetooth and speaks the pad's own
-//  protocol -- rumble, the PS button, the touchpad and the adaptive triggers
-//  all work, measured on 2026-09-08. Without them nothing on the Windows side
-//  ever learns the bus (see DualSenseRoute), and the pad is sent through SDL
-//  as an Xbox-class pad with some rumble and nothing else.
+//  Four files MacGameVideoFix builds from the engine's own wine. Three are PE
+//  and go to lib/wine/x86_64-windows/: winebus names the bus in its compatible
+//  ids (mgvf-0002), setupapi answers CM_Get_Parent for a HID child
+//  (mgvf-0003), and ntoskrnl refreshes a device's ids on every enumeration
+//  (mgvf-0004). With them a Windows client learns that a DualSense is on
+//  Bluetooth and speaks the pad's own protocol -- rumble, the PS button, the
+//  touchpad and the adaptive triggers all work, measured on 2026-09-08.
+//  Without them nothing on the Windows side ever learns the bus (see
+//  DualSenseRoute), and the pad is sent through SDL as an Xbox-class pad with
+//  some rumble and nothing else.
+//
+//  The fourth is winebus's unix half, a Mach-O rather than a PE, and it goes
+//  to lib/wine/x86_64-unix/ -- a different directory, which is the one thing
+//  about this set that cannot be guessed from the other three. It carries the
+//  patches that act on the pad itself rather than on what Windows is told:
+//  seizing a DualSense on Bluetooth so macOS and wine stop writing to it at
+//  once (mgvf-0006), the two narrower answers for a pad that leaves
+//  (mgvf-0007, mgvf-0008), and the vibration rewrite a title's own options ask
+//  for (mgvf-0009). The two halves are built from one source tree and share a
+//  struct, so a set with three of the four in place is not a supported
+//  combination and the script says "broken" for it.
 //
 //  An improvement, not a fix. No title needs it and every one runs without
 //  it, so unlike the media set it is a switch: on by default for an engine it
-//  was built for, and off puts CodeWeavers' three files back. The switch runs
+//  was built for, and off puts CodeWeavers' four files back. The switch runs
 //  install-engine-controller.sh, which keeps each original beside its
 //  replacement as .mgvf-stock, refuses an engine the set was not built for,
 //  refuses while a bottle is up, and re-signs the engine after either
@@ -25,12 +37,13 @@
 //  reads back what it says.
 //
 //  Verified before it runs, the way the codecs are, but not by hash. The
-//  three are this project's own build rather than somebody else's binaries
+//  four are this project's own build rather than somebody else's binaries
 //  carried under licence, and every rebuild changes their bytes; pinning them
 //  would make every rebuild a change here too. What is checked is that all
-//  four files are there, that each of the three begins as a PE does, and that
-//  the stamp beside them names an engine -- and then, before anything is
-//  written, that the engine is that one.
+//  five files are there, that each begins as the kind of binary it is meant to
+//  be -- PE for the three, Mach-O for the unix half -- and that the stamp
+//  beside them names an engine, and then, before anything is written, that the
+//  engine is that one.
 //
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
@@ -43,18 +56,32 @@ nonisolated enum BundledControllerBus {
     /// beside it and nowhere else.
     static let script = "install-engine-controller.sh"
 
-    /// The three, by the names they travel under. `engine-controller-` on
-    /// purpose: the media installer picks its set by reading engine-built-for*
-    /// and engine-winegstreamer*, and these must never be taken for one.
-    static let files = ["engine-controller-winebus.sys",
-                        "engine-controller-setupapi.dll",
-                        "engine-controller-ntoskrnl.exe"]
+    /// The three PE files, by the names they travel under. `engine-controller-`
+    /// on purpose: the media installer picks its set by reading
+    /// engine-built-for* and engine-winegstreamer*, and these must never be
+    /// taken for one.
+    static let peFiles = ["engine-controller-winebus.sys",
+                          "engine-controller-setupapi.dll",
+                          "engine-controller-ntoskrnl.exe"]
+
+    /// winebus's unix half, which goes to a directory of its own. Named apart
+    /// from the three because it is checked apart from them: it is a Mach-O
+    /// library and does not begin as a PE does.
+    static let unixFile = "engine-controller-winebus.so"
+
+    /// All four, in the order the installer names them.
+    static let files = peFiles + [unixFile]
 
     /// Which engine they were built for.
     static let stampFile = "engine-controller-built-for.json"
 
     /// The two bytes every PE begins with.
     static let peMagic = Data("MZ".utf8)
+
+    /// The four a 64-bit Mach-O begins with: 0xfeedfacf, little endian. Four
+    /// and not two, because the first two of them are shared with the 32-bit
+    /// and the reversed-order forms, and the unix half is neither.
+    static let machOMagic = Data([0xcf, 0xfa, 0xed, 0xfe])
 
     /// The stamp beside the files: the same four fields the media stamps carry.
     struct Stamp: Decodable, Equatable, Sendable {
@@ -107,6 +134,7 @@ nonisolated enum BundledControllerBus {
     enum Failure: LocalizedError, Equatable {
         case notBundled(String)
         case notAPE(String)
+        case notAMachO(String)
         case stampUnreadable(String)
         case wrongEngine(wanted: String, found: String)
         case refused(String)
@@ -117,6 +145,8 @@ nonisolated enum BundledControllerBus {
                 return "\(name) is not in this application's bundle"
             case .notAPE(let name):
                 return "\(name) is not a Windows binary: it does not begin with MZ"
+            case .notAMachO(let name):
+                return "\(name) is not a macOS library: it does not begin with a 64-bit Mach-O header"
             case .stampUnreadable(let why):
                 return "The controller-bus set does not say which engine it was built for: \(why)"
             case .wrongEngine(let wanted, let found):
@@ -129,7 +159,7 @@ nonisolated enum BundledControllerBus {
 
     // MARK: - What we carry
 
-    /// The script, the three files and the stamp, all present and all read
+    /// The script, the four files and the stamp, all present and all read
     /// before anything is run. A set that is wrong in one file is a wrong set,
     /// and the script would find that out after it had moved an original aside.
     static func verified(in root: URL? = MGVFBundle.embeddedDirectory) throws -> Payload {
@@ -146,12 +176,21 @@ nonisolated enum BundledControllerBus {
             throw Failure.notBundled(script)
         }
         var found: [URL] = []
-        for name in files {
+        for name in peFiles {
             let url = root.appendingPathComponent(name)
             guard let head = magic(of: url) else { throw Failure.notBundled(name) }
             guard head == peMagic else { throw Failure.notAPE(name) }
             found.append(url)
         }
+        // The unix half, checked for what it is rather than for what the other
+        // three are. Left out of the loop above rather than given a magic of
+        // its own inside it: a set whose .so happened to begin with MZ would be
+        // a PE in the place of a Mach-O, and the script would copy it into the
+        // engine's x86_64-unix directory without looking.
+        let unix = root.appendingPathComponent(unixFile)
+        guard let unixHead = magic(of: unix, count: machOMagic.count) else { throw Failure.notBundled(unixFile) }
+        guard unixHead == machOMagic else { throw Failure.notAMachO(unixFile) }
+        found.append(unix)
         let stampURL = root.appendingPathComponent(stampFile)
         guard let data = f.contents(atPath: stampURL.path(percentEncoded: false)) else {
             throw Failure.notBundled(stampFile)
@@ -165,11 +204,12 @@ nonisolated enum BundledControllerBus {
         return Payload(script: installer, files: found, stamp: stamp)
     }
 
-    /// The first two bytes of a file; nil when there is no file to read.
-    static func magic(of url: URL) -> Data? {
+    /// The first bytes of a file; nil when there is no file to read. Two by
+    /// default, which is a PE's whole magic; the unix half asks for four.
+    static func magic(of url: URL, count: Int = 2) -> Data? {
         guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
         defer { try? handle.close() }
-        return (try? handle.read(upToCount: 2)) ?? Data()
+        return (try? handle.read(upToCount: count)) ?? Data()
     }
 
     // MARK: - Running the script
@@ -281,7 +321,7 @@ nonisolated enum BundledControllerBus {
         return (try? run(.status, onEngineAt: engine, script: payload.script))?.state
     }
 
-    /// Take it out: the three .mgvf-stock originals go back and the script
+    /// Take it out: the four .mgvf-stock originals go back and the script
     /// re-signs. Not checked against the stamp -- there is nothing to match,
     /// only originals to return -- and the script checks nothing there either.
     @discardableResult

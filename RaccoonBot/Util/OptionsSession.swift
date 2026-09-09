@@ -2,7 +2,8 @@
 //  OptionsSession.swift
 //  RaccoonBot
 //
-//  What a title's options panel owes the file when it closes.
+//  What a title's options panel owes the file, as it is edited and when it
+//  closes.
 //
 //  The panel edits a form; the launcher reads a file. Five separate defects
 //  came from those two disagreeing -- a launch that used what the form held
@@ -14,8 +15,21 @@
 //  So there is no "save changes?" on the way out. With a controller that would
 //  be a dialog to navigate every single time, and its Discard button would put
 //  the form and the file back into disagreement -- the exact state the rule
-//  exists to prevent. Undo, before closing, is the escape hatch: it puts the
-//  form back to the file, which is a state that cannot be wrong.
+//  exists to prevent.
+//
+//  AND THE PANEL NO LONGER WAITS UNTIL IT CLOSES. The same rule says that an
+//  option changed and not saved is an option that silently does not apply, and
+//  a Save button is a step that can be forgotten -- it was forgotten in this
+//  project's own measuring, which is what `Autosave` below exists for. An edit
+//  is committed a moment after it is made.
+//
+//  Which changes what Undo can mean. When the file follows the form, "put the
+//  form back to the file" is a button that can never do anything, so Undo goes
+//  back to what the file held when the panel OPENED and stays the escape
+//  hatch it was. That is a second remembered state, `opened`, which nothing
+//  moves while a title's panel is up; `baseline` still means "what is in the
+//  file right now", because that is what "is there anything to write" is
+//  measured against.
 //
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
@@ -26,9 +40,14 @@ import Combine
 @MainActor
 final class OptionsSession: ObservableObject {
 
-    /// What the file held when the panel opened, or the last time it saved.
-    /// Undo goes here; "dirty" is measured against it.
+    /// What is in the file right now: what it held when the panel opened, or
+    /// what the last write put there. "Dirty" is measured against it.
     @Published private(set) var baseline: GameOptionsData?
+
+    /// What the file held when the panel opened, which no write moves. Undo
+    /// goes here, so it can still undo a title's whole visit even though
+    /// autosave has been writing all along.
+    @Published private(set) var opened: GameOptionsData?
 
     /// Where the file lives.
     private(set) var key: String?
@@ -62,11 +81,15 @@ final class OptionsSession: ObservableObject {
         // states outright because everything here rests on it.
         form.set(data: GameOptionsData(data: form))
         self.baseline = GameOptionsData(data: form)
+        // The same value, remembered separately because they stop being the
+        // same the first time autosave writes.
+        self.opened = self.baseline
     }
 
     func end() {
         key = nil
         baseline = nil
+        opened = nil
     }
 
     /// Does the form differ from the file?
@@ -80,8 +103,9 @@ final class OptionsSession: ObservableObject {
         return GameOptionsData(data: form) != baseline
     }
 
-    /// Commit now. The baseline moves, so a later Undo returns to this and
-    /// not to whatever was there before the person pressed Save.
+    /// Commit now. The baseline moves, so nothing is dirty afterwards and the
+    /// next edit is measured against what is now in the file. What Undo
+    /// returns to does not move -- see `opened`.
     func save(_ form: GameOptions) {
         guard let key else { return }
         let data = GameOptionsData(data: form)
@@ -89,10 +113,31 @@ final class OptionsSession: ObservableObject {
         baseline = data
     }
 
-    /// Put the form back to the file.
+    /// Is there anything for Undo to do? Measured against what the panel
+    /// opened with, which is the only thing it can still return to.
+    func canUndo(_ form: GameOptions) -> Bool {
+        guard let opened else { return false }
+        return GameOptionsData(data: form) != opened
+    }
+
+    /// Put the form back to what the file held when the panel opened.
+    ///
+    /// It does not write. It does not have to: the form changing is what
+    /// autosave watches, so the undone form is committed a moment later by
+    /// the same path every other edit takes.
     func undo(into form: GameOptions) {
-        guard let baseline else { return }
-        form.set(data: baseline)
+        guard let opened else { return }
+        form.set(data: opened)
+    }
+
+    /// Commit an edit, if there is one to commit. The rule is `Autosave`'s;
+    /// this is the doing of it, and it answers whether it wrote so that a test
+    /// -- and the panel -- can tell an edit from a no-op.
+    @discardableResult
+    func autosave(_ form: GameOptions) -> Bool {
+        guard Autosave.shouldWrite(hasFile: key != nil, formDiffers: isDirty(form)) else { return false }
+        save(form)
+        return true
     }
 
     /// The panel is closing, by whatever route: the close button, Escape, a
@@ -105,5 +150,36 @@ final class OptionsSession: ObservableObject {
         guard isDirty(form) else { return false }
         save(form)
         return true
+    }
+}
+
+/// When an edit becomes a write.
+///
+/// Out of the view and out of the session both, so the rule can be stated in
+/// a test rather than lived inside a closure: the panel only owns the timer.
+///
+/// WHY THERE IS A PAUSE AT ALL. A slider dragged across its range publishes a
+/// new value every frame, and writing the defaults file sixty times a second
+/// to describe one gesture is a write per frame for one decision. The pause
+/// coalesces a gesture into the write that ends it: every edit cancels the
+/// pending one and starts it again, so the file is written once the hand
+/// stops. It is short enough that it is over before anybody could close the
+/// panel deliberately, and closing writes anyway -- `closing(_:)` is still
+/// there, and is what catches an edit made in the last fraction of a second.
+nonisolated enum Autosave {
+
+    /// How long after the last edit the write happens. A quarter of a second
+    /// reads as immediate and still swallows a drag.
+    static let quietPeriod: Duration = .milliseconds(250)
+
+    /// Whether an edit is worth a write.
+    ///
+    /// Two conditions and no more. There has to be a file to write to -- a
+    /// panel that never loaded a title must not write its defaults over one,
+    /// which is `isDirty`'s own rule said once more where it can be seen --
+    /// and the form has to differ from what is in it, so that a rebuild, a
+    /// reload or an edit put back by hand writes nothing.
+    static func shouldWrite(hasFile: Bool, formDiffers: Bool) -> Bool {
+        hasFile && formDiffers
     }
 }

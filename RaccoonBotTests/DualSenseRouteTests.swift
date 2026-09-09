@@ -88,26 +88,36 @@ struct DualSenseRouteTests {
     /// one build carries both patches, and a Bluetooth pad on that engine stays
     /// raw, which is the only route the emulation exists on.
     private func over(_ pads: [SonyPads.Pad], _ presentation: DualSensePresentation,
-                      sdl: Bool = true, tells: Bool = true, canEmulate: Bool = true) -> [DualSenseRoute.Override] {
+                      sdl: Bool = true, tells: Bool = true, canEmulate: Bool = true,
+                      vibration: DualSenseVibration = .byDefault, percent: Double = 100,
+                      canRewrite: Bool = true) -> [DualSenseRoute.Override] {
         DualSenseRoute.overrides(for: pads, sdlEnabled: sdl, engineTellsTheBus: tells,
-                                 presentation: presentation, engineCanEmulateUSB: canEmulate)
+                                 presentation: presentation, engineCanEmulateUSB: canEmulate,
+                                 vibration: vibration, vibrationPercent: percent,
+                                 engineCanRewriteVibration: canRewrite)
     }
     private func entry(_ o: [DualSenseRoute.Override], _ pid: Int) -> DualSenseRoute.Override? {
         o.first { $0.path == DualSenseRoute.sectionPath(productID: pid) }
     }
     private func said(_ pads: [SonyPads.Pad], _ presentation: DualSensePresentation,
-                      sdl: Bool = true, tells: Bool = true, canEmulate: Bool = true) -> String {
+                      sdl: Bool = true, tells: Bool = true, canEmulate: Bool = true,
+                      vibration: DualSenseVibration = .byDefault, percent: Double = 100,
+                      canRewrite: Bool = true) -> String {
         DualSenseRoute.summary(for: pads, sdlEnabled: sdl, engineTellsTheBus: tells,
-                               presentation: presentation, engineCanEmulateUSB: canEmulate) ?? ""
+                               presentation: presentation, engineCanEmulateUSB: canEmulate,
+                               vibration: vibration, vibrationPercent: percent,
+                               engineCanRewriteVibration: canRewrite) ?? ""
     }
 
-    /// The two names mgvf-0005 reads, and the one mgvf-0002 does. A value
-    /// spelled differently is written into the bottle and read by nobody, and
-    /// the bottle looks configured.
+    /// The two names mgvf-0005 reads, the two mgvf-0009 reads, and the one
+    /// wine itself does. A value spelled differently is written into the
+    /// bottle and read by nobody, and the bottle looks configured.
     @Test func theValueNamesAreTheOnesThePatchReads() {
         #expect(DualSenseRoute.hidrawValue == "Hidraw")
         #expect(DualSenseRoute.usbEmulationValue == "UsbEmulation")
         #expect(DualSenseRoute.productIDValue == "ProductId")
+        #expect(DualSenseRoute.vibrationModeValue == "VibrationMode")
+        #expect(DualSenseRoute.vibrationGainValue == "VibrationGain")
     }
 
     /// A title nobody has told otherwise gets the pad as it is, and the bottle
@@ -445,5 +455,317 @@ struct DualSenseRouteTests {
         #expect(DualSensePresentation.dropdownOptions.first?.id == DualSensePresentation.byDefault.rawValue)
         #expect(DualSensePresentation.allCases.count == 3)
         #expect(DualSensePresentation.dropdownOptions.allSatisfy { !$0.label.isEmpty })
+    }
+
+    // MARK: what the motors do, per game
+
+    private func vibration(_ o: [DualSenseRoute.Override], _ pid: Int) -> (mode: UInt32, gain: UInt32)? {
+        guard let entry = o.first(where: { $0.path == DualSenseRoute.sectionPath(productID: pid) }) else { return nil }
+        return (entry.vibrationMode, entry.vibrationGain)
+    }
+
+    /// A title nobody has told otherwise gets the pad as the game drives it,
+    /// and the bottle gets the pair that means "nothing asked for". Which is
+    /// 0 and 100, not 0 and 0: the driver reads an absent gain as 100.
+    @Test func theDefaultLeavesEveryPacketAlone() {
+        #expect(DualSenseVibration.byDefault == .asAsked)
+        #expect(DualSenseVibration.byDefault.changesAnything(percent: 100) == false)
+        let o = over([pad(SonyPads.dualSenseEdge, "Bluetooth")], .asItIs)
+        #expect(o.count == 2)
+        #expect(o.allSatisfy { $0.vibrationMode == 0 && $0.vibrationGain == 100 })
+        #expect(said([pad(SonyPads.dualSenseEdge, "Bluetooth")], .asItIs).contains("motors") == false,
+                "a title that asked for nothing says nothing about the motors")
+    }
+
+    /// The unknown value, and the number no slider here can reach: both fold
+    /// to the default rather than leaving the menu blank or writing something
+    /// the panel never showed.
+    @Test func anUnknownChoiceAndAnImpossiblePercentageFold() {
+        #expect(DualSenseVibration.pickable(nil) == DualSenseVibration.asAsked.rawValue)
+        #expect(DualSenseVibration.pickable("a choice a later build wrote") == DualSenseVibration.asAsked.rawValue)
+        #expect(DualSenseVibration.pickableGain(nil) == 100)
+        #expect(DualSenseVibration.pickableGain(0) == DualSenseVibration.gainRange.lowerBound)
+        #expect(DualSenseVibration.pickableGain(100000) == DualSenseVibration.gainRange.upperBound)
+        #expect(DualSenseVibration.pickableGain(.nan) == 100)
+        #expect(DualSenseVibration.pickableGain(175) == 175)
+    }
+
+    /// The whole point of the option, and the one thing the console must never
+    /// get wrong: 0 is a request and absence is not. Silence and "leave it
+    /// alone" are written as different numbers, because the driver reads them
+    /// as different things.
+    @Test func silenceAndLeavingItAloneAreWrittenDifferently() {
+        let quiet = over([pad(SonyPads.dualSense, "Bluetooth")], .asItIs, vibration: .off)
+        #expect(vibration(quiet, SonyPads.dualSense)?.gain == 0)
+        #expect(vibration(quiet, SonyPads.dualSense)?.mode == 0, "silence does not need the path rewritten")
+        let alone = over([pad(SonyPads.dualSense, "Bluetooth")], .asItIs, vibration: .asAsked, percent: 100)
+        #expect(vibration(alone, SonyPads.dualSense)?.gain == 100)
+        #expect(DualSenseVibration.off.changesAnything(percent: 100), "0 is a request")
+        #expect(DualSenseVibration.off.gainValue(percent: 400) == 0, "off ignores the percentage entirely")
+        #expect(said([pad(SonyPads.dualSense, "Bluetooth")], .asItIs, vibration: .off).contains("silenced"))
+    }
+
+    /// Stronger asks for the mode, and carries the percentage with it. The
+    /// percentage is the same dial on the choice that does not rewrite the
+    /// path, which is why the two are one control and not two.
+    @Test func strongerAsksForTheModeAndTheGainRidesWithIt() {
+        let o = over([pad(SonyPads.dualSenseEdge, "Bluetooth")], .asItIs, vibration: .stronger, percent: 200)
+        #expect(vibration(o, SonyPads.dualSenseEdge)?.mode == 1)
+        #expect(vibration(o, SonyPads.dualSenseEdge)?.gain == 200)
+        #expect(vibration(o, SonyPads.dualSense)?.mode == 1,
+                "the model that is not here gets the same choice, for when it is the one that arrives")
+
+        let louder = over([pad(SonyPads.dualSenseEdge, "Bluetooth")], .asItIs, vibration: .asAsked, percent: 150)
+        #expect(vibration(louder, SonyPads.dualSenseEdge)?.mode == 0, "the game keeps its own path")
+        #expect(vibration(louder, SonyPads.dualSenseEdge)?.gain == 150)
+    }
+
+    /// An engine whose winebus has no mgvf-0009 is never asked for the
+    /// rewrite, and the console never says it happens: the values would sit
+    /// in the bottle unread and the sentence would have promised an effect
+    /// nobody will feel.
+    @Test func anEngineWithoutThePatchIsNeverAskedToRewrite() {
+        for choice in DualSenseVibration.allCases {
+            let o = over([pad(SonyPads.dualSenseEdge, "Bluetooth")], .asItIs,
+                         vibration: choice, percent: 300, canRewrite: false)
+            #expect(o.allSatisfy { $0.vibrationMode == 0 && $0.vibrationGain == 100 }, "for \(choice)")
+        }
+        let sentence = said([pad(SonyPads.dualSenseEdge, "Bluetooth")], .asItIs,
+                            vibration: .stronger, percent: 300, canRewrite: false)
+        #expect(sentence.contains("no vibration rewrite"))
+        #expect(sentence.contains("legacy motors") == false)
+        #expect(said([pad(SonyPads.dualSenseEdge, "Bluetooth")], .asItIs, vibration: .off, canRewrite: false)
+                    .contains("silenced") == false)
+    }
+
+    /// A pad handed to SDL is a wine gamepad, and winebus never sends it the
+    /// output reports the rewrite acts on. Nothing is asked for there, for the
+    /// reason the emulation is not asked for there.
+    @Test func aPadRoutedThroughSDLIsNeverAskedToRewrite() {
+        let o = over([pad(SonyPads.dualSenseEdge, "Bluetooth")], .asItIs,
+                     sdl: true, tells: false, vibration: .stronger, percent: 200)
+        #expect(vibration(o, SonyPads.dualSenseEdge)?.mode == 0)
+        #expect(vibration(o, SonyPads.dualSenseEdge)?.gain == 100)
+        #expect(said([pad(SonyPads.dualSenseEdge, "Bluetooth")], .asItIs,
+                     sdl: true, tells: false, vibration: .stronger).contains("handed to SDL"))
+    }
+
+    /// Explicit state, as everything else under this key is: the choice is
+    /// written for both models whatever is attached, so the next title clears
+    /// what the last one asked for rather than inheriting it.
+    @Test func everyLaunchClearsWhatTheLastGameAskedOfTheMotors() {
+        let quiet = over([], .asItIs, vibration: .off)
+        #expect(quiet.count == 2)
+        #expect(quiet.allSatisfy { $0.vibrationGain == 0 }, "written for a pad that is not even here")
+        let back = over([], .asItIs, vibration: .asAsked, percent: 100)
+        #expect(back.allSatisfy { $0.vibrationMode == 0 && $0.vibrationGain == 100 })
+    }
+
+    /// The matrix, over everything that can be true at once: nothing may ask
+    /// for a rewrite under a key whose Hidraw is 0, a gain of 0 may only ever
+    /// come from `off`, and the mode may only be 1 where the choice is
+    /// `stronger` on an engine that can serve it.
+    @Test func noCombinationAsksForAVibrationTheDriverCannotHonour() {
+        let arrangements: [[SonyPads.Pad]] = [[], [pad(SonyPads.dualSense, "Bluetooth")],
+                                              [pad(SonyPads.dualSenseEdge, "Bluetooth")],
+                                              [pad(SonyPads.dualSenseEdge, "USB")],
+                                              [pad(SonyPads.dualSense, "Bluetooth"), pad(SonyPads.dualSenseEdge, "USB")]]
+        for pads in arrangements {
+            for choice in DualSenseVibration.allCases {
+                for percent in [25.0, 100.0, 400.0] {
+                    for sdl in [true, false] {
+                        for tells in [true, false] {
+                            for canRewrite in [true, false] {
+                                let o = over(pads, .asItIs, sdl: sdl, tells: tells,
+                                             vibration: choice, percent: percent, canRewrite: canRewrite)
+                                let why: Comment = "\(pads.map(\.transport)) \(choice) \(percent) sdl \(sdl) tells \(tells) can \(canRewrite)"
+                                #expect(o.allSatisfy { $0.hidraw == 1 || ($0.vibrationMode == 0 && $0.vibrationGain == 100) }, why)
+                                #expect(o.allSatisfy { $0.vibrationGain != 0 || choice == .off }, why)
+                                #expect(o.allSatisfy { $0.vibrationMode == 0 || (choice == .stronger && canRewrite) }, why)
+                                #expect(o.allSatisfy { canRewrite || ($0.vibrationMode == 0 && $0.vibrationGain == 100) }, why)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Never "now" for this either: the two values are read as the pad
+    /// arrives, exactly like the other three, so a title that asks only for
+    /// the motors still earns the sentence that says what has to happen.
+    @Test func theMotorSentenceSaysWhenItTakesEffect() {
+        let sentence = said([pad(SonyPads.dualSenseEdge, "Bluetooth")], .asItIs, vibration: .stronger)
+        #expect(sentence.contains("legacy motors"))
+        #expect(sentence.contains("when the pad next arrives"))
+        // A preference, said as one. The comment in the source carries the
+        // ladder; the console carries the fact that it was one person's hand.
+        #expect(sentence.contains("one person here found stronger"))
+        // And with nothing attached there is still something written, so there
+        // is still something to say.
+        #expect(said([], .asItIs, vibration: .off).contains("silenced"))
+        #expect(said([], .asItIs, vibration: .off).contains("no DualSense attached"))
+    }
+
+    /// The saturation is said rather than left to be discovered: a gain over a
+    /// game already asking for 255 cannot make it louder, and somebody who
+    /// sets 400% and feels nothing new should read why on the launch line.
+    @Test func theConsoleSaysWhereTheGainStops() {
+        let sentence = said([pad(SonyPads.dualSense, "Bluetooth")], .asItIs, vibration: .asAsked, percent: 400)
+        #expect(sentence.contains("400%"))
+        #expect(sentence.contains("saturates"))
+    }
+
+    /// Read from the engine's own winebus.sys, the way mgvf-0005 is read, and
+    /// nothing to read is not a yes.
+    @Test func theRewriteIsReadFromTheBinary() throws {
+        #expect(DualSenseRoute.engineCanRewriteVibration(cxAppPath: nil) == false)
+        #expect(DualSenseRoute.engineCanRewriteVibration(cxAppPath: "") == false)
+        #expect(DualSenseRoute.engineCanRewriteVibration(cxAppPath: "/nonexistent.app") == false)
+
+        let f = FileManager.default
+        let bytes = f.temporaryDirectory.appendingPathComponent("pad-\(UUID().uuidString).sys")
+        try Data("MZ and then some bytes that say nothing about any motor".utf8).write(to: bytes)
+        defer { try? f.removeItem(at: bytes) }
+        let plain = try engine(winebus: bytes)
+        defer { try? f.removeItem(at: plain) }
+        #expect(DualSenseRoute.engineCanRewriteVibration(cxAppPath: plain.path(percentEncoded: false)) == false)
+
+        guard let winebus = patchedWinebus else { return }   // another machine, another checkout
+        let ours = try engine(winebus: winebus)
+        defer { try? f.removeItem(at: ours) }
+        #expect(DualSenseRoute.engineCanRewriteVibration(cxAppPath: ours.path(percentEncoded: false)))
+    }
+
+    /// A stock CrossOver carries none of this, and an engine that answers yes
+    /// to the rewrite answers yes to the emulation as well: they travel in one
+    /// winebus. Read only, and skipped quietly where no engine is installed.
+    @Test func aRealEngineIsReadForTheRewriteToo() {
+        let f = FileManager.default
+        let stock = "/Applications/CrossOver.app"
+        if f.fileExists(atPath: winebus(ofEngineAt: stock)) {
+            #expect(DualSenseRoute.engineCanRewriteVibration(cxAppPath: stock) == false)
+        }
+        let ours = f.homeDirectoryForCurrentUser
+            .appendingPathComponent("Applications/Crossover_MGVF.app").path(percentEncoded: false)
+        for engine in [stock, ours] where f.fileExists(atPath: winebus(ofEngineAt: engine)) {
+            if DualSenseRoute.engineCanRewriteVibration(cxAppPath: engine) {
+                #expect(DualSenseRoute.engineCanEmulateUSB(cxAppPath: engine),
+                        "mgvf-0009 never travels without mgvf-0005: \(engine)")
+            }
+        }
+    }
+
+    /// The names and the key are the patch's, checked against the patch and
+    /// not against anybody's memory of it. Skipped where the sibling checkout
+    /// is not on this machine, which is the same rule `patchedWinebus` uses.
+    @Test func thePatchItselfNamesTheseValuesAndThisKey() throws {
+        let patches = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("MacGameVideoFix/source-patches")
+        let f = FileManager.default
+        guard let names = try? f.contentsOfDirectory(atPath: patches.path(percentEncoded: false)),
+              let file = names.first(where: { $0.hasPrefix("mgvf-0009-") && $0.hasSuffix(".patch") }),
+              let text = try? String(contentsOf: patches.appendingPathComponent(file), encoding: .utf8)
+        else { return }
+        // The two names as C wide literals, which is how the driver asks for
+        // them: a value we spell differently is written and read by nobody.
+        #expect(text.contains("L\"\(DualSenseRoute.vibrationModeValue)\""))
+        #expect(text.contains("L\"\(DualSenseRoute.vibrationGainValue)\""))
+        // And the key they live under, which is the one this application
+        // already writes Hidraw, UsbEmulation and ProductId into.
+        #expect(text.contains("Services\\WineBus\\Devices"))
+        #expect(DualSenseRoute.sectionPath(productID: SonyPads.dualSense)
+                == "System\\\\CurrentControlSet\\\\Services\\\\winebus\\\\Devices\\\\054c/0ce6")
+    }
+
+    // MARK: the motor option on disk
+
+    /// A new form starts on the default, and both halves of the one control
+    /// survive the round trip through the saved record.
+    @Test func theMotorChoiceSurvivesTheSavedRecord() {
+        #expect(GameOptions().dualSenseVibration == DualSenseVibration.asAsked.rawValue)
+        #expect(GameOptions().dualSenseVibrationGain == 100)
+        let mine = GameOptions()
+        mine.dualSenseVibration = DualSenseVibration.stronger.rawValue
+        mine.dualSenseVibrationGain = 225
+        let restored = GameOptions()
+        restored.set(data: GameOptionsData(data: mine))
+        #expect(restored.dualSenseVibration == DualSenseVibration.stronger.rawValue)
+        #expect(restored.dualSenseVibrationGain == 225)
+    }
+
+    /// A record saved before this option existed decodes, and reads as the
+    /// default rather than as silence -- which is what a 0 would have meant.
+    @Test func aRecordFromBeforeTheMotorOptionReadsAsTheDefault() throws {
+        let old = try JSONDecoder().decode(GameOptionsData.self, from: Data(#"{"enableSDL": true}"#.utf8))
+        #expect(old.dualSenseVibration == nil)
+        #expect(old.dualSenseVibrationGain == nil)
+        let form = GameOptions()
+        form.set(data: old)
+        #expect(form.dualSenseVibration == DualSenseVibration.asAsked.rawValue)
+        #expect(form.dualSenseVibrationGain == 100)
+        #expect((DualSenseVibration(rawValue: form.dualSenseVibration) ?? .off)
+                    .changesAnything(percent: form.dualSenseVibrationGain) == false)
+    }
+
+    /// The merge path, which is the one an imported configuration takes: a
+    /// record that says nothing leaves the choice alone, and one that says
+    /// something this build cannot show is folded as the load folds it.
+    @Test func theMergePathKeepsAndFoldsTheMotorChoice() {
+        let form = GameOptions()
+        form.dualSenseVibration = DualSenseVibration.stronger.rawValue
+        form.dualSenseVibrationGain = 300
+
+        var silent = GameOptionsData(data: GameOptions())
+        silent.dualSenseVibration = nil
+        silent.dualSenseVibrationGain = nil
+        form.importAutoConfig(data: silent)
+        #expect(form.dualSenseVibration == DualSenseVibration.stronger.rawValue)
+        #expect(form.dualSenseVibrationGain == 300)
+
+        var strange = silent
+        strange.dualSenseVibration = "a choice this build does not have"
+        strange.dualSenseVibrationGain = 99999
+        form.importAutoConfig(data: strange)
+        #expect(form.dualSenseVibration == DualSenseVibration.asAsked.rawValue)
+        #expect(form.dualSenseVibrationGain == DualSenseVibration.gainRange.upperBound)
+    }
+
+    // MARK: what a controller can reach
+
+    /// A control a gamepad cannot reach is a defect here. The picker is in the
+    /// list, and the percentage is in it exactly while the panel is showing
+    /// it -- the rule the DXMT cap and its slider already follow.
+    @Test func aPadCanReachBothHalvesOfTheControl() {
+        let hidden = OptionFocus.visibleControls(for: OptionPanelState(isNative: false, vibrationGainShown: false))
+        #expect(hidden.contains(.vibration))
+        #expect(hidden.contains(.vibrationGain) == false)
+        let shown = OptionFocus.visibleControls(for: OptionPanelState(isNative: false, vibrationGainShown: true))
+        #expect(shown.contains(.vibrationGain))
+        // Beside the pad's own picker, in the controller section: under "Pad
+        // seen as", above the percentage, and after the generic column the
+        // whole section was lifted out of.
+        let at = { (control: OptionControl) in shown.firstIndex(of: control) ?? -1 }
+        #expect(at(.padSeenAs) < at(.vibration))
+        #expect(at(.vibration) < at(.vibrationGain))
+        #expect(at(.vibrationGain) < at(.rumbleTest))
+        #expect(at(.ue4Hack) < at(.vibration), "the controller section is its own, and it comes after")
+        // A native title has no winebus at all, and none of this is offered.
+        #expect(OptionFocus.visibleControls(for: OptionPanelState(isNative: true, vibrationGainShown: true))
+                    .contains(.vibration) == false)
+        // A press opens the same list the mouse gets, and sideways cycles it.
+        #expect(OptionControl.vibration.opensMenu)
+        #expect(OptionControl.vibrationGain.opensMenu == false)
+        #expect(DualSenseVibration.dropdownOptions.map(\.id) == DualSenseVibration.allCases.map(\.rawValue))
+        #expect(DualSenseVibration.dropdownOptions.first?.id == DualSenseVibration.byDefault.rawValue)
+        #expect(DualSenseVibration.dropdownOptions.allSatisfy { !$0.label.isEmpty })
+        // And one press of the stick is a step you can feel, on the slider's
+        // own grid, stopping at both ends.
+        #expect(OptionAdjust.nudge(100, by: OptionAdjust.gainStep, in: DualSenseVibration.gainRange, forward: true) == 125)
+        #expect(OptionAdjust.nudge(DualSenseVibration.gainRange.lowerBound, by: OptionAdjust.gainStep,
+                                   in: DualSenseVibration.gainRange, forward: false) == DualSenseVibration.gainRange.lowerBound)
+        #expect(OptionAdjust.nudge(DualSenseVibration.gainRange.upperBound, by: OptionAdjust.gainStep,
+                                   in: DualSenseVibration.gainRange, forward: true) == DualSenseVibration.gainRange.upperBound)
     }
 }

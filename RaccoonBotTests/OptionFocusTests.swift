@@ -13,7 +13,8 @@ import Foundation
 struct OptionFocusTests {
 
     private var windows: OptionPanelState {
-        OptionPanelState(isNative: false, backend: "dxmt", hudEnabled: true, metalFXOn: true, osVersion: 27)
+        OptionPanelState(isNative: false, backend: "dxmt", hudEnabled: true,
+                         vibrationGainShown: true, metalFXOn: true, osVersion: 27)
     }
 
     /// The list follows the panel's own conditions, in the panel's own order.
@@ -39,11 +40,49 @@ struct OptionFocusTests {
         #expect(!OptionControl.padSeenAs.isButton)
     }
 
+    /// The controller settings are one run, in their own section, after the
+    /// generic ones and before the backend's. The list is the order on screen,
+    /// so this is the section being where it looks like it is.
+    @Test func theControllerControlsAreOneRun() {
+        let all = OptionFocus.visibleControls(for: windows)
+        let section: [OptionControl] = [.sdl, .hidraw, .padSeenAs, .vibration, .vibrationGain, .rumbleTest]
+        let start = all.firstIndex(of: .sdl)
+        #expect(start != nil)
+        #expect(Array(all[start!..<(start! + section.count)]) == section)
+        #expect(all.firstIndex(of: .mvkArgBuff)! < start!, "the generic column comes first")
+        #expect(all.firstIndex(of: .dxmtCap)! > start!, "and the backend's section after")
+    }
+
+    /// The strength slider keeps its place on screen whatever is chosen, so
+    /// nothing moves -- but a pad may only land on it while the choice uses
+    /// it. "Off" is a percentage already, and a press that changed a number
+    /// nothing reads would be a press that lies.
+    @Test func theStrengthSliderIsReachableOnlyWhenItApplies() {
+        var s = windows
+        s.vibrationGainShown = false
+        let hidden = OptionFocus.visibleControls(for: s)
+        #expect(!hidden.contains(.vibrationGain))
+        #expect(hidden.firstIndex(of: .rumbleTest) == hidden.firstIndex(of: .vibration).map { $0 + 1 },
+                "and the test button closes the section either way")
+        s.vibrationGainShown = true
+        #expect(OptionFocus.visibleControls(for: s).contains(.vibrationGain))
+    }
+
+    /// The test button is a button: a press runs it, sideways does nothing to
+    /// it, and it writes nothing into the form.
+    @Test func theRumbleTestIsAButton() {
+        #expect(OptionControl.rumbleTest.isButton)
+        #expect(!OptionControl.rumbleTest.opensMenu)
+        #expect(!OptionFocus.visibleControls(for: OptionPanelState(isNative: true)).contains(.rumbleTest),
+                "a native title has no controller section at all")
+    }
+
     @Test func aNativeTitleHasNoWineControls() {
         let list = OptionFocus.visibleControls(for: OptionPanelState(isNative: true))
         #expect(!list.contains(.backend))
         #expect(!list.contains(.msync))
         #expect(!list.contains(.padSeenAs), "a native title has no bottle to write a pad option into")
+        #expect(!list.contains(.sdl), "nor any of the rest of the controller section")
         #expect(list.contains(.mtlHud))
         #expect(list.contains(.save))
     }
@@ -111,7 +150,7 @@ struct OptionFocusTests {
     }
 
     @Test func theButtonsAreButtons() {
-        for c in [OptionControl.save, .undo, .reset, .autoconfigure] { #expect(c.isButton) }
+        for c in [OptionControl.save, .undo, .reset, .autoconfigure, .rumbleTest] { #expect(c.isButton) }
         #expect(!OptionControl.mtlHud.isButton)
     }
 }

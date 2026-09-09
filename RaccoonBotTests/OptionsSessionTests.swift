@@ -78,7 +78,7 @@ struct OptionsSessionTests {
         #expect(written().count == 1)
     }
 
-    @Test func undoReturnsToTheFile() {
+    @Test func undoReturnsToWhatThePanelOpenedWith() {
         let (s, _) = make()
         let f = form(hud: true)
         s.begin(key: "k", form: f)
@@ -87,22 +87,69 @@ struct OptionsSessionTests {
         s.undo(into: f)
         #expect(f.mtlHudEnabled == true)
         #expect(s.isDirty(f) == false)
+        #expect(s.canUndo(f) == false, "there is nothing left to undo")
     }
 
-    /// Save moves the baseline, so a later Undo returns to what was saved and
-    /// not to what the file held when the panel opened.
-    @Test func saveMovesWhatUndoReturnsTo() {
+    /// A write does NOT move what Undo returns to, and this is the whole
+    /// reason `opened` exists.
+    ///
+    /// It used to: Undo meant "put the form back to the file", and Save moved
+    /// the file. With the panel writing by itself a moment after every edit,
+    /// that Undo could never do anything -- the file is always what the form
+    /// says. So Undo goes back to what the file held when the panel opened,
+    /// which is the state somebody reaches for when they want out of a visit.
+    @Test func aWriteDoesNotMoveWhatUndoReturnsTo() {
         let (s, written) = make()
         let f = form(hud: true)
         s.begin(key: "k", form: f)
         f.mtlHudEnabled = false
         s.save(f)
         #expect(written()["k"]?.mtlHudEnabled == false)
-        let msyncBefore = f.wineMSync
+        #expect(s.isDirty(f) == false, "the file is what the form says")
+        #expect(s.canUndo(f) == true, "and there is still a visit to undo")
         f.wineMSync.toggle()
         s.undo(into: f)
-        #expect(f.mtlHudEnabled == false, "undo went back past the save")
-        #expect(f.wineMSync == msyncBefore)
+        #expect(f.mtlHudEnabled == true, "back to what the panel opened with")
+        #expect(s.isDirty(f) == true, "which the file does not hold yet -- autosave writes it next")
+    }
+
+    // MARK: - saving as it is edited
+
+    /// The rule, on its own: something to write to, and something to write.
+    @Test func theAutosaveRuleIsTwoConditions() {
+        #expect(Autosave.shouldWrite(hasFile: true, formDiffers: true))
+        #expect(!Autosave.shouldWrite(hasFile: true, formDiffers: false), "nothing changed")
+        #expect(!Autosave.shouldWrite(hasFile: false, formDiffers: true),
+                "a panel that never loaded a title has no file to write over")
+        #expect(Autosave.quietPeriod > .zero, "a pause, so one drag is one write")
+    }
+
+    /// An edit is committed without anybody pressing anything, and an edit
+    /// put back by hand during the pause commits nothing at all.
+    @Test func anEditIsWrittenWithoutBeingAskedTo() {
+        let (s, written) = make()
+        let f = form(hud: true)
+        s.begin(key: "k", form: f)
+        #expect(s.autosave(f) == false, "nothing to write")
+        #expect(written().isEmpty)
+        f.mtlHudEnabled = false
+        #expect(s.autosave(f) == true)
+        #expect(written()["k"]?.mtlHudEnabled == false)
+        #expect(s.isDirty(f) == false)
+        f.mtlHudEnabled = true
+        f.mtlHudEnabled = false
+        #expect(s.autosave(f) == false, "back where it was is not an edit")
+        #expect(written().count == 1)
+    }
+
+    /// And the guard the whole session rests on holds for this door too: a
+    /// panel that never loaded a title writes nothing.
+    @Test func autosaveNeverWritesDefaultsOverAFile() {
+        let (s, written) = make()
+        let f = form()
+        f.mtlHudEnabled = false
+        #expect(s.autosave(f) == false)
+        #expect(written().isEmpty)
     }
 
     @Test func endForgetsTheTitle() {

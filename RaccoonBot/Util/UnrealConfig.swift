@@ -98,7 +98,8 @@ enum UnrealConfig {
     static func resolveProject(exe: URL?,
                                steamAppID: String? = nil,
                                steamRoot: URL? = nil,
-                               epicCloudSaveFolder: String? = nil) -> ProjectResolution? {
+                               epicCloudSaveFolder: String? = nil,
+                               bottleForLibrary: URL? = nil) -> ProjectResolution? {
         if let id = steamAppID, let root = steamRoot,
            let name = SteamAppInfo.savedGamesProject(appID: id, steamRoot: root) {
             return ProjectResolution(name: name, source: .steamCloud)
@@ -107,6 +108,16 @@ enum UnrealConfig {
             return ProjectResolution(name: name, source: .epicCloudSave)
         }
         if let exe, let name = projectFromExecutable(exe) {
+            return ProjectResolution(name: name, source: .executable)
+        }
+        // A Steam launch arrives with no executable, so find it: the app id
+        // names a manifest, the manifest names a directory, and the directory
+        // holds an Unreal executable whose name is the project. This is what
+        // takes the coverage from "the titles Steam syncs saves for" to "every
+        // Unreal title installed".
+        if let id = steamAppID, let root = steamRoot, let bottle = bottleForLibrary,
+           let found = SteamLibrary.unrealExecutable(appID: id, steamRoot: root, bottle: bottle),
+           let name = projectFromExecutable(found) {
             return ProjectResolution(name: name, source: .executable)
         }
         return nil
@@ -184,7 +195,8 @@ enum UnrealConfig {
         guard let resolved = resolveProject(exe: exe,
                                             steamAppID: steamAppID,
                                             steamRoot: steamRoot,
-                                            epicCloudSaveFolder: epicCloudSaveFolder)
+                                            epicCloudSaveFolder: epicCloudSaveFolder,
+                                            bottleForLibrary: bottle)
         else {
             // Only worth a line when there was reason to think it was Unreal.
             if exe != nil {
@@ -460,4 +472,106 @@ enum SteamAppInfo {
         return name.unicodeScalars.allSatisfy { allowed.contains($0) }
             && name.rangeOfCharacter(from: .alphanumerics) != nil
     }
+}
+
+// MARK: - Finding a Steam title's executable
+
+/// Where Steam put a title, read from Steam's own bookkeeping.
+///
+/// A Steam launch is `steam.exe -applaunch <id>` and carries no executable
+/// path, so without this the only thing that can name an Unreal project
+/// directory is Steam's cloud-save record -- and only about half the titles
+/// installed here carry one. This supplies the other half: the app id names a
+/// manifest, the manifest names a directory, and the directory contains an
+/// Unreal executable whose name is the project.
+enum SteamLibrary {
+
+    /// The Unreal shipping executable for `appID`, or nil.
+    static func unrealExecutable(appID: String, steamRoot: URL, bottle: URL) -> URL? {
+        for library in libraries(steamRoot: steamRoot, bottle: bottle) {
+            let apps = library.appendingPathComponent("steamapps")
+            let manifest = apps.appendingPathComponent("appmanifest_\(appID).acf")
+            guard let text = try? String(contentsOf: manifest, encoding: .utf8),
+                  let dir = value(of: "installdir", in: text) else { continue }
+            let game = apps.appendingPathComponent("common").appendingPathComponent(dir)
+            if let exe = unrealExecutable(inGameFolder: game) { return exe }
+        }
+        return nil
+    }
+
+    /// Unreal stages as `<Game>/<Project>/Binaries/Win64/<exe>`, and a few
+    /// titles drop the project level. Only those two shapes are looked at:
+    /// walking a game folder is walking tens of gigabytes on an external disk,
+    /// and every second of it happens while somebody is waiting to play.
+    static func unrealExecutable(inGameFolder game: URL) -> URL? {
+        let f = FileManager.default
+        var roots = [game]
+        if let children = try? f.contentsOfDirectory(at: game, includingPropertiesForKeys: [.isDirectoryKey],
+                                                     options: [.skipsHiddenFiles]) {
+            roots.append(contentsOf: children.filter {
+                (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
+            })
+        }
+        for root in roots {
+            let win64 = root.appendingPathComponent("Binaries/Win64")
+            guard let entries = try? f.contentsOfDirectory(atPath: win64.path) else { continue }
+            let exes = entries.filter { $0.lowercased().hasSuffix(".exe") }
+            // The shipping build first; then anything, for the titles that ship
+            // a plain <Project>.exe. Crash reporters and the online-services
+            // helpers are never the title.
+            let ignored = ["crashreport", "eosbootstrapper", "epicwebhelper", "eac", "_be.exe"]
+            let usable = exes.filter { name in !ignored.contains { name.lowercased().contains($0) } }
+            if let shipping = usable.first(where: { $0.lowercased().hasSuffix("-shipping.exe") }) {
+                return win64.appendingPathComponent(shipping)
+            }
+            if usable.count == 1 { return win64.appendingPathComponent(usable[0]) }
+        }
+        return nil
+    }
+
+    /// Every library Steam knows about, as a path on this Mac.
+    ///
+    /// The paths in `libraryfolders.vdf` are the bottle's, not the Mac's:
+    /// `Z:` is wine's name for the root of the filesystem and `C:` is the
+    /// bottle's own `drive_c`. Anything else is skipped rather than guessed at.
+    static func libraries(steamRoot: URL, bottle: URL) -> [URL] {
+        var out: [URL] = []
+        for name in ["config/libraryfolders.vdf", "steamapps/libraryfolders.vdf"] {
+            guard let text = try? String(contentsOf: steamRoot.appendingPathComponent(name),
+                                         encoding: .utf8) else { continue }
+            for raw in values(of: "path", in: text) {
+                guard let url = macPath(forWindowsPath: raw, bottle: bottle) else { continue }
+                if !out.contains(url) { out.append(url) }
+            }
+        }
+        if out.isEmpty { out = [steamRoot] }
+        return out
+    }
+
+    static func macPath(forWindowsPath raw: String, bottle: URL) -> URL? {
+        let path = raw.replacingOccurrences(of: "\\\\", with: "/")
+                      .replacingOccurrences(of: "\\", with: "/")
+        guard path.count >= 2, path.dropFirst().hasPrefix(":") else { return nil }
+        let drive = path.first!.lowercased()
+        let rest = String(path.dropFirst(2)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        switch drive {
+        case "z": return URL(fileURLWithPath: "/" + rest)
+        case "c": return bottle.appendingPathComponent("drive_c").appendingPathComponent(rest)
+        default:  return nil
+        }
+    }
+
+    /// Steam's key-value text is `"key"<whitespace>"value"`, one per line.
+    static func values(of key: String, in text: String) -> [String] {
+        var out: [String] = []
+        for line in text.split(whereSeparator: { $0.isNewline }) {
+            let parts = line.split(separator: "\"", omittingEmptySubsequences: false)
+            // "" key "" gap "" value ""  ->  indices 1 and 3
+            guard parts.count >= 4, parts[1] == Substring(key) else { continue }
+            out.append(String(parts[3]))
+        }
+        return out
+    }
+
+    static func value(of key: String, in text: String) -> String? { values(of: key, in: text).first }
 }

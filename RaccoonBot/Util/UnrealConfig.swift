@@ -425,21 +425,27 @@ enum SteamAppInfo {
     }
 
     /// Pulls `Dawnwalker` out of `Dawnwalker/Saved/SaveGames`.
+    ///
+    /// The project is the FIRST component of the recorded path, not the one
+    /// before `Saved`. Most titles record `<Project>/Saved/SaveGames` and the
+    /// two readings agree, but not all do: Returnal records
+    /// `Returnal/Steam/Saved/SaveGames`, and reading backwards from `Saved`
+    /// answers "Steam" -- a directory belonging to nothing, which is worse than
+    /// no answer at all. Measured against this machine's appinfo.vdf.
     private static func firstSavedPathComponent(in blob: Data) -> String? {
         let needle = Data("/Saved/".utf8)
         var searchFrom = blob.startIndex
         while let hit = blob.range(of: needle, in: searchFrom..<blob.endIndex) {
-            // Back up to the start of the null-terminated string holding it.
+            // Back up to the start of the null-terminated string, so the whole
+            // recorded path is in hand rather than its tail.
             var begin = hit.lowerBound
-            while begin > blob.startIndex {
-                let b = blob[blob.index(before: begin)]
-                if b == 0 || b == UInt8(ascii: "\\") || b == UInt8(ascii: "/") { break }
+            while begin > blob.startIndex, blob[blob.index(before: begin)] != 0 {
                 begin = blob.index(before: begin)
             }
             if begin < hit.lowerBound,
-               let name = String(data: blob[begin..<hit.lowerBound], encoding: .utf8),
-               isPlausibleProjectName(name) {
-                return name
+               let path = String(data: blob[begin..<hit.lowerBound], encoding: .utf8) {
+                let first = path.split(whereSeparator: { $0 == "/" || $0 == "\\" }).first.map(String.init)
+                if let first, isPlausibleProjectName(first) { return first }
             }
             searchFrom = hit.upperBound
         }

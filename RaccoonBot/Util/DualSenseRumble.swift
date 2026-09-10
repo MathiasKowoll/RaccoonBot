@@ -239,7 +239,7 @@ nonisolated enum DualSenseRumble {
             case .buzzed(let what):
                 return what
             case .silent:
-                return "The pad answered, and stayed quiet: \"Off\" silences it, so there is nothing to feel. Pick another choice to test one."
+                return "The pad answered, and stayed quiet: a strength of 0% silences it, so there is nothing to feel. Pick another choice to test one."
             case .noPad:
                 return "No DualSense is attached, so there is nothing to buzz. The choice is still written for both models, and winebus reads it as the pad arrives."
             case .refused(let transport, let code):

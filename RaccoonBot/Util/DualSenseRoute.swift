@@ -399,9 +399,17 @@ nonisolated enum DualSenseRoute {
     /// console tells its owner to reconnect; writing a 0 for it because it was
     /// not there at launch is what would make that advice impossible to follow.
     /// Nor did asking only for an attached Bluetooth pad buy any safety: the
-    /// driver refuses these values by itself for anything that is not a hidraw
-    /// device on BUS_TYPE_BLUETOOTH (mgvf-0005 dualsense_usb_emulation_fixups),
-    /// so a value written for a pad on a cable is read and dropped there.
+    /// driver refuses the PRESENTATION by itself for anything that is not a
+    /// hidraw device on BUS_TYPE_BLUETOOTH (mgvf-0005
+    /// dualsense_usb_emulation_fixups), so a presentation written for a pad on
+    /// a cable is read and dropped there.
+    ///
+    /// That used to be true of the two vibration values as well, and mgvf-0016
+    /// is why it no longer is: they are read on either transport now, and a pad
+    /// on a cable is rewritten like any other. It changes nothing here -- the
+    /// values were always written for both models -- but the reason above is
+    /// only half a reason now, and half a reason in a comment is how the next
+    /// person gets it wrong.
     ///
     /// Two gates stay. The engine has to hold mgvf-0005, or the values sit in
     /// the bottle unread. And the raw route has to be the one this same list
@@ -492,12 +500,28 @@ nonisolated enum DualSenseRoute {
     /// but the question asked here is "can this engine do what the option
     /// promises", and the option promises both halves.
     ///
-    /// The rewrite lives in winebus's unix half, and this reads the PE. That
-    /// is not a mismatch: mgvf-0009 puts the two names in the .sys, which is
-    /// where the registry is read, and the two halves are built from one
-    /// source tree and installed together -- the installer calls a set with
-    /// only one of them broken. Reading the .sys keeps every one of these
-    /// questions asked of one file.
+    /// It is the .sys that is read, and that is where the rewrite is: mgvf-0009
+    /// puts both names and both entry points in winebus.sys, not in the unix
+    /// half. The two halves are built from one source tree and installed
+    /// together anyway, so reading the .sys keeps every one of these questions
+    /// asked of one file.
+    ///
+    /// IT CANNOT TELL mgvf-0009 FROM mgvf-0009 PLUS mgvf-0016, and that is a
+    /// choice rather than an oversight. mgvf-0016 gave the rewrite a pad on a
+    /// cable and reuses the same two registry names, so the two builds are
+    /// identical to this question; a third probe would need a marker of its
+    /// own. It is not worth one. On every wired output report this project has
+    /// captured -- 10,684 of them -- not one asks the motors for anything, so
+    /// an engine that lacks mgvf-0016 and one that has it behave the same on
+    /// every title measured so far. The day a wired title is found that does
+    /// ask, the marker to look for is the ASCII name
+    /// `dualsense_usb_native_set_output_report`, which mgvf-0016 puts in the
+    /// binary as a debug string and which survives the strip.
+    static func engineCanRewriteVibration(cxAppPath: String?) -> Bool {
+        contains(literal: vibrationModeValue, inWinebusOf: cxAppPath)
+            && contains(literal: vibrationGainValue, inWinebusOf: cxAppPath)
+    }
+
     /// Whether the engine carries mgvf-0010: the winebus that can offer a pad's
     /// motors to XInput. Asked of the binary by the name of the registry value
     /// it reads, exactly as the two questions above are, and asked separately
@@ -509,11 +533,6 @@ nonisolated enum DualSenseRoute {
     /// assembled by hand, and this application does not try to guess at that.
     static func engineCanXInputRumble(cxAppPath: String?) -> Bool {
         contains(literal: xinputRumbleValue, inWinebusOf: cxAppPath)
-    }
-
-    static func engineCanRewriteVibration(cxAppPath: String?) -> Bool {
-        contains(literal: vibrationModeValue, inWinebusOf: cxAppPath)
-            && contains(literal: vibrationGainValue, inWinebusOf: cxAppPath)
     }
 
     /// The engine's own winebus.sys, searched for a UTF-16 literal. A missing

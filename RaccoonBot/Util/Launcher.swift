@@ -401,6 +401,14 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
             let vibration = DualSenseVibration(rawValue: options!.dualSenseVibration) ?? .byDefault
             let vibrationPercent = options!.dualSenseVibrationGain
             let canRewriteVibration = DualSenseRoute.engineCanRewriteVibration(cxAppPath: cxAppPath)
+            // And whether this title asked for its motors to be reachable by a
+            // game that reads XInput, asked of the same engine by the same
+            // means: the name of a value in the binary. Off for every title
+            // that has not asked, which is what makes it safe to write on
+            // every launch -- a title that wants the pad untouched clears what
+            // the last one set rather than inheriting it.
+            let xinputRumble = options!.xinputRumble
+            let canXInputRumble = DualSenseRoute.engineCanXInputRumble(cxAppPath: cxAppPath)
             if let summary = DualSenseRoute.summary(for: pads, sdlEnabled: sdlEnabled, engineTellsTheBus: tellsTheBus,
                                                     presentation: presentation, engineCanEmulateUSB: canEmulateUSB,
                                                     vibration: vibration, vibrationPercent: vibrationPercent,
@@ -410,7 +418,9 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
             for override in DualSenseRoute.overrides(for: pads, sdlEnabled: sdlEnabled, engineTellsTheBus: tellsTheBus,
                                                      presentation: presentation, engineCanEmulateUSB: canEmulateUSB,
                                                      vibration: vibration, vibrationPercent: vibrationPercent,
-                                                     engineCanRewriteVibration: canRewriteVibration) {
+                                                     engineCanRewriteVibration: canRewriteVibration,
+                                                     xinputRumble: xinputRumble,
+                                                     engineCanXInputRumble: canXInputRumble) {
                 let section: WineRegSection
                 if let existing = registry.section(forPath: override.path) {
                     section = existing
@@ -424,6 +434,7 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
                     (DualSenseRoute.productIDValue, override.askedProductID),
                     (DualSenseRoute.vibrationModeValue, override.vibrationMode),
                     (DualSenseRoute.vibrationGainValue, override.vibrationGain),
+                    (DualSenseRoute.xinputRumbleValue, override.xinputRumble),
                 ]
                 for (key, value) in values {
                     // The call is the write; keeping it out of a `where` clause so
@@ -553,6 +564,14 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
     console.log(command)
     #endif
     try safeShell(command)
+
+    // While a game runs under wine, macOS sees no input at all: the pad is
+    // opened exclusively by the bottle, so not one of its reports reaches the
+    // system, and a game asks for no keyboard and no mouse. Half an hour in,
+    // the idle timer runs out and the screen saver comes up over the game. So
+    // it is told, the way a video player tells it, for as long as this bottle
+    // has a game in it.
+    ScreenAwake.watch(bottleAt: bottleURL)
 }
 
 func launchNativeGame(id: String, cxAppPath: String, selectedBottle: String, options: GameOptions? = nil, appExeURL: URL? = nil) async throws {

@@ -265,6 +265,15 @@ struct GameOptionsView: View {
                             .opacity(vibrationChoice.usesGain ? 1 : 0)
                             .disabled(!vibrationChoice.usesGain)
                             .accessibilityHidden(!vibrationChoice.usesGain)
+                            // Off unless a title asks, and the help says why
+                            // rather than only what. This one changes what the
+                            // game SEES rather than how the pad behaves, and it
+                            // can take the pad away from a game that was
+                            // perfectly happy -- so the caution belongs on the
+                            // control, not in a release note nobody reads.
+                            Toggle("Rumble through XInput", isOn: $gameOptions.xinputRumble)
+                                .help("For a game that has a controller but no vibration. Some titles read the pad directly and rumble it themselves; others only know how to rumble through XInput, and a DualSense is not an XInput device, so they stay silent. This offers the pad's motors to XInput as a small device of its own, beside the pad -- the pad itself is not replaced, wrapped or hidden, so its adaptive triggers, touchpad and PlayStation glyphs are exactly as they were. TRY IT ONLY WHERE A GAME DOES NOT RUMBLE. A game that reads XInput for its INPUT can take that little device for the controller and stop seeing the pad at all: one title measured here lost the pad entirely with this on and was perfectly fine with it off. It also costs a few percent of the frame time, which shows up only in a game with no headroom left -- one measured here dropped 3 to 5 fps at 60 and none at all with a 50 fps cap. Needs the engine controller set from Options, and takes effect when the pad next arrives: start with Steam closed, or reconnect the pad.")
+                                .optionFocus(.xinputRumble, current: focus.current, shown: gamepad.showsFocus)
                             // Felt, not imagined. This is the one control in
                             // the panel that does something to the hardware
                             // now: it writes the pad's own report through
@@ -662,6 +671,7 @@ struct GameOptionsView: View {
         case .msync:        return flip(\.wineMSync)
         case .sdl:          return flip(\.enableSDL)
         case .hidraw:       return flip(\.disableHidraw)
+        case .xinputRumble: return flip(\.xinputRumble)
         case .ue4Hack:      return flip(\.ue4Hack)
         case .mvkArgBuff:   return flip(\.mvkArgBuff)
         case .dxmtMetalFX:  return flip(\.dxmtMetalFXSpatial)

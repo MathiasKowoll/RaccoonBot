@@ -25,10 +25,13 @@ nonisolated enum OptionControl: String, CaseIterable, Hashable {
     // Generic
     case backend, x87, mtlHud, advertiseAVX, msync, ue4Hack, mvkArgBuff
     // The controller, in its own section on screen and its own run here.
-    // Five settings and a button that describe a physical device rather than
+    // Six settings and a button that describe a physical device rather than
     // a rendering choice; they were a column of toggles until the vibration
     // picker made the column too narrow to read a label in.
     case sdl, hidraw, padSeenAs
+    /// Offers the pad's motors to a game that only knows how to rumble through
+    /// XInput. Off unless a title asks: it can cost a game the pad.
+    case xinputRumble
     // The vibration picker and the percentage the two of its three choices
     // that use one are set with. Two entries because they are two controls on
     // screen, one idea: the slider keeps its place whatever is chosen -- see

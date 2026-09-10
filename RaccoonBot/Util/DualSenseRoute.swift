@@ -316,7 +316,7 @@ nonisolated enum DualSenseRoute {
 
     static let devicesPath = "System\\\\CurrentControlSet\\\\Services\\\\winebus\\\\Devices"
 
-    /// The five value names winebus reads under a device's key, spelled once.
+    /// The six value names winebus reads under a device's key, spelled once.
     /// Spelling one of them differently writes a value nothing ever reads, and
     /// the bottle looks configured.
     static let hidrawValue = "Hidraw"
@@ -324,6 +324,7 @@ nonisolated enum DualSenseRoute {
     static let productIDValue = "ProductId"
     static let vibrationModeValue = "VibrationMode"
     static let vibrationGainValue = "VibrationGain"
+    static let xinputRumbleValue = "XInputRumble"
 
     struct Override: Equatable {
         /// The registry section, in the doubled-backslash form the .reg file uses.
@@ -351,12 +352,19 @@ nonisolated enum DualSenseRoute {
         /// not 0 is the default here -- 0 is silence, and the driver reads
         /// the two differently on purpose.
         let vibrationGain: UInt32
+        /// What goes into "XInputRumble": 1 asks mgvf-0010 to offer the pad's
+        /// motors to XInput, as a small device of their own beside the pad. 0
+        /// leaves the pad exactly as it was, which is what every title gets
+        /// unless it asks otherwise.
+        let xinputRumble: UInt32
 
         /// Defaulted so that a caller who only cares about the route -- which
         /// is what this type meant before mgvf-0005 -- still reads the same.
         init(path: String, hidraw: UInt32, usbEmulation: UInt32 = 0, askedProductID: UInt32 = 0,
-             vibrationMode: UInt32 = 0, vibrationGain: UInt32 = DualSenseVibration.neutralGain) {
+             vibrationMode: UInt32 = 0, vibrationGain: UInt32 = DualSenseVibration.neutralGain,
+             xinputRumble: UInt32 = 0) {
             self.path = path
+            self.xinputRumble = xinputRumble
             self.hidraw = hidraw
             self.usbEmulation = usbEmulation
             self.askedProductID = askedProductID
@@ -421,20 +429,27 @@ nonisolated enum DualSenseRoute {
                           engineCanEmulateUSB: Bool = false,
                           vibration: DualSenseVibration = .byDefault,
                           vibrationPercent: Double = Double(DualSenseVibration.neutralGain),
-                          engineCanRewriteVibration: Bool = false) -> [Override] {
+                          engineCanRewriteVibration: Bool = false,
+                          xinputRumble: Bool = false,
+                          engineCanXInputRumble: Bool = false) -> [Override] {
         SonyPads.models.map { model in
             let onBluetooth = pads.contains { $0.productID == model && $0.isBluetooth }
             let viaSDL = onBluetooth && sdlEnabled && !engineTellsTheBus
             let emulating = presentation.presentsAsWired && engineCanEmulateUSB && !viaSDL
             let rewriting = vibration.changesAnything(percent: vibrationPercent)
                 && engineCanRewriteVibration && !viaSDL
+            // Asked for, the engine can do it, and the pad is not being sent
+            // through SDL -- where the pad's own descriptor is thrown away and
+            // there is nothing for mgvf-0010 to add a collection to.
+            let rumblingThroughXInput = xinputRumble && engineCanXInputRumble && !viaSDL
             return Override(path: sectionPath(productID: model),
                             hidraw: viaSDL ? 0 : 1,
                             usbEmulation: emulating ? 1 : 0,
                             askedProductID: emulating ? presentation.productIDValue(for: model) : 0,
                             vibrationMode: rewriting ? vibration.modeValue : 0,
                             vibrationGain: rewriting ? vibration.gainValue(percent: vibrationPercent)
-                                                     : DualSenseVibration.neutralGain)
+                                                     : DualSenseVibration.neutralGain,
+                            xinputRumble: rumblingThroughXInput ? 1 : 0)
         }
     }
 
@@ -483,6 +498,19 @@ nonisolated enum DualSenseRoute {
     /// source tree and installed together -- the installer calls a set with
     /// only one of them broken. Reading the .sys keeps every one of these
     /// questions asked of one file.
+    /// Whether the engine carries mgvf-0010: the winebus that can offer a pad's
+    /// motors to XInput. Asked of the binary by the name of the registry value
+    /// it reads, exactly as the two questions above are, and asked separately
+    /// rather than inferred: one question, one measurement.
+    ///
+    /// It does not ask about hidclass.sys or the xinput DLLs that the same
+    /// switch needs. They travel with this winebus and are installed by the
+    /// same script; an engine with one and not the others is an engine somebody
+    /// assembled by hand, and this application does not try to guess at that.
+    static func engineCanXInputRumble(cxAppPath: String?) -> Bool {
+        contains(literal: xinputRumbleValue, inWinebusOf: cxAppPath)
+    }
+
     static func engineCanRewriteVibration(cxAppPath: String?) -> Bool {
         contains(literal: vibrationModeValue, inWinebusOf: cxAppPath)
             && contains(literal: vibrationGainValue, inWinebusOf: cxAppPath)

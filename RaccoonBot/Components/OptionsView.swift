@@ -161,14 +161,16 @@ struct OptionsView: View {
                     .help("Off: RaccoonBot does not touch the controller at all. Arrow keys still navigate.")
                 // Which bus a pad is on, told to the games: MacGameVideoFix's
                 // controller-bus set, an improvement rather than a fix. No title
-                // needs it, so it is a switch, and off puts CrossOver's own three
-                // files back. The switch is what is wanted; the row under it is
+                // needs it, so it is a switch, and off puts CrossOver's own
+                // files back. The set was three files, then four, and is ten
+                // now -- so the label and the help say what it DOES rather than
+                // counting them, which is a number that has been wrong twice. The switch is what is wanted; the row under it is
                 // what the engine holds, read from the engine, and the two are
                 // allowed to disagree out loud -- see ControllerBusSwitch.
                 Toggle("Tell games which bus a controller is on", isOn: $appGlobals.controllerBusEnabled)
                     .font(.footnote)
                     .disabled(controllerBus.busy || !(controllerBus.status?.isBundled ?? true))
-                    .help("On: the engine carries MacGameVideoFix's winebus, setupapi and ntoskrnl, and a DualSense on Bluetooth keeps rumble, the touchpad and the PS button. Off: CrossOver's own three files are put back.")
+                    .help("On: the engine carries MacGameVideoFix's controller set, and a DualSense on Bluetooth keeps rumble, the touchpad and the PS button. It is also what the per-title controller options need: with this off they have nothing to talk to. Off: CrossOver's own files are put back.")
                     .onChange(of: appGlobals.controllerBusEnabled) { _, on in
                         persistUsrDefOptionBool(key: AppGlobals.controllerBusKey, value: on)
                         Task { await controllerBus.apply(on ? .install : .remove, engine: appGlobals.cxAppPath) }

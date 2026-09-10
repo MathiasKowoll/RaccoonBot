@@ -195,6 +195,14 @@ struct GameOptionsData: Codable, Equatable { // this is used for reading saved p
     var dualSensePresentation: String?
     /// What this title asks of the pad's motors -- a `DualSenseVibration` raw
     /// value, stored as its string for the same reason.
+    /// Whether this title should be offered the pad's motors through XInput.
+    ///
+    /// Off unless a title asks, and it should stay off for most of them: a game
+    /// that already rumbles a DualSense by writing the pad's own reports needs
+    /// nothing from this, and turning it on there can cost it the pad
+    /// altogether. See the Controller section of the options for what it costs
+    /// and when it helps.
+    var xinputRumble: Bool?
     var dualSenseVibration: String?
     /// How hard, as a percentage, for the two choices that use one. Absent is
     /// 100, which changes nothing; it is not 0, which is silence.
@@ -232,6 +240,7 @@ struct GameOptionsData: Codable, Equatable { // this is used for reading saved p
         self.enableSDL = data.enableSDL
         self.disableHidraw = data.disableHidraw
         self.dualSensePresentation = data.dualSensePresentation
+        self.xinputRumble = data.xinputRumble
         self.dualSenseVibration = data.dualSenseVibration
         self.dualSenseVibrationGain = data.dualSenseVibrationGain
         self.ue4Hack = data.ue4Hack
@@ -290,6 +299,7 @@ class GameOptions: ObservableObject { // this is used as form state
     /// back into one answer. Out of the initialiser for the same reason the
     /// presentation is: every existing call site keeps working, and a title
     /// nobody has told otherwise gets the pad exactly as the game drives it.
+    @Published var xinputRumble: Bool = false
     @Published var dualSenseVibration: String = DualSenseVibration.byDefault.rawValue
     @Published var dualSenseVibrationGain: Double = Double(DualSenseVibration.neutralGain)
     @Published var ue4Hack: Bool
@@ -353,6 +363,7 @@ class GameOptions: ObservableObject { // this is used as form state
         // Folded the same way, and the percentage with it: a number outside
         // the slider's range would leave the slider pinned at an end while the
         // launch wrote something the panel never showed.
+        self.xinputRumble = data.xinputRumble ?? false
         self.dualSenseVibration = DualSenseVibration.pickable(data.dualSenseVibration)
         self.dualSenseVibrationGain = DualSenseVibration.pickableGain(data.dualSenseVibrationGain)
         self.ue4Hack = data.ue4Hack ?? true
@@ -393,6 +404,7 @@ class GameOptions: ObservableObject { // this is used as form state
         if let v = data.enableSDL { self.enableSDL = v }
         if let v = data.disableHidraw { self.disableHidraw = v }
         if let v = data.dualSensePresentation { self.dualSensePresentation = DualSensePresentation.pickable(v) }
+        if let v = data.xinputRumble { self.xinputRumble = v }
         if let v = data.dualSenseVibration { self.dualSenseVibration = DualSenseVibration.pickable(v) }
         if let v = data.dualSenseVibrationGain { self.dualSenseVibrationGain = DualSenseVibration.pickableGain(v) }
         if let v = data.ue4Hack { self.ue4Hack = v }

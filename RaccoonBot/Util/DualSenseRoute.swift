@@ -205,12 +205,22 @@ nonisolated enum DualSenseVibration: String, CaseIterable {
     /// explicitly -- see `overrides(for:)` for why.
     static let neutralGain: UInt32 = 100
 
-    /// What the slider offers. The driver clamps at 1000 and a byte of 26
-    /// already saturates there, so a wider range would only be a longer way
-    /// to reach the same 255. It starts at 0, which is silence and not a
-    /// quiet pad: the driver reads 0 as a request and every other value as a
-    /// multiplier.
-    static let gainRange: ClosedRange<Double> = 0...400
+    /// What the slider offers: the whole range the driver accepts.
+    ///
+    /// It stopped at 400 on the reasoning that "a byte of 26 already saturates
+    /// at 1000, so a wider range would only be a longer way to reach the same
+    /// 255". That was true of the legacy motors, where a title's requests
+    /// arrive high. It is not true of the pad's own haptic path, which is what
+    /// a title asks for and what mgvf-0020 now delivers at the game's own rate:
+    /// measured on Beast of Reincarnation over Bluetooth on 2026-09-10, its
+    /// requests in one session were 1, 7, 9, 22 and 42 of 255. At 400% the
+    /// loudest of those reaches 168 and nothing saturates at all -- so the
+    /// ceiling was not a limit of the pad, it was a limit of the slider, and
+    /// the rumble felt thin for it. 42 saturates around 600%.
+    ///
+    /// It starts at 0, which is silence and not a quiet pad: the driver reads
+    /// 0 as a request and every other value as a multiplier.
+    static let gainRange: ClosedRange<Double> = 0...1000
 
     /// Whether the percentage means anything for this choice. Only for
     /// `custom`, which exists to carry it: the other two are complete

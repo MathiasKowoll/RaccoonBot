@@ -503,6 +503,10 @@ struct DualSenseRouteTests {
         #expect(DualSenseVibration.pickableGain(nil) == 100)
         #expect(DualSenseVibration.pickableGain(0) == DualSenseVibration.gainRange.lowerBound)
         #expect(DualSenseVibration.pickableGain(100000) == DualSenseVibration.gainRange.upperBound)
+        // The ceiling is the driver's own clamp, not a number the panel chose:
+        // a value the slider can reach must be a value the driver will honour.
+        #expect(DualSenseVibration.gainRange.upperBound == 1000)
+        #expect(DualSenseVibration.custom.gainValue(percent: 1000) == 1000)
         #expect(DualSenseVibration.pickableGain(.nan) == 100)
         #expect(DualSenseVibration.pickableGain(175) == 175)
     }

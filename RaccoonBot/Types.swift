@@ -222,6 +222,13 @@ struct GameOptionsData: Codable, Equatable { // this is used for reading saved p
     init(data: GameOptions) {
         self.cxGraphicsBackend = data.cxGraphicsBackend
         self.wineMSync = data.wineMSync
+        // Every field this initialiser forgets is a field that survives the
+        // panel and dies at the save -- see the note below, which was written
+        // when the Metal HUD's three settings were being dropped exactly here.
+        // The trace toggle was added and forgotten in the same way on the same
+        // day: it showed on screen, and the launcher read the saved options and
+        // found nothing. A round-trip test guards it now.
+        self.hidTraceEnabled = data.hidTraceEnabled
         self.mtlHudEnabled = data.mtlHudEnabled
         // Declared, read by set(data:) and by importAutoConfig, and until
         // now never written back here -- so the detail level, the opacity

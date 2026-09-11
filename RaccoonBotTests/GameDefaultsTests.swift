@@ -17,6 +17,25 @@ struct GameDefaultsTests {
     private func clean(_ key: String) { deleteUsrDefOption(key: key) }
 
     /// What the owner asked a new title to start with.
+    /// A field that reaches the panel but not GameOptionsData.init(data:) is a
+    /// field that dies at the save, and the launcher reads the SAVED options.
+    /// It has happened twice: the Metal HUD's three settings, and the HID trace
+    /// toggle on the day it was added.
+    @Test func everySettingSurvivesTheSave() {
+        let form = GameOptions()
+        form.hidTraceEnabled = true
+        form.wineMSync = false
+        form.mtlHudEnabled = true
+        let saved = GameOptionsData(data: form)
+        #expect(saved.hidTraceEnabled == true, "the trace toggle reached the panel and not the save once already")
+        #expect(saved.wineMSync == false)
+        #expect(saved.mtlHudEnabled == true)
+        // and back again, which is what the launcher will read
+        let reloaded = GameOptions()
+        reloaded.set(data: saved)
+        #expect(reloaded.hidTraceEnabled == true)
+    }
+
     @Test func aFreshTitleGetsTheHudAndTheFourthToolkit() {
         let data = GameDefaults.freshOptions()
         #expect(data.mtlHudEnabled == true)

@@ -227,6 +227,13 @@ nonisolated enum DualSenseVibration: String, CaseIterable {
     /// What goes into "VibrationMode": 1 only where the path is rewritten,
     /// which is `stronger` alone. The haptic choice leaves the path to the
     /// game and carries only its strength.
+    ///
+    /// Since mgvf-0024 an engine on Bluetooth stamps the haptic path by
+    /// default, so `asAsked` now delivers the path its name has always
+    /// promised, and `stronger` is the same pair it always was: the stamp
+    /// takes the haptic path and this rewrite, which runs after it, turns the
+    /// packet back into the legacy motors. Nothing here changed; what changed
+    /// is that the driver no longer quietly sent legacy for both.
     var modeValue: UInt32 { self == .stronger ? 1 : 0 }
 
     /// What goes into "VibrationGain": the strength this path was given,

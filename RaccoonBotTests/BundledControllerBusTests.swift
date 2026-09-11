@@ -74,7 +74,9 @@ struct BundledControllerBusTests {
     private func destinations(in app: URL) -> [URL] {
         let lib = app.appendingPathComponent(SHARED_SUPPORT_COMPONENT).appendingPathComponent("lib/wine")
         let windows = lib.appendingPathComponent("x86_64-windows")
-        return ["winebus.sys", "setupapi.dll", "ntoskrnl.exe"].map { windows.appendingPathComponent($0) }
+        return ["winebus.sys", "setupapi.dll", "ntoskrnl.exe", "hidclass.sys",
+                "xinput1_1.dll", "xinput1_2.dll", "xinput1_3.dll", "xinput1_4.dll", "xinputuap.dll"]
+            .map { windows.appendingPathComponent($0) }
             + [lib.appendingPathComponent("x86_64-unix/winebus.so")]
     }
 
@@ -103,7 +105,7 @@ struct BundledControllerBusTests {
     /// engine's x86_64-unix directory, and the script copies what it is given.
     @Test func everyFileWeCarryIsTheKindOfBinaryItShouldBe() throws {
         let checked = try BundledControllerBus.verified(inDirectory: payload)
-        #expect(checked.files.count == 4)
+        #expect(checked.files.count == 10)
         for url in checked.files where url.lastPathComponent != BundledControllerBus.unixFile {
             #expect(BundledControllerBus.magic(of: url) == BundledControllerBus.peMagic,
                     "\(url.lastPathComponent) does not begin with MZ")
@@ -122,12 +124,19 @@ struct BundledControllerBusTests {
     @Test func theStampNamesTheEngineTheMediaSetNames() throws {
         let ours = try stamp
         #expect(ours.app == "CrossOver.app")
-        // Eight now. mgvf-0005 added the USB emulation a game's own options can
-        // ask for; mgvf-0006 to mgvf-0009 are in winebus's unix half, and the
-        // last of them is the vibration rewrite this application's per-game
-        // option asks for. The whole list is named rather than a count, so a
+        // Twenty now, and the whole list is named rather than a count, so a
         // build made from a shorter series fails here and not in a bottle.
-        #expect(ours.patches == "mgvf-0002 mgvf-0003 mgvf-0004 mgvf-0005 mgvf-0006 mgvf-0007 mgvf-0008 mgvf-0009")
+        // That is not hypothetical: this application shipped a payload built
+        // from mgvf-0009 for as long as it took somebody to read the stamp by
+        // hand, and every per-title option added after it did nothing at all
+        // in a bottle the application itself had installed.
+        //
+        // So when this fails after a payload refresh, the question to ask is
+        // which of the two is behind -- and it is usually this line, because
+        // the payload is the thing that just moved.
+        #expect(ours.patches == "mgvf-0002 mgvf-0003 mgvf-0004 mgvf-0005 mgvf-0006 mgvf-0007 mgvf-0008"
+                + " mgvf-0009 mgvf-0010 mgvf-0011 mgvf-0012 mgvf-0014 mgvf-0016 mgvf-0017 mgvf-0018"
+                + " mgvf-0019 mgvf-0020 mgvf-0021 mgvf-0022 mgvf-0023")
         let media = try JSONDecoder().decode(BundledControllerBus.Stamp.self,
                                              from: Data(contentsOf: payload.appendingPathComponent("engine-built-for-stock.json")))
         #expect(ours.version == media.version)
@@ -139,8 +148,29 @@ struct BundledControllerBusTests {
     /// derive: the installer puts it in x86_64-unix, not beside the three PE
     /// files. Read from the script rather than asserted from memory -- the
     /// script is the one that writes into the engine.
+    /// The PE list here against the PE list in the script that installs them.
+    ///
+    /// Not a count and not a remembered list: the script's own PE_NAMES is the
+    /// thing that writes into an engine, so it is the thing to agree with. The
+    /// set has grown three times -- mgvf-0011 added hidclass, mgvf-0012 added
+    /// five xinput DLLs -- and each time the list here could have stayed as it
+    /// was without a single test noticing, because everything else this file
+    /// asks is asked about the files the list already names.
+    @Test func theListAgreesWithTheScriptThatInstallsThem() throws {
+        let script = try String(contentsOf: payload.appendingPathComponent(BundledControllerBus.script), encoding: .utf8)
+        guard let range = script.range(of: #"PE_NAMES="[^"]*""#, options: .regularExpression) else {
+            Issue.record("the installer no longer sets PE_NAMES; this test is reading for something that is gone")
+            return
+        }
+        let separators: Set<Character> = [" ", "\n", "\t", "\\", "\""]
+        let named = Set(script[range].split(whereSeparator: { separators.contains($0) })
+                            .dropFirst()
+                            .map { "engine-controller-" + $0 })
+        #expect(named == Set(BundledControllerBus.peFiles))
+    }
+
     @Test func theUnixHalfTravelsAndGoesToItsOwnDirectory() throws {
-        #expect(BundledControllerBus.files.count == 4)
+        #expect(BundledControllerBus.files.count == 10)
         #expect(BundledControllerBus.files.contains(BundledControllerBus.unixFile))
         #expect(BundledControllerBus.peFiles.contains(BundledControllerBus.unixFile) == false)
         let script = try String(contentsOf: payload.appendingPathComponent(BundledControllerBus.script), encoding: .utf8)

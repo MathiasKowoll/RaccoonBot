@@ -5,7 +5,7 @@
 //  The controller-bus set this application carries, and how it goes into an
 //  engine and comes back out.
 //
-//  Four files MacGameVideoFix builds from the engine's own wine. Three are PE
+//  Ten files MacGameVideoFix builds from the engine's own wine. Nine are PE
 //  and go to lib/wine/x86_64-windows/: winebus names the bus in its compatible
 //  ids (mgvf-0002), setupapi answers CM_Get_Parent for a HID child
 //  (mgvf-0003), and ntoskrnl refreshes a device's ids on every enumeration
@@ -16,16 +16,24 @@
 //  DualSenseRoute), and the pad is sent through SDL as an Xbox-class pad with
 //  some rumble and nothing else.
 //
-//  The fourth is winebus's unix half, a Mach-O rather than a PE, and it goes
+//  hidclass offers a pad carrying a haptics collection to xinput as well as to
+//  everything else (mgvf-0011), and the five xinput DLLs are one patch and
+//  five binaries (mgvf-0012) because wine builds xinput1_1, 1_2, 1_4 and
+//  xinputuap from xinput1_3's sources and a game links whichever it was built
+//  against. Together they are what lets a title's own rumble reach a
+//  DualSense's motors through XInput rather than through the pad's protocol.
+//
+//  The tenth is winebus's unix half, a Mach-O rather than a PE, and it goes
 //  to lib/wine/x86_64-unix/ -- a different directory, which is the one thing
-//  about this set that cannot be guessed from the other three. It carries the
+//  about this set that cannot be guessed from the others. It carries the
 //  patches that act on the pad itself rather than on what Windows is told:
 //  seizing a DualSense on Bluetooth so macOS and wine stop writing to it at
 //  once (mgvf-0006), the two narrower answers for a pad that leaves
-//  (mgvf-0007, mgvf-0008), and the vibration rewrite a title's own options ask
-//  for (mgvf-0009). The two halves are built from one source tree and share a
-//  struct, so a set with three of the four in place is not a supported
-//  combination and the script says "broken" for it.
+//  (mgvf-0007, mgvf-0008), the vibration rewrite a title's own options ask
+//  for (mgvf-0009), and everything the motors have learned since. The two
+//  halves are built from one source tree and share a struct, so a set with
+//  nine of the ten in place is not a supported combination and the script
+//  says "broken" for it.
 //
 //  An improvement, not a fix. No title needs it and every one runs without
 //  it, so unlike the media set it is a switch: on by default for an engine it
@@ -37,11 +45,11 @@
 //  reads back what it says.
 //
 //  Verified before it runs, the way the codecs are, but not by hash. The
-//  four are this project's own build rather than somebody else's binaries
+//  ten are this project's own build rather than somebody else's binaries
 //  carried under licence, and every rebuild changes their bytes; pinning them
 //  would make every rebuild a change here too. What is checked is that all
-//  five files are there, that each begins as the kind of binary it is meant to
-//  be -- PE for the three, Mach-O for the unix half -- and that the stamp
+//  ten files are there, that each begins as the kind of binary it is meant to
+//  be -- PE for the nine, Mach-O for the unix half -- and that the stamp
 //  beside them names an engine, and then, before anything is written, that the
 //  engine is that one.
 //
@@ -56,20 +64,38 @@ nonisolated enum BundledControllerBus {
     /// beside it and nowhere else.
     static let script = "install-engine-controller.sh"
 
-    /// The three PE files, by the names they travel under. `engine-controller-`
+    /// The PE files, by the names they travel under. `engine-controller-`
     /// on purpose: the media installer picks its set by reading
     /// engine-built-for* and engine-winegstreamer*, and these must never be
     /// taken for one.
+    ///
+    /// NINE, not the three this set began with, and the list is read from the
+    /// installer's own PE_NAMES rather than remembered: hidclass offers a pad
+    /// carrying a haptics collection to xinput (mgvf-0011), and the five
+    /// xinput DLLs are one patch and five binaries because wine builds
+    /// xinput1_1, 1_2, 1_4 and xinputuap from xinput1_3's sources and a game
+    /// links whichever it was built against (mgvf-0012). xinput9_1_0 is
+    /// deliberately not among them: it forwards to xinput1_4, which is.
+    ///
+    /// A set that grew and a list here that did not is exactly how this
+    /// application came to carry a payload from mgvf-0009 while believing it
+    /// carried everything -- the stamp said so and nothing compared the two.
     static let peFiles = ["engine-controller-winebus.sys",
                           "engine-controller-setupapi.dll",
-                          "engine-controller-ntoskrnl.exe"]
+                          "engine-controller-ntoskrnl.exe",
+                          "engine-controller-hidclass.sys",
+                          "engine-controller-xinput1_1.dll",
+                          "engine-controller-xinput1_2.dll",
+                          "engine-controller-xinput1_3.dll",
+                          "engine-controller-xinput1_4.dll",
+                          "engine-controller-xinputuap.dll"]
 
     /// winebus's unix half, which goes to a directory of its own. Named apart
     /// from the three because it is checked apart from them: it is a Mach-O
     /// library and does not begin as a PE does.
     static let unixFile = "engine-controller-winebus.so"
 
-    /// All four, in the order the installer names them.
+    /// All ten, in the order the installer names them.
     static let files = peFiles + [unixFile]
 
     /// Which engine they were built for.

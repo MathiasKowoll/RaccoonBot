@@ -210,6 +210,11 @@ struct GameOptionsData: Codable, Equatable { // this is used for reading saved p
     /// How hard, as a percentage, for the two choices that use one. Absent is
     /// 100, which changes nothing; it is not 0, which is silence.
     var dualSenseVibrationGain: Double?
+    /// The strength for the LEGACY path. Two paths, two numbers: the haptic
+    /// one saturates around x6 and the legacy one is harder at every value, so
+    /// a shared number would make switching between them a shock rather than a
+    /// change of character.
+    var dualSenseStrongGain: Double?
     var ue4Hack: Bool?
     var mvkArgBuff: Bool?
     var vulkanLib: String?
@@ -253,6 +258,7 @@ struct GameOptionsData: Codable, Equatable { // this is used for reading saved p
         self.xinputRumble = data.xinputRumble
         self.dualSenseVibration = data.dualSenseVibration
         self.dualSenseVibrationGain = data.dualSenseVibrationGain
+        self.dualSenseStrongGain = data.dualSenseStrongGain
         self.ue4Hack = data.ue4Hack
         self.mvkArgBuff = data.mvkArgBuff
         self.vulkanLib = data.vulkanLib
@@ -315,6 +321,8 @@ class GameOptions: ObservableObject { // this is used as form state
     @Published var xinputRumble: Bool = false
     @Published var dualSenseVibration: String = DualSenseVibration.byDefault.rawValue
     @Published var dualSenseVibrationGain: Double = Double(DualSenseVibration.neutralGain)
+    /// The legacy path's own strength -- see GameOptionsData.
+    @Published var dualSenseStrongGain: Double = Double(DualSenseVibration.neutralGain)
     @Published var ue4Hack: Bool
     @Published var mvkArgBuff: Bool
     @Published var vulkanLib: String
@@ -380,6 +388,7 @@ class GameOptions: ObservableObject { // this is used as form state
         self.xinputRumble = data.xinputRumble ?? false
         self.dualSenseVibration = DualSenseVibration.pickable(data.dualSenseVibration)
         self.dualSenseVibrationGain = DualSenseVibration.pickableGain(data.dualSenseVibrationGain)
+        self.dualSenseStrongGain = DualSenseVibration.pickableGain(data.dualSenseStrongGain)
         self.ue4Hack = data.ue4Hack ?? true
         self.mvkArgBuff = data.mvkArgBuff ?? true
         self.vulkanLib = data.vulkanLib ?? "standard"
@@ -422,6 +431,7 @@ class GameOptions: ObservableObject { // this is used as form state
         if let v = data.xinputRumble { self.xinputRumble = v }
         if let v = data.dualSenseVibration { self.dualSenseVibration = DualSenseVibration.pickable(v) }
         if let v = data.dualSenseVibrationGain { self.dualSenseVibrationGain = DualSenseVibration.pickableGain(v) }
+        if let v = data.dualSenseStrongGain { self.dualSenseStrongGain = DualSenseVibration.pickableGain(v) }
         if let v = data.ue4Hack { self.ue4Hack = v }
         if let v = data.mvkArgBuff { self.mvkArgBuff = v }
         if let v = data.vulkanLib { self.vulkanLib = v }

@@ -260,9 +260,17 @@ struct GameOptionsView: View {
                                 // what it is, and the neutral point stays
                                 // obvious -- x1 is the game untouched, which is
                                 // the default and the honest setting.
-                                Text(gameOptions.dualSenseVibrationGain == 0 ? "Rumble strength: off"
-                                     : "Rumble strength \(DualSenseVibration.multiplierLabel(gameOptions.dualSenseVibrationGain))")
-                                Slider(value: $gameOptions.dualSenseVibrationGain,
+                                // Each path keeps its own strength, so this
+                                // binds to whichever the chosen one uses:
+                                // switching lands where you left it instead of
+                                // at a number that meant something else. The
+                                // haptic path saturates around x6 and the
+                                // legacy one is harder at every value, so a
+                                // shared number would be a shock, not a change
+                                // of character.
+                                Text(gameOptions[keyPath: vibrationChoice.gainKeyPath] == 0 ? "Rumble strength: off"
+                                     : "Rumble strength \(DualSenseVibration.multiplierLabel(gameOptions[keyPath: vibrationChoice.gainKeyPath]))")
+                                Slider(value: $gameOptions[dynamicMember: vibrationChoice.gainKeyPath],
                                        in: DualSenseVibration.gainRange,
                                        step: OptionAdjust.gainStep)
                                     .optionFocus(.vibrationGain, current: focus.current, shown: gamepad.showsFocus)
@@ -678,7 +686,7 @@ struct GameOptionsView: View {
                                                                 forward: forward)
             return .changed
         case .vibrationGain:
-            return step(\.dualSenseVibrationGain, by: OptionAdjust.gainStep, in: DualSenseVibration.gainRange)
+            return step(vibrationChoice.gainKeyPath, by: OptionAdjust.gainStep, in: DualSenseVibration.gainRange)
         case .x87:          return flip(\.x87PatchEnabled)
         case .mtlHud:       return flip(\.mtlHudEnabled)
         case .advertiseAVX: return flip(\.advertiseAVX)

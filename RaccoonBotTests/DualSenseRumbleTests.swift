@@ -104,38 +104,41 @@ struct DualSenseRumbleTests {
         // The other two buzz at the reference whatever the slider says, so a
         // person switching between them feels the PATH change and nothing
         // else -- which is the comparison the button exists to make.
-        #expect(DualSenseRumble.motor(vibration: .asAsked, percent: 25) == 25)
-        #expect(DualSenseRumble.motor(vibration: .asAsked, percent: 400) == 25)
-        #expect(DualSenseRumble.motor(vibration: .stronger, percent: 400) == 25,
-                "stronger is the same request through the other path, so the two pulses compare")
-        #expect(DualSenseRumble.motor(vibration: .custom, percent: 25) == 6)
-        #expect(DualSenseRumble.motor(vibration: .custom, percent: 100) == 25)
-        #expect(DualSenseRumble.motor(vibration: .custom, percent: 150) == 38)
-        #expect(DualSenseRumble.motor(vibration: .custom, percent: 200) == 50)
+        // Both paths scale now, so the comparison the button exists to make --
+        // the same request through the two paths -- is made by leaving the two
+        // strengths equal and switching the path, not by the type ignoring one.
+        #expect(DualSenseRumble.motor(vibration: .asAsked, percent: 100) == 25)
+        #expect(DualSenseRumble.motor(vibration: .stronger, percent: 100) == 25,
+                "same strength, two paths: what changes in the hand is the path")
+        #expect(DualSenseRumble.motor(vibration: .stronger, percent: 400) == 100)
+        #expect(DualSenseRumble.motor(vibration: .asAsked, percent: 25) == 6)
+        #expect(DualSenseRumble.motor(vibration: .asAsked, percent: 100) == 25)
+        #expect(DualSenseRumble.motor(vibration: .asAsked, percent: 150) == 38)
+        #expect(DualSenseRumble.motor(vibration: .asAsked, percent: 200) == 50)
         // The reference is 25 so that the WHOLE slider is a range in the hand:
         // at the x10 ceiling it reaches 250, just short of saturating, where 64
         // saturated at x4 and left the top three fifths unpreviewable.
-        #expect(DualSenseRumble.motor(vibration: .custom, percent: 1000) == 250)
-        #expect(DualSenseRumble.motor(vibration: .custom, percent: 300) == 75)
-        #expect(DualSenseRumble.motor(vibration: .custom, percent: 400) == 100)
+        #expect(DualSenseRumble.motor(vibration: .asAsked, percent: 1000) == 250)
+        #expect(DualSenseRumble.motor(vibration: .asAsked, percent: 300) == 75)
+        #expect(DualSenseRumble.motor(vibration: .asAsked, percent: 400) == 100)
         // A percentage from a record this build would not offer is folded into
         // the range first, exactly as the launch folds it -- and the fold is
         // now x10, so the pulse tops out at the reference times ten and never
         // at the byte. The byte is still the driver's own ceiling for a GAME:
         // Beast asking 42 reaches 255 at x6, measured 2026-09-10.
-        #expect(DualSenseRumble.motor(vibration: .custom, percent: 100000) == 250)
-        #expect(DualSenseRumble.motor(vibration: .custom, percent: 0) == 0, "0 is silence, and the slider reaches it")
+        #expect(DualSenseRumble.motor(vibration: .asAsked, percent: 100000) == 250)
+        #expect(DualSenseRumble.motor(vibration: .asAsked, percent: 0) == 0, "0 is silence, and the slider reaches it")
     }
 
     /// Custom at 0 is silence, and the report says so with the motors and not
     /// by staying home: the enable bits are still set, because a block with no
     /// enable bit asks the pad to change nothing at all.
     @Test func silenceSendsZeroMotorsWithTheEnableBitsStillSet() {
-        let report = DualSenseRumble.bluetoothReport(vibration: .custom, percent: 0, sequence: 1)
+        let report = DualSenseRumble.bluetoothReport(vibration: .asAsked, percent: 0, sequence: 1)
         #expect(report[5] == 0)
         #expect(report[6] == 0)
         #expect(report[3] == 0x02, "still a valid request, for nothing -- the haptic path custom now takes")
-        #expect(DualSenseRumble.motor(vibration: .custom, percent: 0) == 0)
+        #expect(DualSenseRumble.motor(vibration: .asAsked, percent: 0) == 0)
     }
 
     /// The release that stops the pulse is the same report with the motors at
@@ -153,7 +156,7 @@ struct DualSenseRumbleTests {
 
     /// On a cable the pad takes the short report and checks no signature.
     @Test func aPadOnACableTakesReport0x02() {
-        let report = DualSenseRumble.usbReport(vibration: .custom, percent: 200)
+        let report = DualSenseRumble.usbReport(vibration: .asAsked, percent: 200)
         #expect(report.count == 48)
         #expect(report[0] == 0x02)
         #expect(report[1] == 0x02, "flag0, one byte after the id this time -- custom takes the haptic path")
@@ -178,8 +181,8 @@ struct DualSenseRumbleTests {
     @Test func onlyTheRewriteAsksForTheLegacyMotors() {
         #expect(DualSenseRumble.path(for: .stronger) == .legacyMotors)
         #expect(DualSenseRumble.path(for: .asAsked) == .haptic)
-        #expect(DualSenseRumble.path(for: .custom) == .haptic,
-                "a strength stopped dragging the legacy path with it on 2026-09-10: custom scales what the game asks on the path the game chose, and the button has to feel like the game will")
+        #expect(DualSenseRumble.path(for: .asAsked) == .haptic,
+                "the path is the choice and the strength is separate, so the button has to feel like the game will")
         #expect(DualSenseRumble.Path.legacyMotors.flag0 == 0x03)
         #expect(DualSenseRumble.Path.legacyMotors.flag2 == 0x00)
         #expect(DualSenseRumble.Path.haptic.flag0 == 0x02)

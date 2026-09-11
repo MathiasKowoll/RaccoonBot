@@ -473,15 +473,15 @@ struct DualSenseRouteTests {
     /// when both are asked for, because its rewrite runs after the stamp and
     /// silently wins; this is the half of that contradiction the launcher owns.
     @Test func aStrengthDoesNotDragTheLegacyPathWithIt() {
-        #expect(DualSenseVibration.custom.modeValue == 0)
+        #expect(DualSenseVibration.asAsked.modeValue == 0)
         #expect(DualSenseVibration.stronger.modeValue == 1)
         #expect(DualSenseVibration.asAsked.modeValue == 0)
-        #expect(DualSenseVibration.custom.gainValue(percent: 250) == 250)
+        #expect(DualSenseVibration.asAsked.gainValue(percent: 250) == 250)
         // it still asks the driver for something, so the launcher writes it
-        #expect(DualSenseVibration.custom.changesAnything(percent: 250))
+        #expect(DualSenseVibration.asAsked.changesAnything(percent: 250))
         // and silence is still reachable, still without touching the path
-        #expect(DualSenseVibration.custom.gainValue(percent: 0) == 0)
-        #expect(DualSenseVibration.custom.changesAnything(percent: 0))
+        #expect(DualSenseVibration.asAsked.gainValue(percent: 0) == 0)
+        #expect(DualSenseVibration.asAsked.changesAnything(percent: 0))
     }
 
     @Test func theDefaultLeavesEveryPacketAlone() {
@@ -513,7 +513,7 @@ struct DualSenseRouteTests {
         #expect(DualSenseVibration.multiplierLabel(1000) == "x10")
         #expect(DualSenseVibration.multiplierLabel(150) == "x1.5")
         #expect(DualSenseVibration.multiplierLabel(99999) == "x10", "and it folds what the slider cannot reach")
-        #expect(DualSenseVibration.custom.gainValue(percent: 1000) == 1000)
+        #expect(DualSenseVibration.asAsked.gainValue(percent: 1000) == 1000)
         #expect(DualSenseVibration.pickableGain(.nan) == 100)
         #expect(DualSenseVibration.pickableGain(175) == 175)
     }
@@ -523,37 +523,37 @@ struct DualSenseRouteTests {
     /// alone" are written as different numbers, because the driver reads them
     /// as different things.
     @Test func silenceAndLeavingItAloneAreWrittenDifferently() {
-        let quiet = over([pad(SonyPads.dualSense, "Bluetooth")], .asItIs, vibration: .custom, percent: 0)
+        let quiet = over([pad(SonyPads.dualSense, "Bluetooth")], .asItIs, vibration: .asAsked, percent: 0)
         #expect(vibration(quiet, SonyPads.dualSense)?.gain == 0)
         #expect(vibration(quiet, SonyPads.dualSense)?.mode == 0,
                 "custom is the rewrite with the strength chosen by hand; at 0 the strength is silence")
         let alone = over([pad(SonyPads.dualSense, "Bluetooth")], .asItIs, vibration: .asAsked, percent: 100)
         #expect(vibration(alone, SonyPads.dualSense)?.gain == 100)
-        #expect(DualSenseVibration.custom.changesAnything(percent: 0), "0 is a request")
-        #expect(DualSenseVibration.custom.gainValue(percent: 0) == 0, "custom at 0 is silence")
-        #expect(said([pad(SonyPads.dualSense, "Bluetooth")], .asItIs, vibration: .custom, percent: 0).contains("silenced"))
+        #expect(DualSenseVibration.asAsked.changesAnything(percent: 0), "0 is a request")
+        #expect(DualSenseVibration.asAsked.gainValue(percent: 0) == 0, "custom at 0 is silence")
+        #expect(said([pad(SonyPads.dualSense, "Bluetooth")], .asItIs, vibration: .asAsked, percent: 0).contains("silenced"))
     }
 
     /// Stronger asks for the path and nothing else; custom asks for the path
     /// and the strength. The percentage belongs to one choice, which is why
     /// the slider is only alive under it: a strength under "as the game asks"
     /// would contradict its own name.
-    @Test func strongerAsksForThePathAndCustomCarriesTheStrength() {
+    @Test func eachPathCarriesItsOwnStrength() {
         let o = over([pad(SonyPads.dualSenseEdge, "Bluetooth")], .asItIs, vibration: .stronger, percent: 200)
         #expect(vibration(o, SonyPads.dualSenseEdge)?.mode == 1)
-        #expect(vibration(o, SonyPads.dualSenseEdge)?.gain == 100,
-                "the percentage is not this choice's business, whatever the slider last held")
+        #expect(vibration(o, SonyPads.dualSenseEdge)?.gain == 200,
+                "both paths carry a strength now, and this one carries its own")
         #expect(vibration(o, SonyPads.dualSense)?.mode == 1,
                 "the model that is not here gets the same choice, for when it is the one that arrives")
 
-        let chosen = over([pad(SonyPads.dualSenseEdge, "Bluetooth")], .asItIs, vibration: .custom, percent: 200)
+        let chosen = over([pad(SonyPads.dualSenseEdge, "Bluetooth")], .asItIs, vibration: .asAsked, percent: 200)
         #expect(vibration(chosen, SonyPads.dualSenseEdge)?.mode == 0,
-                "custom carries a strength and nothing else: the path stays the game's own")
+                "the haptic choice leaves the path to the game and carries only its strength")
         #expect(vibration(chosen, SonyPads.dualSenseEdge)?.gain == 200)
 
         let alone = over([pad(SonyPads.dualSenseEdge, "Bluetooth")], .asItIs, vibration: .asAsked, percent: 150)
         #expect(vibration(alone, SonyPads.dualSenseEdge)?.mode == 0, "the game keeps its own path")
-        #expect(vibration(alone, SonyPads.dualSenseEdge)?.gain == 100, "and its own strength")
+        #expect(vibration(alone, SonyPads.dualSenseEdge)?.gain == 150, "at the strength this path was given")
     }
 
     /// An engine whose winebus has no mgvf-0009 is never asked for the
@@ -570,7 +570,7 @@ struct DualSenseRouteTests {
                             vibration: .stronger, percent: 300, canRewrite: false)
         #expect(sentence.contains("no vibration rewrite"))
         #expect(sentence.contains("legacy motors") == false)
-        #expect(said([pad(SonyPads.dualSenseEdge, "Bluetooth")], .asItIs, vibration: .custom, percent: 0, canRewrite: false)
+        #expect(said([pad(SonyPads.dualSenseEdge, "Bluetooth")], .asItIs, vibration: .asAsked, percent: 0, canRewrite: false)
                     .contains("silenced") == false)
     }
 
@@ -590,7 +590,7 @@ struct DualSenseRouteTests {
     /// written for both models whatever is attached, so the next title clears
     /// what the last one asked for rather than inheriting it.
     @Test func everyLaunchClearsWhatTheLastGameAskedOfTheMotors() {
-        let quiet = over([], .asItIs, vibration: .custom, percent: 0)
+        let quiet = over([], .asItIs, vibration: .asAsked, percent: 0)
         #expect(quiet.count == 2)
         #expect(quiet.allSatisfy { $0.vibrationGain == 0 }, "written for a pad that is not even here")
         let back = over([], .asItIs, vibration: .asAsked, percent: 100)
@@ -616,7 +616,7 @@ struct DualSenseRouteTests {
                                              vibration: choice, percent: percent, canRewrite: canRewrite)
                                 let why: Comment = "\(pads.map(\.transport)) \(choice) \(percent) sdl \(sdl) tells \(tells) can \(canRewrite)"
                                 #expect(o.allSatisfy { $0.hidraw == 1 || ($0.vibrationMode == 0 && $0.vibrationGain == 100) }, why)
-                                #expect(o.allSatisfy { $0.vibrationGain != 0 || choice == .custom }, why)
+                                #expect(o.allSatisfy { $0.vibrationGain != 0 || choice == .asAsked }, why)
                                 // Only `stronger` rewrites the path now: a strength
                                 // is a strength, and asking for one stopped meaning
                                 // asking for the legacy motors on 2026-09-10.
@@ -635,24 +635,26 @@ struct DualSenseRouteTests {
     /// the motors still earns the sentence that says what has to happen.
     @Test func theMotorSentenceSaysWhenItTakesEffect() {
         let sentence = said([pad(SonyPads.dualSenseEdge, "Bluetooth")], .asItIs, vibration: .stronger)
-        #expect(sentence.contains("legacy motors"))
+        #expect(sentence.contains("legacy compatible motors"))
         #expect(sentence.contains("when the pad next arrives"))
         // A preference, said as one. The comment in the source carries the
         // ladder; the console carries the fact that it was one person's hand.
-        #expect(sentence.contains("one person here found stronger"))
+        #expect(sentence.contains("harder at the same command"),
+                "the sentence cites the two-path comparison of 2026-09-10, not the old six-pulse ladder")
         // And with nothing attached there is still something written, so there
         // is still something to say.
-        #expect(said([], .asItIs, vibration: .custom, percent: 0).contains("silenced"))
-        #expect(said([], .asItIs, vibration: .custom, percent: 0).contains("no DualSense attached"))
+        #expect(said([], .asItIs, vibration: .asAsked, percent: 0).contains("silenced"))
+        #expect(said([], .asItIs, vibration: .asAsked, percent: 0).contains("no DualSense attached"))
     }
 
     /// The saturation is said rather than left to be discovered: a gain over a
     /// game already asking for 255 cannot make it louder, and somebody who
     /// sets 400% and feels nothing new should read why on the launch line.
     @Test func theConsoleSaysWhereTheGainStops() {
-        let sentence = said([pad(SonyPads.dualSense, "Bluetooth")], .asItIs, vibration: .custom, percent: 400)
-        #expect(sentence.contains("400%"))
+        let sentence = said([pad(SonyPads.dualSense, "Bluetooth")], .asItIs, vibration: .asAsked, percent: 400)
+        #expect(sentence.contains("x4"), "the console speaks the multiplier the panel shows")
         #expect(sentence.contains("saturates"))
+        #expect(sentence.contains("haptic path"), "and names which path the strength is applied to")
     }
 
     /// Read from the engine's own winebus.sys, the way mgvf-0005 is read, and
@@ -744,7 +746,7 @@ struct DualSenseRouteTests {
         form.set(data: old)
         #expect(form.dualSenseVibration == DualSenseVibration.asAsked.rawValue)
         #expect(form.dualSenseVibrationGain == 100)
-        #expect((DualSenseVibration(rawValue: form.dualSenseVibration) ?? .custom)
+        #expect((DualSenseVibration(rawValue: form.dualSenseVibration) ?? .stronger)
                     .changesAnything(percent: form.dualSenseVibrationGain) == false)
     }
 

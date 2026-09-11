@@ -123,14 +123,15 @@ nonisolated enum DualSenseRumble {
     /// because the pulse is there to be COMPARED: the same request through
     /// the two paths, so the difference you feel is the path and nothing
     /// else. `custom` carries the percentage, and at 0 it is silence.
+    /// Both paths carry a strength now, so the pulse scales for both. It used
+    /// to scale for one of three choices and buzz at the bare reference for the
+    /// other two, so that switching between them changed only the PATH -- the
+    /// comparison the button existed to make. That comparison is still
+    /// available and is now the honest one: leave the two strengths equal and
+    /// switch the path.
     static func motor(vibration: DualSenseVibration, percent: Double) -> UInt8 {
-        switch vibration {
-        case .asAsked, .stronger:
-            return UInt8(min(255, referenceRequest.rounded()))
-        case .custom:
-            let gain = Double(vibration.gainValue(percent: percent))
-            return UInt8(min(255, (referenceRequest * gain / 100).rounded()))
-        }
+        let gain = Double(vibration.gainValue(percent: percent))
+        return UInt8(min(255, (referenceRequest * gain / 100).rounded()))
     }
 
     /// The 47-byte block both transports carry, the one field layout SDL's
@@ -324,7 +325,7 @@ nonisolated enum DualSenseRumble {
         _ = off.withUnsafeBufferPointer {
             IOHIDDeviceSetReport(pad.device, kIOHIDReportTypeOutput, reportID, $0.baseAddress!, $0.count)
         }
-        guard !(vibration == .custom && vibration.gainValue(percent: percent) == 0) else { return .silent }
+        guard vibration.gainValue(percent: percent) != 0 else { return .silent }
         let name = pad.productID == SonyPads.dualSenseEdge ? "DualSense Edge" : "DualSense"
         let way = chosen == .legacyMotors ? "the legacy motors" : "the game's own haptic path"
         let gain = vibration.gainValue(percent: percent)

@@ -412,7 +412,9 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
             // The motors, asked of the same engine and by the same means: the
             // name of a value in the binary, never a version number.
             let vibration = DualSenseVibration(rawValue: options!.dualSenseVibration) ?? .byDefault
-            let vibrationPercent = options!.dualSenseVibrationGain
+            // Each path keeps its own strength; the launch writes the one the
+            // chosen path uses.
+            let vibrationPercent = options![keyPath: vibration.gainKeyPath]
             let canRewriteVibration = DualSenseRoute.engineCanRewriteVibration(cxAppPath: cxAppPath)
             // And whether this title asked for its motors to be reachable by a
             // game that reads XInput, asked of the same engine by the same

@@ -174,28 +174,21 @@ nonisolated enum DualSenseVibration: String, CaseIterable {
     /// "nothing asked for" are written and the driver leaves every packet
     /// alone.
     case asAsked = "as-asked"
-    /// The game's choice of the haptic path is rewritten to the legacy
-    /// motors, and the driver signs the packet again so the pad accepts it.
-    /// The strength is what the game asked for; only the path changes.
+    /// The legacy compatible motors: the pad imitates a pair of
+    /// rotating-mass motors. Coarser than the haptic path and measurably
+    /// harder at the same command -- 2026-09-10, both paths driven to
+    /// 252/255 over Bluetooth with only the two selecting bits different.
     case stronger = "stronger"
-    /// The game's own choice of path, at the strength chosen here. It is the
-    /// only choice the slider belongs to, which is why there are three and
-    /// not two plus a number that sometimes applies. At 0 per cent it is
-    /// silence -- how somebody who does not want the pad to buzz turns it
-    /// off for every game at once, including the ones with no setting of
-    /// their own -- so no fourth entry has to say the same thing.
-    ///
-    /// IT USED TO FORCE THE LEGACY PATH TOO, and stopped on 2026-09-10. The
-    /// menu was built when that rewrite WAS how a pad was made to hit harder,
-    /// so "stronger" and "stronger, by this much" were one idea with a number
-    /// attached. They are two ideas: which way the pad is asked to move, and
-    /// how hard. Tying them meant nobody could ask for the game's own path at
-    /// a chosen strength -- and once mgvf-0020 let the motors ride the game's
-    /// packet at its own rate, that became the combination worth having. The
-    /// engine's mgvf-0021 warns when both are asked for, because the rewrite
-    /// runs after the stamp and silently wins; this is the half of that
-    /// contradiction the launcher owns.
-    case custom = "custom"
+    // `custom` was the third entry and is gone, because it was never a third
+    // PATH -- it was `stronger` with a number attached, from a time when that
+    // rewrite WAS how a pad was made to hit harder. Measured on 2026-09-10
+    // with identical bytes on the wire, the two paths differ in character and
+    // in ceiling: the haptic one is finer and saturates around x6, the legacy
+    // one is harder. So the path is one question and the strength is another,
+    // and each path keeps its own strength -- switching between them should
+    // land where you left it, not at a number that meant something else.
+    // A record that still says "custom" reads as the haptic path, which is
+    // what it selected on the day it was removed.
 
     /// What a title gets when nobody has said: the pad as the game drives it.
     static let byDefault = DualSenseVibration.asAsked
@@ -222,29 +215,27 @@ nonisolated enum DualSenseVibration: String, CaseIterable {
     /// 0 as a request and every other value as a multiplier.
     static let gainRange: ClosedRange<Double> = 0...1000
 
-    /// Whether the percentage means anything for this choice. Only for
-    /// `custom`, which exists to carry it: the other two are complete
-    /// sentences on their own, and a strength under "as the game asks" would
-    /// contradict its own name -- which is how the owner read it the first
-    /// time he saw the two together.
-    var usesGain: Bool { self == .custom }
+    /// Both paths carry a strength now, and each carries its OWN. A single
+    /// shared number would make switching paths a shock: the haptic path is
+    /// useful to about x6 before it saturates and the legacy one is harder at
+    /// every value, so the same multiplier means very different things on the
+    /// two. Kept as a property rather than deleted because the panel still
+    /// asks the question, and a path that ever stops taking a strength has a
+    /// place to say so.
+    var usesGain: Bool { true }
 
     /// What goes into "VibrationMode": 1 only where the path is rewritten,
-    /// which is `stronger` alone. `custom` carries a strength and leaves the
-    /// path to the game -- see its own note for why those stopped being one
-    /// question.
+    /// which is `stronger` alone. The haptic choice leaves the path to the
+    /// game and carries only its strength.
     var modeValue: UInt32 { self == .stronger ? 1 : 0 }
 
-    /// What goes into "VibrationGain", given the percentage this title asks
-    /// for. `off` is 0 and nothing else; `asAsked` is 100, which the driver
-    /// reads as "leave every motor byte alone"; `stronger` carries the slider,
+    /// What goes into "VibrationGain": the strength this path was given,
     /// clamped to the range the menu can show so a record from another build
-    /// cannot write a number this one would not offer.
+    /// cannot write a number this one would not offer. Both paths carry one;
+    /// which of the two stored strengths arrives here is the panel's business,
+    /// not this type's.
     func gainValue(percent: Double) -> UInt32 {
-        switch self {
-        case .asAsked, .stronger: return Self.neutralGain
-        case .custom:             return UInt32(Self.pickableGain(percent).rounded())
-        }
+        UInt32(Self.pickableGain(percent).rounded())
     }
 
     /// The slider's number, as a multiplier of what the game asks.
@@ -268,11 +259,16 @@ nonisolated enum DualSenseVibration: String, CaseIterable {
         modeValue != 0 || gainValue(percent: percent) != Self.neutralGain
     }
 
+    /// Which stored strength this path uses. Two paths, two numbers, so that
+    /// switching lands where it was left.
+    var gainKeyPath: ReferenceWritableKeyPath<GameOptions, Double> {
+        self == .stronger ? \GameOptions.dualSenseStrongGain : \GameOptions.dualSenseVibrationGain
+    }
+
     var label: String {
         switch self {
         case .asAsked: return "As the game asks"
         case .stronger: return "Stronger motors"
-        case .custom: return "Custom strength"
         }
     }
 
@@ -284,10 +280,13 @@ nonisolated enum DualSenseVibration: String, CaseIterable {
     /// A stored value the menu cannot show is not a choice, it is a leftover
     /// -- `DualSensePresentation.pickable`'s rule, for the same reason.
     static func pickable(_ raw: String?) -> String {
-        // "off" was a fourth entry for one afternoon; it is `custom` at 0 now,
-        // and a record that still says it must not read as the default, which
-        // would turn somebody's silence back on behind their back.
-        if raw == "off" { return DualSenseVibration.custom.rawValue }
+        // Two entries have been folded away rather than dropped, because a
+        // record that names one must not read as the default and turn a
+        // person's setting back on behind their back. "off" was a fourth
+        // entry for one afternoon and became a strength of zero; "custom" was
+        // the haptic path with a strength, and the strength moved out of the
+        // choice on 2026-09-10.
+        if raw == "off" || raw == "custom" { return DualSenseVibration.asAsked.rawValue }
         guard let raw, let known = DualSenseVibration(rawValue: raw) else { return byDefault.rawValue }
         return known.rawValue
     }
@@ -707,20 +706,26 @@ nonisolated enum DualSenseRoute {
             return "the vibration setting is not applied: a pad handed to SDL is a wine gamepad, and winebus never sees the output reports it would rewrite"
         }
         let gain = vibration.gainValue(percent: percent)
+        if gain == 0 { return "the motors are silenced for this title, whatever the game asks for" }
+        let strength = gain == DualSenseVibration.neutralGain ? "at what the game asks"
+                     : "at \(DualSenseVibration.multiplierLabel(percent)) what the game asks"
         switch vibration {
-        case .custom where gain == 0:
-            return "the motors are silenced for this title, whatever the game asks for"
         case .stronger:
-            // Said as a preference, because that is all it is: it was chosen by
-            // one person's hand on a six-pulse ladder, not by a meter.
-            return "the motors: the game's haptic vibration is rewritten to the legacy motors, which one person here found stronger at the same value -- a preference, not a measurement"
-        case .custom:
-            // The saturation is worth one clause: somebody who asks for 400%
-            // and feels nothing new in a game already asking for 255 should
-            // read why here rather than conclude the option is broken.
-            return "the motors: \(gain)% of what the game asks for, on the path the game chose -- it saturates at the top of the range, so a game already asking for everything cannot be made louder"
+            // The comparison behind this sentence: both paths driven to 252 of
+            // 255 over Bluetooth on 2026-09-10 with only the two selecting bits
+            // different, and the legacy one was clearly harder to the hand
+            // holding it. That is still one hand -- but it is one hand on two
+            // packets that differ in two bits, which the six-pulse ladder this
+            // sentence used to cite was not.
+            return "the motors: the legacy compatible motors \(strength) -- coarser than the pad's own path and harder at the same command"
         case .asAsked:
-            return "the motors: whatever the game asks for, on the path it chose, untouched"
+            // The saturation is worth a clause: somebody who asks for x10 and
+            // feels nothing new should read why here rather than conclude the
+            // option is broken. Measured: a title asking 42 of 255 saturates
+            // around x6, and nothing above it changes a byte.
+            return gain == DualSenseVibration.neutralGain
+                ? "the motors: whatever the game asks for, on the path it chose, untouched"
+                : "the motors: the pad's own haptic path \(strength) -- finer than the legacy motors, and it saturates, so past about x6 nothing more reaches them"
         }
     }
 }

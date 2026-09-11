@@ -247,6 +247,21 @@ nonisolated enum DualSenseVibration: String, CaseIterable {
         }
     }
 
+    /// The slider's number, as a multiplier of what the game asks.
+    ///
+    /// The driver's value is a percentage and stays one -- it is what goes into
+    /// the registry and what every trace prints. This is the label only: "x4"
+    /// where the stored value is 400. A percentage that reaches 1000 reads as a
+    /// mistake, and the neutral point is what matters most here: x1 is the game
+    /// untouched, which no reader has to be told.
+    ///
+    /// One decimal only where it is not whole, so x1.5 is reachable and x4 does
+    /// not become "x4.0".
+    static func multiplierLabel(_ percent: Double) -> String {
+        let x = pickableGain(percent) / 100
+        return x == x.rounded() ? "x\(Int(x))" : String(format: "x%.1f", x)
+    }
+
     /// Whether this asks the driver for anything at all. `asAsked` at 100 does
     /// not, and that is the case that has to stay silent everywhere.
     func changesAnything(percent: Double) -> Bool {

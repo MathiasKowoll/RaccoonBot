@@ -506,6 +506,13 @@ struct DualSenseRouteTests {
         // The ceiling is the driver's own clamp, not a number the panel chose:
         // a value the slider can reach must be a value the driver will honour.
         #expect(DualSenseVibration.gainRange.upperBound == 1000)
+        // The label is a multiplier; the stored value stays the percentage the
+        // driver reads and every trace prints.
+        #expect(DualSenseVibration.multiplierLabel(100) == "x1", "the neutral point has to read as neutral")
+        #expect(DualSenseVibration.multiplierLabel(400) == "x4")
+        #expect(DualSenseVibration.multiplierLabel(1000) == "x10")
+        #expect(DualSenseVibration.multiplierLabel(150) == "x1.5")
+        #expect(DualSenseVibration.multiplierLabel(99999) == "x10", "and it folds what the slider cannot reach")
         #expect(DualSenseVibration.custom.gainValue(percent: 1000) == 1000)
         #expect(DualSenseVibration.pickableGain(.nan) == 100)
         #expect(DualSenseVibration.pickableGain(175) == 175)

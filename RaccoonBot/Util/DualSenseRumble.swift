@@ -94,16 +94,27 @@ nonisolated enum DualSenseRumble {
     /// A quarter of full scale, so that the whole slider can be felt.
     ///
     /// A gain multiplies what a game asks for and saturates at 255, so the
-    /// reference this test scales decides how much of the slider does
-    /// anything at all. At half scale, 200% already reached 255 and every
-    /// percentage above it felt identical -- which is exactly what the first
-    /// person to try it reported. At a quarter, 100% is 64, 200% is 128 and
-    /// 400% is 255, so each step of the slider is a step in the hand.
+    /// reference this test scales decides how much of the slider does anything
+    /// at all. It has been lowered twice for the same reason, and the second
+    /// time is worth writing down.
+    ///
+    /// At half scale, 200% already reached 255 and every step above it felt
+    /// identical -- which is exactly what the first person to try it reported.
+    /// A quarter, 64, fixed that for a slider that stopped at 400%.
+    ///
+    /// Then the ceiling became x10, and 64 saturated at x4 again: the top
+    /// three fifths of the slider could not be previewed. 25 reaches 250 at
+    /// x10, so the whole range is a range in the hand -- and it is far closer
+    /// to what a game actually asks. Measured over Bluetooth on 2026-09-10,
+    /// Beast of Reincarnation asked for 1, 7, 9, 22 and 42 of 255 across a
+    /// session. At 64 this pulse was some nine times whatever that title was
+    /// asking, which is why the button always felt strong while the game felt
+    /// thin, and why the button was a poor preview of it.
     ///
     /// It stays a reference and not a promise: a game that already asks for
     /// 255 cannot be made louder by any of this, and no test pulse can show
     /// that. What the pulse shows is the shape of the multiplier.
-    static let referenceRequest: Double = 64
+    static let referenceRequest: Double = 25
 
     /// Both motor bytes, saturated at 255 the way the driver saturates.
     ///

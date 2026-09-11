@@ -254,8 +254,14 @@ struct GameOptionsView: View {
                                 // "no vibration at 0%": it is off, and it says
                                 // so, because a number alone would read as a
                                 // very quiet pad rather than a silent one.
+                                // A multiplier and not a percentage, since the
+                                // ceiling became ten times. "1000%" reads as a
+                                // number that must be wrong; "x10" reads as
+                                // what it is, and the neutral point stays
+                                // obvious -- x1 is the game untouched, which is
+                                // the default and the honest setting.
                                 Text(gameOptions.dualSenseVibrationGain == 0 ? "Rumble strength: off"
-                                     : "Rumble strength \(Int(gameOptions.dualSenseVibrationGain))%")
+                                     : "Rumble strength \(DualSenseVibration.multiplierLabel(gameOptions.dualSenseVibrationGain))")
                                 Slider(value: $gameOptions.dualSenseVibrationGain,
                                        in: DualSenseVibration.gainRange,
                                        step: OptionAdjust.gainStep)

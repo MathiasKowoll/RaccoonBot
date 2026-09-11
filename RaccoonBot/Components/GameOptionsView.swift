@@ -293,14 +293,6 @@ struct GameOptionsView: View {
                             Toggle("Keep a HID trace", isOn: $gameOptions.hidTraceEnabled)
                                 .help("Keeps everything winebus says about the controller for this launch, in a dated file on the Desktop. For diagnosing a pad that does not rumble, is not seen, or costs frames -- read it with MacGameVideoFix's diagnostics/read-hid-trace.sh. It slows the game while it runs and the file grows to hundreds of megabytes, so turn it off again afterwards.")
                                 .optionFocus(.hidTrace, current: focus.current, shown: gamepad.showsFocus)
-                            // A diagnostic, and it lives beside the pad because
-                            // that is what it traces. Off by default and never
-                            // suggested: a trace is hundreds of megabytes and
-                            // costs the game frames of its own, which is the
-                            // one thing this section spent a day removing.
-                            Toggle("Keep a HID trace", isOn: $gameOptions.hidTraceEnabled)
-                                .help("Keeps everything winebus says about the controller for this launch, in a dated file on the Desktop. For diagnosing a pad that does not rumble, is not seen, or costs frames -- read it with MacGameVideoFix's diagnostics/read-hid-trace.sh. It slows the game while it runs and the file grows to hundreds of megabytes, so turn it off again afterwards.")
-                                .optionFocus(.hidTrace, current: focus.current, shown: gamepad.showsFocus)
                             // Always there, three lines tall, whether it is
                             // holding the invitation or the answer: a sentence
                             // that appears when the button is pressed would

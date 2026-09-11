@@ -45,7 +45,7 @@ struct OptionFocusTests {
     /// so this is the section being where it looks like it is.
     @Test func theControllerControlsAreOneRun() {
         let all = OptionFocus.visibleControls(for: windows)
-        let section: [OptionControl] = [.sdl, .hidraw, .padSeenAs, .vibration, .vibrationGain, .rumbleTest]
+        let section: [OptionControl] = [.sdl, .hidraw, .padSeenAs, .vibration, .vibrationGain, .rumbleTest, .hidTrace]
         let start = all.firstIndex(of: .sdl)
         #expect(start != nil)
         #expect(Array(all[start!..<(start! + section.count)]) == section)

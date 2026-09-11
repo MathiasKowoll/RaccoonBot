@@ -467,6 +467,23 @@ struct DualSenseRouteTests {
     /// A title nobody has told otherwise gets the pad as the game drives it,
     /// and the bottle gets the pair that means "nothing asked for". Which is
     /// 0 and 100, not 0 and 0: the driver reads an absent gain as 100.
+    /// A strength and a path are two questions, and this menu asked them as one
+    /// until mgvf-0020 made the combination nobody could express -- the game's
+    /// own path at a chosen strength -- the one worth having. The engine warns
+    /// when both are asked for, because its rewrite runs after the stamp and
+    /// silently wins; this is the half of that contradiction the launcher owns.
+    @Test func aStrengthDoesNotDragTheLegacyPathWithIt() {
+        #expect(DualSenseVibration.custom.modeValue == 0)
+        #expect(DualSenseVibration.stronger.modeValue == 1)
+        #expect(DualSenseVibration.asAsked.modeValue == 0)
+        #expect(DualSenseVibration.custom.gainValue(percent: 250) == 250)
+        // it still asks the driver for something, so the launcher writes it
+        #expect(DualSenseVibration.custom.changesAnything(percent: 250))
+        // and silence is still reachable, still without touching the path
+        #expect(DualSenseVibration.custom.gainValue(percent: 0) == 0)
+        #expect(DualSenseVibration.custom.changesAnything(percent: 0))
+    }
+
     @Test func theDefaultLeavesEveryPacketAlone() {
         #expect(DualSenseVibration.byDefault == .asAsked)
         #expect(DualSenseVibration.byDefault.changesAnything(percent: 100) == false)
@@ -497,7 +514,7 @@ struct DualSenseRouteTests {
     @Test func silenceAndLeavingItAloneAreWrittenDifferently() {
         let quiet = over([pad(SonyPads.dualSense, "Bluetooth")], .asItIs, vibration: .custom, percent: 0)
         #expect(vibration(quiet, SonyPads.dualSense)?.gain == 0)
-        #expect(vibration(quiet, SonyPads.dualSense)?.mode == 1,
+        #expect(vibration(quiet, SonyPads.dualSense)?.mode == 0,
                 "custom is the rewrite with the strength chosen by hand; at 0 the strength is silence")
         let alone = over([pad(SonyPads.dualSense, "Bluetooth")], .asItIs, vibration: .asAsked, percent: 100)
         #expect(vibration(alone, SonyPads.dualSense)?.gain == 100)
@@ -519,7 +536,8 @@ struct DualSenseRouteTests {
                 "the model that is not here gets the same choice, for when it is the one that arrives")
 
         let chosen = over([pad(SonyPads.dualSenseEdge, "Bluetooth")], .asItIs, vibration: .custom, percent: 200)
-        #expect(vibration(chosen, SonyPads.dualSenseEdge)?.mode == 1, "custom is stronger, by hand")
+        #expect(vibration(chosen, SonyPads.dualSenseEdge)?.mode == 0,
+                "custom carries a strength and nothing else: the path stays the game's own")
         #expect(vibration(chosen, SonyPads.dualSenseEdge)?.gain == 200)
 
         let alone = over([pad(SonyPads.dualSenseEdge, "Bluetooth")], .asItIs, vibration: .asAsked, percent: 150)
@@ -588,7 +606,10 @@ struct DualSenseRouteTests {
                                 let why: Comment = "\(pads.map(\.transport)) \(choice) \(percent) sdl \(sdl) tells \(tells) can \(canRewrite)"
                                 #expect(o.allSatisfy { $0.hidraw == 1 || ($0.vibrationMode == 0 && $0.vibrationGain == 100) }, why)
                                 #expect(o.allSatisfy { $0.vibrationGain != 0 || choice == .custom }, why)
-                                #expect(o.allSatisfy { $0.vibrationMode == 0 || (choice != .asAsked && canRewrite) }, why)
+                                // Only `stronger` rewrites the path now: a strength
+                                // is a strength, and asking for one stopped meaning
+                                // asking for the legacy motors on 2026-09-10.
+                                #expect(o.allSatisfy { $0.vibrationMode == 0 || (choice == .stronger && canRewrite) }, why)
                                 #expect(o.allSatisfy { canRewrite || ($0.vibrationMode == 0 && $0.vibrationGain == 100) }, why)
                             }
                         }
@@ -757,6 +778,7 @@ struct DualSenseRouteTests {
         #expect(at(.padSeenAs) < at(.vibration))
         #expect(at(.vibration) < at(.vibrationGain))
         #expect(at(.vibrationGain) < at(.rumbleTest))
+        #expect(at(.rumbleTest) < at(.hidTrace), "the trace is last: it is the one control here that is not about how the pad behaves")
         #expect(at(.ue4Hack) < at(.vibration), "the controller section is its own, and it comes after")
         // A native title has no winebus at all, and none of this is offered.
         #expect(OptionFocus.visibleControls(for: OptionPanelState(isNative: true, vibrationGainShown: true))

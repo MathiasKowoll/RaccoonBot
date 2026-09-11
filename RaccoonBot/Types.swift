@@ -169,6 +169,9 @@ enum MetalHudAlignment: String, CaseIterable {
 struct GameOptionsData: Codable, Equatable { // this is used for reading saved properties
     var cxGraphicsBackend: String?
     var wineMSync: Bool?
+    /// Whether this launch keeps a HID trace. A diagnostic, off by default and
+    /// saved per title only so that turning it on survives the panel closing.
+    var hidTraceEnabled: Bool?
     var mtlHudEnabled: Bool?
     /// How much the Metal HUD should show: "fps", "normal" or "extended".
     var mtlHudDetail: String?
@@ -258,6 +261,9 @@ struct GameOptionsData: Codable, Equatable { // this is used for reading saved p
 class GameOptions: ObservableObject { // this is used as form state
     @Published var cxGraphicsBackend: String
     @Published var wineMSync: Bool
+    /// Keep a HID trace of this launch. Not in the initialiser, like the other
+    /// settings added after it: every existing call site keeps its meaning.
+    @Published var hidTraceEnabled: Bool = false
     @Published var mtlHudEnabled: Bool
     /// How much the Metal HUD should show.
     ///
@@ -341,6 +347,7 @@ class GameOptions: ObservableObject { // this is used as form state
         let foldedBackend = pickableBackend(data.cxGraphicsBackend)
         self.cxGraphicsBackend = foldedBackend
         self.wineMSync = data.wineMSync ?? true
+        self.hidTraceEnabled = data.hidTraceEnabled ?? false
         self.mtlHudEnabled = data.mtlHudEnabled ?? false
         self.mtlHudDetail = data.mtlHudDetail ?? MetalHudDetail.fpsOnly.rawValue
         self.mtlHudOpacity = data.mtlHudOpacity ?? 1.0
@@ -388,6 +395,7 @@ class GameOptions: ObservableObject { // this is used as form state
     func importAutoConfig(data: GameOptionsData) {
         if let v = data.cxGraphicsBackend { self.cxGraphicsBackend = v }
         if let v = data.wineMSync { self.wineMSync = v }
+        if let v = data.hidTraceEnabled { self.hidTraceEnabled = v }
         if let v = data.mtlHudEnabled { self.mtlHudEnabled = v }
         if let v = data.mtlHudDetail { self.mtlHudDetail = v }
         if let v = data.mtlHudOpacity { self.mtlHudOpacity = v }

@@ -178,12 +178,23 @@ nonisolated enum DualSenseVibration: String, CaseIterable {
     /// motors, and the driver signs the packet again so the pad accepts it.
     /// The strength is what the game asked for; only the path changes.
     case stronger = "stronger"
-    /// The same rewrite, with the strength chosen here instead. It is the
+    /// The game's own choice of path, at the strength chosen here. It is the
     /// only choice the slider belongs to, which is why there are three and
     /// not two plus a number that sometimes applies. At 0 per cent it is
     /// silence -- how somebody who does not want the pad to buzz turns it
     /// off for every game at once, including the ones with no setting of
     /// their own -- so no fourth entry has to say the same thing.
+    ///
+    /// IT USED TO FORCE THE LEGACY PATH TOO, and stopped on 2026-09-10. The
+    /// menu was built when that rewrite WAS how a pad was made to hit harder,
+    /// so "stronger" and "stronger, by this much" were one idea with a number
+    /// attached. They are two ideas: which way the pad is asked to move, and
+    /// how hard. Tying them meant nobody could ask for the game's own path at
+    /// a chosen strength -- and once mgvf-0020 let the motors ride the game's
+    /// packet at its own rate, that became the combination worth having. The
+    /// engine's mgvf-0021 warns when both are asked for, because the rewrite
+    /// runs after the stamp and silently wins; this is the half of that
+    /// contradiction the launcher owns.
     case custom = "custom"
 
     /// What a title gets when nobody has said: the pad as the game drives it.
@@ -208,8 +219,11 @@ nonisolated enum DualSenseVibration: String, CaseIterable {
     /// time he saw the two together.
     var usesGain: Bool { self == .custom }
 
-    /// What goes into "VibrationMode": 1 only where the path is rewritten.
-    var modeValue: UInt32 { self == .asAsked ? 0 : 1 }
+    /// What goes into "VibrationMode": 1 only where the path is rewritten,
+    /// which is `stronger` alone. `custom` carries a strength and leaves the
+    /// path to the game -- see its own note for why those stopped being one
+    /// question.
+    var modeValue: UInt32 { self == .stronger ? 1 : 0 }
 
     /// What goes into "VibrationGain", given the percentage this title asks
     /// for. `off` is 0 and nothing else; `asAsked` is 100, which the driver
@@ -679,7 +693,7 @@ nonisolated enum DualSenseRoute {
             // The saturation is worth one clause: somebody who asks for 400%
             // and feels nothing new in a game already asking for 255 should
             // read why here rather than conclude the option is broken.
-            return "the motors: the legacy motors at \(gain)% of what the game asks for -- it saturates at the top of the range, so a game already asking for everything cannot be made louder"
+            return "the motors: \(gain)% of what the game asks for, on the path the game chose -- it saturates at the top of the range, so a game already asking for everything cannot be made louder"
         case .asAsked:
             return "the motors: whatever the game asks for, on the path it chose, untouched"
         }

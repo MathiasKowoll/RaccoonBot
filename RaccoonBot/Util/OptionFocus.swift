@@ -42,6 +42,10 @@ nonisolated enum OptionControl: String, CaseIterable, Hashable {
     /// Buzzes the attached pad now, with what is on screen. A button, not a
     /// setting: nothing is written and nothing is read back.
     case rumbleTest
+    /// Keeps a HID trace of the next launch. A diagnostic, last in the section
+    /// because it is the one control here that is not about how the pad
+    /// behaves.
+    case hidTrace
     // DXMT
     case dxmtCap, dxmtMaxFPS, dxmtMetalFX, dxmtUpscale
     // Metal HUD
@@ -161,6 +165,7 @@ nonisolated struct OptionFocus: Equatable {
             list += [.sdl, .hidraw, .padSeenAs, .vibration]
             if state.vibrationGainShown { list.append(.vibrationGain) }
             list.append(.rumbleTest)
+            list.append(.hidTrace)
         }
         if state.backend == "dxmt" {
             list.append(.dxmtCap)

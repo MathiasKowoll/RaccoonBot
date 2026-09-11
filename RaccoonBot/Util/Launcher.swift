@@ -312,6 +312,19 @@ func copyMoltenVK(cxAppPath: String, vulkanLibID: String) throws -> Void {
 /// and the game inherits the running launcher's environment instead: opened
 /// from the Epic panel, say, without any of this. That is the one case in
 /// which the game's options do not reach it.
+/// Where a HID trace of this launch is kept.
+///
+/// The Desktop, named by the clock, the same shape
+/// MacGameVideoFix's diagnostics/capture-hid-trace.sh uses -- so the reader
+/// that answers these logs takes either without being told which made it.
+func hidTraceLogPath() -> String {
+    let f = DateFormatter()
+    f.dateFormat = "HHmmss"
+    return FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Desktop/hid-\(f.string(from: Date())).log")
+        .path(percentEncoded: false)
+}
+
 func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, steamExePath: String, options: GameOptions? = nil, appExeURL: URL? = nil, launcherURI: String? = nil) async throws -> Void {
     console.log("options: \(options.debugDescription)")
     if let vulkanLibID = options?.vulkanLib {
@@ -501,7 +514,28 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
     // to carry the redirection in its own configuration -- an accident to
     // depend on, not a design.
     let bottleRoot = URL(string: selectedBottle)?.deletingLastPathComponent().path(percentEncoded: false) ?? ""
-    let wineEnvs = "CX_BOTTLE_PATH=\"\(bottleRoot)\" CX_ROOT=\"\(cxAppPath)/Contents/SharedSupport/CrossOver\" WINEPREFIX=\"\(URL(string: selectedBottle)?.path ?? "")\" WINEDEBUG=-all WINEMSYNC=\(options!.wineMSync ? "1" : "0")"
+    // CX_DEBUGMSG, not WINEDEBUG, and it took a whole session to learn why.
+    // The command below goes through CrossOver's bin/wine, which is a Perl
+    // script that BUILDS the environment of everything it starts and feeds
+    // WINEDEBUG from its own CX_DEBUGMSG:
+    //
+    //     $ENV{WINEDEBUG} = $opt_debugmsg if (defined $opt_debugmsg);
+    //
+    // So a WINEDEBUG set here never reaches the wineserver it forks, and so
+    // never reaches winedevice.exe -- which is where winebus lives and the only
+    // process whose traces answer a controller question. What that failure
+    // looks like is a log full of msync and MoltenVK lines and not one line of
+    // trace:hid: output flowing, channel off, every count reading as "the pad
+    // did nothing". The WINEDEBUG below is kept because it costs nothing and
+    // would be read if this ever stopped going through the Perl script.
+    //
+    // "-all" first and then "+hid": asking for +hid alone leaves unwind,
+    // module, process, seh and loaddll on as well -- 1.6 million lines in under
+    // two minutes, a third of them nothing to do with the pad, and the game too
+    // slow to reach the thing being investigated. The trace would change what
+    // it measures.
+    let traceChannels = options!.hidTraceEnabled ? "-all,+timestamp,+hid" : "-all"
+    let wineEnvs = "CX_BOTTLE_PATH=\"\(bottleRoot)\" CX_ROOT=\"\(cxAppPath)/Contents/SharedSupport/CrossOver\" WINEPREFIX=\"\(URL(string: selectedBottle)?.path ?? "")\" WINEDEBUG=\(traceChannels) CX_DEBUGMSG=\(traceChannels) WINEMSYNC=\(options!.wineMSync ? "1" : "0")"
     
 //    try cpyd8d9DLLs(to: bottleURL, enable: options!.dx9PatchEnabled)
     
@@ -559,6 +593,20 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
     // Reduced precision itself stays: on 27 it is FEX_X87REDUCEDPRECISION and
     // on 26 ROSETTA_X87_PATH, both environment, neither needing a bundle.
         command = "env \(EnvAssignments.removalArguments(options!.envVariables))\(getInlineEnvs(from: options!, cxAppPath: cxAppPath) + wineEnvs) \(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \(gameLaunchCommand) \(arguments)"
+
+        // The trace goes to a file rather than to this application's console.
+        // A +hid session is hundreds of thousands of lines and the console is
+        // where a person reads what the launcher decided; drowning it would
+        // cost more than the trace is worth. The redirect also outlives this
+        // command: Steam forks and returns, and the descriptor stays open in
+        // the processes that keep writing, which is what makes the log cover
+        // the whole session and not just the launch.
+        if options!.hidTraceEnabled {
+            let log = hidTraceLogPath()
+            command += " > \"\(log)\" 2>&1"
+            console.log("HID trace: keeping this session's controller traffic in \(log)")
+            console.log("read it with MacGameVideoFix's diagnostics/read-hid-trace.sh")
+        }
     
     #if DEBUG
     console.log(command)

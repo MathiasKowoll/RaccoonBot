@@ -235,7 +235,7 @@ struct GameOptionsView: View {
                                      value: $gameOptions.dualSenseVibration)
                                 .pickerStyle(.menu)
                                 .frame(width: Self.controllerControlWidth, alignment: .leading)
-                                .help("What this game's rumble does. A preference and not a repair -- the default sends every packet exactly as the game wrote it. \"Stronger motors\" rewrites the game's choice of the haptic vibration path to the legacy motors: a title measured here asks for the full 255 and still feels soft, and on a six-pulse ladder the legacy motors at the same value felt stronger to one person here, which is a hand and not a meter. \"Custom strength\" at 0% silences the pad for this title whatever the game asks, including a game with no setting of its own. The percentage saturates at the top of the range, so a game already asking for everything cannot be made louder. It needs the engine controller set from Options, applies to a DualSense on either transport, and takes effect when the pad next arrives: start with Steam closed, or reconnect the pad.")
+                                .help("What this game's rumble does. A preference and not a repair -- the default sends every packet exactly as the game wrote it. \"Stronger motors\" rewrites the game's choice of the haptic vibration path to the legacy motors: a title measured here asks for the full 255 and still feels soft, and on a six-pulse ladder the legacy motors at the same value felt stronger to one person here, which is a hand and not a meter. \"Custom strength\" scales what the game asks without changing the path it chose, and at 0% it silences the pad for this title whatever the game asks, including a game with no setting of its own. The percentage saturates at the top of the range, so a game already asking for everything cannot be made louder. It needs the engine controller set from Options, applies to a DualSense on either transport, and takes effect when the pad next arrives: start with Steam closed, or reconnect the pad.")
                                 .optionFocus(.vibration, current: focus.current, shown: gamepad.showsFocus)
                                 .popover(isPresented: Binding(get: { menu?.control == .vibration },
                                                               set: { if !$0 { menu = nil } }),
@@ -285,6 +285,22 @@ struct GameOptionsView: View {
                             Button(rumbleRunning ? "Buzzing..." : "Test rumble now") { runRumbleTest() }
                                 .disabled(rumbleRunning)
                                 .optionFocus(.rumbleTest, current: focus.current, shown: gamepad.showsFocus)
+                            // A diagnostic, and it sits beside the pad because
+                            // that is what it traces. Off by default and never
+                            // suggested: a trace is hundreds of megabytes and
+                            // costs the game frames of its own, which is the
+                            // one thing this section spent a day removing.
+                            Toggle("Keep a HID trace", isOn: $gameOptions.hidTraceEnabled)
+                                .help("Keeps everything winebus says about the controller for this launch, in a dated file on the Desktop. For diagnosing a pad that does not rumble, is not seen, or costs frames -- read it with MacGameVideoFix's diagnostics/read-hid-trace.sh. It slows the game while it runs and the file grows to hundreds of megabytes, so turn it off again afterwards.")
+                                .optionFocus(.hidTrace, current: focus.current, shown: gamepad.showsFocus)
+                            // A diagnostic, and it lives beside the pad because
+                            // that is what it traces. Off by default and never
+                            // suggested: a trace is hundreds of megabytes and
+                            // costs the game frames of its own, which is the
+                            // one thing this section spent a day removing.
+                            Toggle("Keep a HID trace", isOn: $gameOptions.hidTraceEnabled)
+                                .help("Keeps everything winebus says about the controller for this launch, in a dated file on the Desktop. For diagnosing a pad that does not rumble, is not seen, or costs frames -- read it with MacGameVideoFix's diagnostics/read-hid-trace.sh. It slows the game while it runs and the file grows to hundreds of megabytes, so turn it off again afterwards.")
+                                .optionFocus(.hidTrace, current: focus.current, shown: gamepad.showsFocus)
                             // Always there, three lines tall, whether it is
                             // holding the invitation or the answer: a sentence
                             // that appears when the button is pressed would
@@ -669,6 +685,7 @@ struct GameOptionsView: View {
         case .mtlHud:       return flip(\.mtlHudEnabled)
         case .advertiseAVX: return flip(\.advertiseAVX)
         case .msync:        return flip(\.wineMSync)
+        case .hidTrace:     return flip(\.hidTraceEnabled)
         case .sdl:          return flip(\.enableSDL)
         case .hidraw:       return flip(\.disableHidraw)
         case .xinputRumble: return flip(\.xinputRumble)

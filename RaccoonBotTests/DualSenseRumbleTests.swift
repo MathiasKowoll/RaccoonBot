@@ -128,7 +128,7 @@ struct DualSenseRumbleTests {
         let report = DualSenseRumble.bluetoothReport(vibration: .custom, percent: 0, sequence: 1)
         #expect(report[5] == 0)
         #expect(report[6] == 0)
-        #expect(report[3] == 0x03, "still a valid request, for nothing")
+        #expect(report[3] == 0x02, "still a valid request, for nothing -- the haptic path custom now takes")
         #expect(DualSenseRumble.motor(vibration: .custom, percent: 0) == 0)
     }
 
@@ -150,10 +150,10 @@ struct DualSenseRumbleTests {
         let report = DualSenseRumble.usbReport(vibration: .custom, percent: 200)
         #expect(report.count == 48)
         #expect(report[0] == 0x02)
-        #expect(report[1] == 0x03, "flag0, one byte after the id this time")
+        #expect(report[1] == 0x02, "flag0, one byte after the id this time -- custom takes the haptic path")
         #expect(report[3] == 128, "right motor")
         #expect(report[4] == 128, "left motor")
-        #expect(report[39] == 0x00, "byte 38 of the common block")
+        #expect(report[39] == 0x04, "byte 38 of the common block: the haptic path's own bit")
         #expect(report[40...].allSatisfy { $0 == 0 }, "and nothing after it -- no CRC on USB")
     }
 
@@ -172,8 +172,8 @@ struct DualSenseRumbleTests {
     @Test func onlyTheRewriteAsksForTheLegacyMotors() {
         #expect(DualSenseRumble.path(for: .stronger) == .legacyMotors)
         #expect(DualSenseRumble.path(for: .asAsked) == .haptic)
-        #expect(DualSenseRumble.path(for: .custom) == .legacyMotors,
-                "custom is stronger with the strength chosen by hand, so it takes the same path")
+        #expect(DualSenseRumble.path(for: .custom) == .haptic,
+                "a strength stopped dragging the legacy path with it on 2026-09-10: custom scales what the game asks on the path the game chose, and the button has to feel like the game will")
         #expect(DualSenseRumble.Path.legacyMotors.flag0 == 0x03)
         #expect(DualSenseRumble.Path.legacyMotors.flag2 == 0x00)
         #expect(DualSenseRumble.Path.haptic.flag0 == 0x02)

@@ -235,7 +235,7 @@ struct GameOptionsView: View {
                                      value: $gameOptions.dualSenseVibration)
                                 .pickerStyle(.menu)
                                 .frame(width: Self.controllerControlWidth, alignment: .leading)
-                                .help("What this game's rumble does. A preference and not a repair -- the default sends every packet exactly as the game wrote it. \"Stronger motors\" rewrites the game's choice of the haptic vibration path to the legacy motors: a title measured here asks for the full 255 and still feels soft, and on a six-pulse ladder the legacy motors at the same value felt stronger to one person here, which is a hand and not a meter. \"Custom strength\" scales what the game asks without changing the path it chose, and at 0% it silences the pad for this title whatever the game asks, including a game with no setting of its own. The percentage saturates at the top of the range, so a game already asking for everything cannot be made louder. It needs the engine controller set from Options, applies to a DualSense on either transport, and takes effect when the pad next arrives: start with Steam closed, or reconnect the pad.")
+                                .help("Which way the pad is asked to vibrate. A preference and not a repair: both work, and they feel different rather than better or worse. \"Modern\" is the DualSense's own haptic path, the one Sony's library asks for on every packet -- finer, and what a title gets unless you say otherwise. \"Legacy\" asks the pad to imitate a pair of rotating-mass motors instead, which is clearly harder at the same command: measured by running one Sony title twice with nothing changed but this. Each keeps its own strength, so switching lands where you left it. Strength scales what the game asks; it saturates, so a game already asking for everything cannot be made louder, and at the bottom of the bar the pad stays silent for this title whatever the game asks. It needs the engine controller set from Options, applies to a DualSense on either transport, and takes effect when the pad next arrives: start with Steam closed, or reconnect the pad.")
                                 .optionFocus(.vibration, current: focus.current, shown: gamepad.showsFocus)
                                 .popover(isPresented: Binding(get: { menu?.control == .vibration },
                                                               set: { if !$0 { menu = nil } }),
@@ -268,8 +268,21 @@ struct GameOptionsView: View {
                                 // legacy one is harder at every value, so a
                                 // shared number would be a shock, not a change
                                 // of character.
+                                // NO NUMBER ON THE BAR, on purpose. It used to
+                                // read "Rumble strength x4", and a multiplier
+                                // invites arithmetic that does not survive
+                                // contact with the pad: the two paths saturate
+                                // at different points, a title that already asks
+                                // for 255 cannot be multiplied any higher, and
+                                // x10 and x4 send the identical byte on more
+                                // than half the packets of the session measured
+                                // here. A number that is right about the request
+                                // and wrong about the pad is worse than no
+                                // number. The one end worth naming is the
+                                // bottom, because silence is a state and not
+                                // just a small amount.
                                 Text(gameOptions[keyPath: vibrationChoice.gainKeyPath] == 0 ? "Rumble strength: off"
-                                     : "Rumble strength \(DualSenseVibration.multiplierLabel(gameOptions[keyPath: vibrationChoice.gainKeyPath]))")
+                                     : "Rumble strength")
                                 Slider(value: $gameOptions[dynamicMember: vibrationChoice.gainKeyPath],
                                        in: DualSenseVibration.gainRange,
                                        step: OptionAdjust.gainStep)

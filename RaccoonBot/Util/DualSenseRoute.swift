@@ -272,10 +272,29 @@ nonisolated enum DualSenseVibration: String, CaseIterable {
         self == .stronger ? \GameOptions.dualSenseStrongGain : \GameOptions.dualSenseVibrationGain
     }
 
+    /// The two names in the menu, and they name the PATH rather than describe
+    /// an outcome.
+    ///
+    /// "As the game asks" and "Stronger motors" were both true and both
+    /// unhelpful. The first described where the choice came from, which stopped
+    /// meaning anything once the driver had a default of its own; the second
+    /// promised a result, and a promise about how hard a pad feels is a thing a
+    /// menu cannot keep. "Modern" and "Legacy" are what the two are: the pad's
+    /// own haptic path, and the rotating-mass motors it imitates for software
+    /// that predates it. Somebody who tries both knows within a second which
+    /// one they want, and neither name has told them what to expect.
+    ///
+    /// THE RAW VALUES DO NOT MOVE. "as-asked" and "stronger" are in every saved
+    /// record on every machine, and a rename that silently reset those would
+    /// turn somebody's chosen path back to the default behind their back --
+    /// which is the whole reason `pickable` folds the two dead entries instead
+    /// of dropping them. The case names follow the raw values for the same
+    /// reason, so what is stored and what is written here stay legible as one
+    /// thing.
     var label: String {
         switch self {
-        case .asAsked: return "As the game asks"
-        case .stronger: return "Stronger motors"
+        case .asAsked: return "Modern"
+        case .stronger: return "Legacy"
         }
     }
 

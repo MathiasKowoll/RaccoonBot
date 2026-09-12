@@ -58,7 +58,7 @@
 		</data>
 		<key>Resources/engine-controller-built-for.json</key>
 		<data>
-		QnjwyXOOtMojtSiw+9Uo8pr+UBw=
+		gWoJ2zDbuMoM4J8vEeX6gR75myE=
 		</data>
 		<key>Resources/engine-controller-hidclass.sys</key>
 		<data>
@@ -82,23 +82,23 @@
 		</data>
 		<key>Resources/engine-controller-xinput1_1.dll</key>
 		<data>
-		ppFUDKhS7ExG+md0yhgbojPyFvU=
+		w5JKMQcHf9XplzA30Wkhq9N5bQg=
 		</data>
 		<key>Resources/engine-controller-xinput1_2.dll</key>
 		<data>
-		tvjnNNpg6o+0vPZKmHiuhmRBSIg=
+		rOpMoUCQ5/q5bLt+8VeAiZN9+CA=
 		</data>
 		<key>Resources/engine-controller-xinput1_3.dll</key>
 		<data>
-		1U/Itwbh05ylIynEanKEVPtyVok=
+		YYkyrjuZDcff2bVzyXgNpovc6eo=
 		</data>
 		<key>Resources/engine-controller-xinput1_4.dll</key>
 		<data>
-		PiDRI6E2nMaU1FwdWiaWXNzUOLc=
+		mrr/vOZ0jDzDjJ3uP6K0aSF5hrM=
 		</data>
 		<key>Resources/engine-controller-xinputuap.dll</key>
 		<data>
-		cuyhJrSWxfY7Up3gSAM3ZSr3j54=
+		DtkjufAUKUunl0WHoweKOK/u4Ac=
 		</data>
 		<key>Resources/engine-winegstreamer-stock.dll</key>
 		<data>
@@ -238,7 +238,7 @@
 		</data>
 		<key>Resources/manifest.json</key>
 		<data>
-		nr2B55WxvHn7Ri50fGCmdeH2EtU=
+		TapcdkSZoAF+s2DHcChgWwwnZUA=
 		</data>
 		<key>Resources/ng3-THIRD-PARTY-LICENCES.md</key>
 		<data>
@@ -374,7 +374,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			4OU74632BtTdH1hVhLBQUlFhn+KX2OzglU386nspV2E=
+			wckIMfgknfAtZ0Z5ogJvyWlm2Ld3CWvoCH4reTWWREg=
 			</data>
 		</dict>
 		<key>Resources/engine-controller-hidclass.sys</key>
@@ -416,35 +416,35 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			MNLNfXWJPX2uqLN9TFqSsR01jQlgQAfJxhwsPsqzvQY=
+			ld+pKTYiCVCZUGsJRoCdZj0NAVSLVDc8VT9qCdhQhis=
 			</data>
 		</dict>
 		<key>Resources/engine-controller-xinput1_2.dll</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			Ig82Al3wt4hJMvffSNvhE6FbtSstQjSTUrZscqB2rYs=
+			CRnxkUNuiawvEr/+x9tJ6QvFODG9jn23VgxbBl9e7mE=
 			</data>
 		</dict>
 		<key>Resources/engine-controller-xinput1_3.dll</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			qzjkKk2ejd0/mU8GE5VcJtwszaqcK0ey5RvkFfsZFYo=
+			SH1ORdqyRE19c7WU1Aj8iRrvSQivVDJpYnnMLfLcaR4=
 			</data>
 		</dict>
 		<key>Resources/engine-controller-xinput1_4.dll</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			HtkZDYR/2rG8rX/qyfNAs8OBSU6x7klsZzkcsrDKAU4=
+			yZ1prLCIwHW+Q1+kV6ixnWmRbcNY5aJvFJ4hchV5X0c=
 			</data>
 		</dict>
 		<key>Resources/engine-controller-xinputuap.dll</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			lFCeETXhVBBr/o+H4lwhRT+j+w+pozfuC6bWW9YG1eg=
+			7zqUjt6iJstd9fiCHyOJuqFn1g12YtxY+NYB1NxZu20=
 			</data>
 		</dict>
 		<key>Resources/engine-winegstreamer-stock.dll</key>
@@ -689,7 +689,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			u8euc0yowETIsuj38EUwO275IbarGAtRdB8yeHMkIv8=
+			0SK88yALNoz6EUEzhMurGA7PbAK+peNufhL/S/KchU8=
 			</data>
 		</dict>
 		<key>Resources/ng3-THIRD-PARTY-LICENCES.md</key>

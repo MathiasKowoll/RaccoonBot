@@ -106,3 +106,47 @@ struct MachineIdentityTests {
         #expect(old.wineMSync == true)
     }
 }
+
+/// The catalogue's own stamp: which Mac the shipped fixes were verified on.
+struct CatalogVerifiedOnTests {
+
+    /// The bundled manifest carries it, and it names a machine rather than
+    /// being an empty string somebody forgot to fill in.
+    @Test func theShippedCatalogueSaysWhereItWasVerified() throws {
+        let payload = try #require(MGVFBundle.embeddedDirectory)
+        let data = try Data(contentsOf: payload.appendingPathComponent("manifest.json"))
+        let manifest = try JSONDecoder().decode(MGVFManifest.self, from: data)
+        let stamp = try #require(manifest.verifiedOn, "the catalogue has to say what it was verified on")
+        #expect(stamp.contains("Apple M"), "an Apple Silicon Mac, named")
+        #expect(stamp.contains("macOS"), "and the OS, because a fix can depend on it")
+    }
+
+    /// The schema does NOT move for this. A reader that only knows schema 3
+    /// keeps working, which is the whole reason the field is optional.
+    @Test func theSchemaDidNotMove() throws {
+        let payload = try #require(MGVFBundle.embeddedDirectory)
+        let data = try Data(contentsOf: payload.appendingPathComponent("manifest.json"))
+        #expect(try JSONDecoder().decode(MGVFManifest.self, from: data).schema == 3)
+    }
+
+    /// A manifest written before the field existed still decodes, with nil.
+    /// This is the property that lets an old bundle be read by a new build.
+    @Test func aCatalogueWithoutTheStampStillDecodes() throws {
+        let json = #"{"schema":3,"version":"v1","commit":"abc","games":[]}"#
+        let manifest = try JSONDecoder().decode(MGVFManifest.self, from: Data(json.utf8))
+        #expect(manifest.verifiedOn == nil)
+        #expect(manifest.schema == 3)
+    }
+
+    /// And the controller set is listed, which it was not in any manifest this
+    /// project ever generated until the Perl precedence bug behind it was
+    /// found: `grep BLOCK LIST` had swallowed the condition that followed.
+    @Test func theControllerSetIsInTheCatalogue() throws {
+        let payload = try #require(MGVFBundle.embeddedDirectory)
+        let data = try Data(contentsOf: payload.appendingPathComponent("manifest.json"))
+        let raw = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let optional = try #require(raw["engineOptional"] as? [[String: Any]],
+                                    "the controller set is an optional engine set and has to be listed")
+        #expect(optional.contains { $0["id"] as? String == "controller" })
+    }
+}

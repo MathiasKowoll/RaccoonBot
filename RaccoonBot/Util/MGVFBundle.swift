@@ -263,6 +263,32 @@ struct MGVFManifest: Codable {
     /// building the interface.
     let scopeWarning: String?
 
+    /// The Mac every entry in this catalogue was verified on.
+    ///
+    /// A configuration that makes a game playable is a claim, and a claim
+    /// without the machine behind it is what made ProtonDB useless. This is
+    /// that machine, as one line of prose rather than a structure, because it
+    /// is read by a person and not matched by a comparator.
+    ///
+    /// ON THE CATALOGUE AND NOT ON A TITLE, because every entry was measured on
+    /// the same Mac -- one fact, not nineteen. The day records arrive from a
+    /// second machine it belongs on the record, and that is the change that
+    /// should move it.
+    ///
+    /// Optional and a `String`, which together are the whole reason this does
+    /// not break anything: a manifest written before it existed decodes with
+    /// nil, and the worst a malformed value can do is be a different string.
+    /// An object with required fields here could fail the decode and take the
+    /// entire catalogue down with it.
+    ///
+    /// `var` with a default where every neighbour is a plain `let`, and the odd
+    /// one out on purpose: a defaulted property keeps its place in the
+    /// synthesised memberwise initialiser, so the three `MGVFManifest(...)`
+    /// call sites in the tests go on compiling without being handed a value
+    /// they have no opinion about. A `let` with no default made all three a
+    /// compile error the moment this was added.
+    var verifiedOn: String? = nil
+
     /// Files that belong to the engine rather than to any title.
     ///
     /// Deliberately not an entry under `games`: nothing about it is per-title,

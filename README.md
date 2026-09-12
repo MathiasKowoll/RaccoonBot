@@ -48,8 +48,8 @@ decoder for the format, and the game either plays audio over a blank picture or
 exits. RaccoonBot copies the missing decoder into your patched CrossOver and
 applies per-title fixes where a decoder alone is not enough.
 
-**Installs what is missing.** It reports whether GStreamer is installed and
-which version, and it can apply every fix your library needs in one pass.
+**Installs what is missing.** It says whether an engine has the decoders it
+needs, and it can apply every fix your library needs in one pass.
 
 **Tells you before you are surprised.** A title that needs its fix is marked in
 the library and warned about *before* it launches, not after the cutscene fails.
@@ -62,7 +62,7 @@ the library and warned about *before* it launches, not after the cutscene fails.
 |---|---|
 | macOS | **15 or later**, Apple Silicon. The build targets `arm64` only |
 | [CrossOver](https://www.codeweavers.com/crossover) | 26.x or 27.x. You buy and install it yourself; RaccoonBot does not include it |
-| [GStreamer](https://gstreamer.freedesktop.org/data/pkg/osx/1.24.13/) | **1.24.13** exactly, the universal macOS runtime. It is where the decoder is taken from when CrossOver is patched — needed for Nioh, Nioh 2, Persona 5 Strikers, Returnal, Ghostwire Tokyo and the WMV/VC-1 titles |
+| ~~GStreamer~~ | **No longer required.** Until 0.2.0 the decoders were taken from a GStreamer the user had to install. They travel inside RaccoonBot now, so there is nothing to install and nothing to keep at a particular version |
 | Steam | Installed inside a RaccoonBot bottle, and signed in |
 
 D3DMetal and the Wine components for the 32-bit path come with RaccoonBot and
@@ -120,9 +120,9 @@ same page appears with an Install button instead.
 
 ![Application settings](docs/images/03-app-settings.webp)
 
-This is where you point RaccoonBot at CrossOver, choose a bottle, and see
-whether GStreamer is installed and current. **Patch all** applies every fix your
-installed library needs in one pass — it checks each title is really there
+This is where you point RaccoonBot at CrossOver, choose a bottle, see whether an
+engine has its decoders, and install the controller set. **Patch all** applies
+every fix your installed library needs in one pass — it checks each title is really there
 first, and skips anything you have chosen to leave alone.
 
 > **RaccoonBot keeps its own bottles.** They live in
@@ -144,11 +144,14 @@ known to need, in one action.
 
 ## The fixes
 
-RaccoonBot downloads a catalogue from
-[MacGameVideoFix](https://github.com/MathiasKowoll/MacGameVideoFix) at run time —
-currently **17 titles** across **11 installers** — and verifies its checksum
-before unpacking. It is not bundled, so a fix can ship without a new release of
-the application.
+RaccoonBot carries [MacGameVideoFix](https://github.com/MathiasKowoll/MacGameVideoFix)
+**inside the application** and runs it from there — a catalogue of currently
+**19 titles** across **12 installers**. Nothing is downloaded at run time.
+
+It used to be fetched, and being bundled is the point of the change: two copies
+that can silently disagree is worse than one copy that ships with the
+application. A fix now needs a new release, and in exchange what you have is
+what was tested.
 
 ### The codecs
 
@@ -157,9 +160,16 @@ ships everything it needs except one plugin: **`libgstlibav`**, which is where
 VC-1, WMV, WMA and software VP9 come from. Without it those cutscenes play their
 sound over a blank picture.
 
-RaccoonBot copies it, and the FFmpeg libraries it needs, out of your own
-GStreamer install and into the patched CrossOver while it is patching it.
-Anything already there is kept as `.orig`, so the engine can be put back.
+RaccoonBot **carries twelve files itself** — three plugins and the nine
+libraries they need — and copies them into the patched CrossOver while it is
+patching it. Each is verified against a recorded sha256 before it goes in, and
+anything already there is kept as `.orig`, so the engine can be put back.
+
+They were taken out of a user's own GStreamer install until 0.2.0. Shipping them
+makes this application a redistributor of other people's LGPL and BSD binaries,
+which is a real obligation and not a formality: `CODEC-LICENCES.md` travels with
+them, names every file, gives its hash and says where the corresponding source
+is. Read it before passing these on.
 
 Inside the engine rather than beside it, on purpose. The plugin then binds to
 the GStreamer that engine already carries, and there is never a second core in
@@ -188,6 +198,44 @@ fixes are not interchangeable:
 picture, because the luma and chroma planes are handled separately.
 
 ---
+
+## Controllers
+
+A PlayStation pad under CrossOver used to be half a pad: connect a DualSense by
+cable and it rumbled in every game, connect the same pad by Bluetooth and it
+never rumbled in any of them, and the PS button and the touchpad went quiet too.
+It is none of the things people blame — the pad speaks a different protocol on
+each transport and **silently ignores the wrong one**, and nothing under Wine
+ever told Windows which transport it was on.
+
+RaccoonBot installs an engine set that does, from **Options**. With it a pad
+behaves like a PlayStation pad on either transport: PlayStation glyphs,
+touchpad, PS button, adaptive triggers and rumble. The pad is never replaced,
+wrapped or hidden — it keeps its own report descriptor — so nothing that read it
+before reads anything different now.
+
+**And rumble in games that have never heard of a DualSense.** Most Windows games
+ask XInput for "controller 1" and expect an Xbox pad; XInput had no motors to
+offer, because a DualSense does not keep its motors where an Xbox pad does. The
+set offers them, and it costs nothing in frames: a Bluetooth link to a pad
+carries about sixty-five reports a second, so instead of adding packets the
+motors ride inside one the game is already sending. It is **per title**, in the
+game's options panel, because a game that drives the pad itself does not need it.
+
+The same panel carries the rest per title: which of the pad's two vibration
+paths to ask for — **Modern**, the pad's own, finer; or **Legacy**, an imitation
+of rotating-mass motors, harder at the same command — a strength for each, and a
+HID trace for anyone reporting a controller problem.
+
+The engine patches, what each one is for and what was measured on it are in
+[MacGameVideoFix](https://github.com/MathiasKowoll/MacGameVideoFix), and the
+same set is published on its own as
+[MacGamePadFix](https://github.com/MathiasKowoll/MacGamePadFix) for people who
+want the controller half and nothing else.
+
+> Everything above was measured on one machine, with a DualSense and a DualSense
+> Edge. Which of the two vibration paths feels better is one person's hand with
+> nothing instrumented, and it is written that way wherever it appears.
 
 ## FAQ
 
@@ -225,15 +273,21 @@ patched copy at any time.
 Yes. It is commercial software from CodeWeavers and RaccoonBot does not include
 it, replace it, or work without it.
 
-### Why do I have to install GStreamer separately?
+### Do I have to install GStreamer separately?
 
-Because the decoder is taken from your copy of it, and it is not ours to
-redistribute. It belongs to your system: other applications use it, and it
-updates on its own schedule.
+**Not since 0.2.0.** You did: the decoder was taken from your own copy of the
+framework while CrossOver was being patched, so you had to install it and keep
+it at one exact version.
 
-It is read **when RaccoonBot patches CrossOver**, which is when the decoder is
-copied in. After that the engine carries its own and a game does not need the
-framework at all.
+RaccoonBot carries the twelve files itself now — three plugins and the nine
+libraries they need — and copies them into the engine while it patches it,
+verifying each against a recorded hash first. Nothing reads
+`/Library/Frameworks/GStreamer.framework` any more.
+
+That makes this application a **redistributor of other people's LGPL and BSD
+binaries**, which is an obligation rather than a formality. `CODEC-LICENCES.md`
+travels with them, names every file, gives its hash, and says where the
+corresponding source is.
 
 ### A game still shows a black screen
 

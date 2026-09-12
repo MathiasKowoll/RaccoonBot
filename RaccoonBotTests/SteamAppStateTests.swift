@@ -9,11 +9,12 @@ import Testing
 import Foundation
 @testable import RaccoonBot
 
-private final class Fired: @unchecked Sendable {
+/// A fact the watcher reports, readable from the test's own task.
+private final class Flag: @unchecked Sendable {
     private let lock = NSLock()
     private var value = false
     func set() { lock.lock(); defer { lock.unlock() }; value = true }
-    var didFire: Bool { lock.lock(); defer { lock.unlock() }; return value }
+    var isSet: Bool { lock.lock(); defer { lock.unlock() }; return value }
 }
 
 /// A bottle holding nothing but a Steam app key, written the way wine writes it.
@@ -95,7 +96,7 @@ struct SteamAppStateTests {
     /// the game during startup -- which is the bug this replaced.
     @Test func aZeroOnItsOwnIsNotASessionEnding() async throws {
         let dir = try makeBottle(appID: 485510, running: 0)
-        let fired = Fired()
+        let fired = Flag()
         let task = Task {
             await watchSteamSession(SteamAppState(bottleDirectory: dir),
                                     appID: 485510,
@@ -105,22 +106,32 @@ struct SteamAppStateTests {
         // fired". The only way to believe that is to wait, then look.
         try await Task.sleep(nanoseconds: 400_000_000)
         task.cancel()
-        #expect(fired.didFire == false)
+        #expect(fired.isSet == false)
     }
 
     @Test func aOneThatBecomesZeroIsASessionEnding() async throws {
         let dir = try makeBottle(appID: 485510, running: 1)
-        let fired = Fired()
+        let fired = Flag()
+        let sawRunning = Flag()
         let task = Task {
             await watchSteamSession(SteamAppState(bottleDirectory: dir),
                                     appID: 485510,
-                                    every: 20_000_000) { _ in fired.set() }
+                                    every: 20_000_000,
+                                    onFirstRunning: { sawRunning.set() }) { _ in fired.set() }
         }
-        // Long enough that the watcher, polling every 20ms, has read the 1 at
-        // least once: without that there is no transition for it to see.
-        try await Task.sleep(nanoseconds: 400_000_000)
+        // The 0 is written only once the watcher has actually read the 1.
+        //
+        // This was a 400ms sleep, and it failed about one full run in three
+        // while passing alone every time. The reason is not that 400ms was
+        // too short for the poll -- it polls every 20ms -- but that under
+        // parallel load the watcher's task may not be scheduled at all in
+        // that window. Writing the 0 then removes the transition rather than
+        // completing it: there is no 1 for the 0 to follow, so the callback
+        // never fires and the wait below runs out. Waiting on the fact makes
+        // the test's premise true before it depends on it, at any load.
+        #expect(await eventually { sawRunning.isSet }, "the watcher never read the game as running")
         try writeRegistry(in: dir, appID: 485510, running: 0)
-        let didFire = await eventually { fired.didFire }
+        let didFire = await eventually { fired.isSet }
         task.cancel()
         #expect(didFire == true)
     }

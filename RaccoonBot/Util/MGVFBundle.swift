@@ -179,6 +179,45 @@ struct MGVFGame: Codable, Hashable {
     /// Sorted and length-prefixed, so two different sets of fields cannot
     /// produce one string: "ab" + "c" and "a" + "bc" are the same
     /// concatenation and not the same fix.
+    /// Where the installer put the original aside, if it did. Nil means the
+    /// fix is not on this folder.
+    ///
+    /// The manifest names a carrier directory; the installer does not always
+    /// stop there. For the Unreal titles the ogg carrier sits under a
+    /// compiler-named subfolder -- `Win64/VS2015/` -- which the script
+    /// discovers on the machine rather than assumes, and says so in the very
+    /// sentence the launch gate shows. The gate assumed. Four titles with the
+    /// fix on and working were refused at launch as needing it, because the
+    /// kept-aside original was one directory further down than the manifest
+    /// said.
+    ///
+    /// So this looks where the manifest says first, then one and two levels
+    /// below it, by listing directories rather than by knowing their names.
+    /// Bounded, because a carrier directory is a small, specific place and an
+    /// unbounded walk of a game folder is the wrong cost for drawing a row.
+    func keptAsideOriginal(inGameFolder folder: String) -> URL? {
+        let f = FileManager.default
+        var root = URL(fileURLWithPath: folder)
+        if !carrierDir.isEmpty { root.appendPathComponent(carrierDir) }
+        func has(_ dir: URL) -> URL? {
+            let candidate = dir.appendingPathComponent(keptAs)
+            return f.fileExists(atPath: candidate.path(percentEncoded: false)) ? candidate : nil
+        }
+        func subdirectories(of dir: URL) -> [URL] {
+            ((try? f.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.isDirectoryKey])) ?? [])
+                .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
+                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        }
+        if let here = has(root) { return here }
+        for level1 in subdirectories(of: root) {
+            if let there = has(level1) { return there }
+            for level2 in subdirectories(of: level1) {
+                if let deeper = has(level2) { return deeper }
+            }
+        }
+        return nil
+    }
+
     func fingerprint(inDirectory directory: URL) -> String {
         var parts: [String] = [
             "schema3", script, exe, carrier, keptAs, carrierDir,
@@ -223,6 +262,32 @@ struct MGVFManifest: Codable {
     /// Carried in the data rather than in a comment, so it reaches the person
     /// building the interface.
     let scopeWarning: String?
+
+    /// The Mac every entry in this catalogue was verified on.
+    ///
+    /// A configuration that makes a game playable is a claim, and a claim
+    /// without the machine behind it is what made ProtonDB useless. This is
+    /// that machine, as one line of prose rather than a structure, because it
+    /// is read by a person and not matched by a comparator.
+    ///
+    /// ON THE CATALOGUE AND NOT ON A TITLE, because every entry was measured on
+    /// the same Mac -- one fact, not nineteen. The day records arrive from a
+    /// second machine it belongs on the record, and that is the change that
+    /// should move it.
+    ///
+    /// Optional and a `String`, which together are the whole reason this does
+    /// not break anything: a manifest written before it existed decodes with
+    /// nil, and the worst a malformed value can do is be a different string.
+    /// An object with required fields here could fail the decode and take the
+    /// entire catalogue down with it.
+    ///
+    /// `var` with a default where every neighbour is a plain `let`, and the odd
+    /// one out on purpose: a defaulted property keeps its place in the
+    /// synthesised memberwise initialiser, so the three `MGVFManifest(...)`
+    /// call sites in the tests go on compiling without being handed a value
+    /// they have no opinion about. A `let` with no default made all three a
+    /// compile error the moment this was added.
+    var verifiedOn: String? = nil
 
     /// Files that belong to the engine rather than to any title.
     ///
@@ -411,7 +476,10 @@ final class MGVFBundle: @unchecked Sendable {
     }
 
     /// Where the embedded MacGameVideoFix keeps its installers and manifest.
-    static var embeddedDirectory: URL? {
+    ///
+    /// Nonisolated: it answers a question about the bundle on disk, and the
+    /// engine checks that ask it run in Task.detached.
+    nonisolated static var embeddedDirectory: URL? {
         guard let app = Bundle.main.resourceURL?
             .appendingPathComponent("mgvf/MacGameVideoFix.app/Contents/Resources")
         else { return nil }

@@ -163,9 +163,15 @@ enum MetalHudAlignment: String, CaseIterable {
     }
 }
 
-struct GameOptionsData: Codable { // this is used for reading saved properties
+/// Equatable so "has anything changed" is a comparison and not a flag somebody
+/// has to remember to set on every control. Synthesized: every field is an
+/// optional value type, and a new field joins the comparison by existing.
+struct GameOptionsData: Codable, Equatable { // this is used for reading saved properties
     var cxGraphicsBackend: String?
     var wineMSync: Bool?
+    /// Whether this launch keeps a HID trace. A diagnostic, off by default and
+    /// saved per title only so that turning it on survives the panel closing.
+    var hidTraceEnabled: Bool?
     var mtlHudEnabled: Bool?
     /// How much the Metal HUD should show: "fps", "normal" or "extended".
     var mtlHudDetail: String?
@@ -186,6 +192,29 @@ struct GameOptionsData: Codable { // this is used for reading saved properties
     var envVariables: String?
     var enableSDL: Bool?
     var disableHidraw: Bool?
+    /// What a DualSense should look like to this title -- a
+    /// `DualSensePresentation` raw value. Stored as its string rather than as
+    /// the case, so renaming a case cannot silently reinterpret a saved record.
+    var dualSensePresentation: String?
+    /// What this title asks of the pad's motors -- a `DualSenseVibration` raw
+    /// value, stored as its string for the same reason.
+    /// Whether this title should be offered the pad's motors through XInput.
+    ///
+    /// Off unless a title asks, and it should stay off for most of them: a game
+    /// that already rumbles a DualSense by writing the pad's own reports needs
+    /// nothing from this, and turning it on there can cost it the pad
+    /// altogether. See the Controller section of the options for what it costs
+    /// and when it helps.
+    var xinputRumble: Bool?
+    var dualSenseVibration: String?
+    /// How hard, as a percentage, for the two choices that use one. Absent is
+    /// 100, which changes nothing; it is not 0, which is silence.
+    var dualSenseVibrationGain: Double?
+    /// The strength for the LEGACY path. Two paths, two numbers: the haptic
+    /// one saturates around x6 and the legacy one is harder at every value, so
+    /// a shared number would make switching between them a shock rather than a
+    /// change of character.
+    var dualSenseStrongGain: Double?
     var ue4Hack: Bool?
     var mvkArgBuff: Bool?
     var vulkanLib: String?
@@ -194,10 +223,36 @@ struct GameOptionsData: Codable { // this is used for reading saved properties
     var d3dMEnableMetalFX: String?
     var d3dSupportDXR: String?
     var d3dMaxFPS: Double?
-    
+
+    /// The machine this record was last written on, as `MachineIdentity`
+    /// describes it.
+    ///
+    /// NOT A SETTING, which is why it is the one field here that does not
+    /// appear in the panel and does not come back through `set(data:)`. Nobody
+    /// chooses it, nothing reads it to decide a launch, and a record that
+    /// arrives from another machine keeps the machine it came from rather than
+    /// being rewritten to this one on sight -- it is only stamped when this
+    /// machine is the one doing the saving, which is exactly here.
+    ///
+    /// It exists because a configuration that makes a game playable is a claim,
+    /// and a claim without the machine behind it is what makes a catalog of
+    /// them worthless. See MachineIdentity for what is recorded and what
+    /// deliberately is not concluded from it.
+    var savedOnMachine: MachineIdentity?
+
     init(data: GameOptions) {
+        // Stamped rather than copied: `data` is the panel, and the panel has no
+        // opinion about which Mac it is running on.
+        self.savedOnMachine = MachineIdentity.current
         self.cxGraphicsBackend = data.cxGraphicsBackend
         self.wineMSync = data.wineMSync
+        // Every field this initialiser forgets is a field that survives the
+        // panel and dies at the save -- see the note below, which was written
+        // when the Metal HUD's three settings were being dropped exactly here.
+        // The trace toggle was added and forgotten in the same way on the same
+        // day: it showed on screen, and the launcher read the saved options and
+        // found nothing. A round-trip test guards it now.
+        self.hidTraceEnabled = data.hidTraceEnabled
         self.mtlHudEnabled = data.mtlHudEnabled
         // Declared, read by set(data:) and by importAutoConfig, and until
         // now never written back here -- so the detail level, the opacity
@@ -218,6 +273,11 @@ struct GameOptionsData: Codable { // this is used for reading saved properties
         self.envVariables = data.envVariables
         self.enableSDL = data.enableSDL
         self.disableHidraw = data.disableHidraw
+        self.dualSensePresentation = data.dualSensePresentation
+        self.xinputRumble = data.xinputRumble
+        self.dualSenseVibration = data.dualSenseVibration
+        self.dualSenseVibrationGain = data.dualSenseVibrationGain
+        self.dualSenseStrongGain = data.dualSenseStrongGain
         self.ue4Hack = data.ue4Hack
         self.mvkArgBuff = data.mvkArgBuff
         self.vulkanLib = data.vulkanLib
@@ -233,6 +293,9 @@ struct GameOptionsData: Codable { // this is used for reading saved properties
 class GameOptions: ObservableObject { // this is used as form state
     @Published var cxGraphicsBackend: String
     @Published var wineMSync: Bool
+    /// Keep a HID trace of this launch. Not in the initialiser, like the other
+    /// settings added after it: every existing call site keeps its meaning.
+    @Published var hidTraceEnabled: Bool = false
     @Published var mtlHudEnabled: Bool
     /// How much the Metal HUD should show.
     ///
@@ -260,6 +323,25 @@ class GameOptions: ObservableObject { // this is used as form state
     @Published var envVariables: String
     @Published var enableSDL: Bool
     @Published var disableHidraw: Bool
+    /// What a DualSense looks like to this title.
+    ///
+    /// Not in the initialiser on purpose, as the HUD's detail is not: every
+    /// existing call site keeps working, and a title nobody has told otherwise
+    /// gets the pad as it is -- which is what this application did for every
+    /// title before the option existed.
+    @Published var dualSensePresentation: String = DualSensePresentation.byDefault.rawValue
+    /// What this title asks of the pad's motors, and how hard.
+    ///
+    /// Two stored fields for one control, because that is what the driver
+    /// reads -- see `DualSenseVibration`, which is where the two are turned
+    /// back into one answer. Out of the initialiser for the same reason the
+    /// presentation is: every existing call site keeps working, and a title
+    /// nobody has told otherwise gets the pad exactly as the game drives it.
+    @Published var xinputRumble: Bool = false
+    @Published var dualSenseVibration: String = DualSenseVibration.byDefault.rawValue
+    @Published var dualSenseVibrationGain: Double = Double(DualSenseVibration.neutralGain)
+    /// The legacy path's own strength -- see GameOptionsData.
+    @Published var dualSenseStrongGain: Double = Double(DualSenseVibration.neutralGain)
     @Published var ue4Hack: Bool
     @Published var mvkArgBuff: Bool
     @Published var vulkanLib: String
@@ -299,6 +381,7 @@ class GameOptions: ObservableObject { // this is used as form state
         let foldedBackend = pickableBackend(data.cxGraphicsBackend)
         self.cxGraphicsBackend = foldedBackend
         self.wineMSync = data.wineMSync ?? true
+        self.hidTraceEnabled = data.hidTraceEnabled ?? false
         self.mtlHudEnabled = data.mtlHudEnabled ?? false
         self.mtlHudDetail = data.mtlHudDetail ?? MetalHudDetail.fpsOnly.rawValue
         self.mtlHudOpacity = data.mtlHudOpacity ?? 1.0
@@ -314,6 +397,17 @@ class GameOptions: ObservableObject { // this is used as form state
         self.envVariables = data.envVariables ?? ""
         self.enableSDL = data.enableSDL ?? true
         self.disableHidraw = data.disableHidraw ?? false
+        // Folded through the enum rather than taken as written: a raw value
+        // this build cannot show would leave the menu blank while the launch
+        // quietly used the default, and one question would have two answers.
+        self.dualSensePresentation = DualSensePresentation.pickable(data.dualSensePresentation)
+        // Folded the same way, and the percentage with it: a number outside
+        // the slider's range would leave the slider pinned at an end while the
+        // launch wrote something the panel never showed.
+        self.xinputRumble = data.xinputRumble ?? false
+        self.dualSenseVibration = DualSenseVibration.pickable(data.dualSenseVibration)
+        self.dualSenseVibrationGain = DualSenseVibration.pickableGain(data.dualSenseVibrationGain)
+        self.dualSenseStrongGain = DualSenseVibration.pickableGain(data.dualSenseStrongGain)
         self.ue4Hack = data.ue4Hack ?? true
         self.mvkArgBuff = data.mvkArgBuff ?? true
         self.vulkanLib = data.vulkanLib ?? "standard"
@@ -336,6 +430,7 @@ class GameOptions: ObservableObject { // this is used as form state
     func importAutoConfig(data: GameOptionsData) {
         if let v = data.cxGraphicsBackend { self.cxGraphicsBackend = v }
         if let v = data.wineMSync { self.wineMSync = v }
+        if let v = data.hidTraceEnabled { self.hidTraceEnabled = v }
         if let v = data.mtlHudEnabled { self.mtlHudEnabled = v }
         if let v = data.mtlHudDetail { self.mtlHudDetail = v }
         if let v = data.mtlHudOpacity { self.mtlHudOpacity = v }
@@ -351,6 +446,11 @@ class GameOptions: ObservableObject { // this is used as form state
         if let v = data.envVariables { self.envVariables = v }
         if let v = data.enableSDL { self.enableSDL = v }
         if let v = data.disableHidraw { self.disableHidraw = v }
+        if let v = data.dualSensePresentation { self.dualSensePresentation = DualSensePresentation.pickable(v) }
+        if let v = data.xinputRumble { self.xinputRumble = v }
+        if let v = data.dualSenseVibration { self.dualSenseVibration = DualSenseVibration.pickable(v) }
+        if let v = data.dualSenseVibrationGain { self.dualSenseVibrationGain = DualSenseVibration.pickableGain(v) }
+        if let v = data.dualSenseStrongGain { self.dualSenseStrongGain = DualSenseVibration.pickableGain(v) }
         if let v = data.ue4Hack { self.ue4Hack = v }
         if let v = data.mvkArgBuff { self.mvkArgBuff = v }
         if let v = data.vulkanLib { self.vulkanLib = v }
@@ -395,6 +495,16 @@ struct Game: Identifiable, Codable {
     var appNames: [String] = []
     var appExeURL: URL?
     var isCustom: Bool?
+    /// Which store this title belongs to. Nil means Steam, which is every
+    /// title written before the field existed, so old records decode as they
+    /// always did. This is a tag, not an identifier: the identity of an Epic
+    /// title is its three-part id string, kept in `id`, never a scalar beside
+    /// steamAppID.
+    var store: Store?
+    var isEpic: Bool { store == .epic }
+    /// The store this title came from. Nil means Steam: the field was added
+    /// when the second store was, and every card written before it is Steam's.
+    var storeOrSteam: Store { store ?? .steam }
     
     // taken from SteamGame
     let type: String
@@ -455,6 +565,7 @@ struct Game: Identifiable, Codable {
         case appNames = "app_names"
         case appExeURL = "app_exe_url"
         case isCustom = "is_custom"
+        case store
         
         case type
         case name
@@ -649,6 +760,86 @@ extension Game {
             "usk": RatingBody(rating: "12", requiredAge: "12", descriptors: "Violence")
         ]
     )
+    /// A title the Epic launcher has installed, as a card. No store page, no
+    /// art, no description: Epic keeps none of that locally, and the card
+    /// shows what is known rather than pretending.
+    /// The same card for a title the account owns and nobody has installed
+    /// here. There is no manifest and no folder, so the name comes from the
+    /// catalogue and the id is the triple the owned list already carries.
+    ///
+    /// It exists because the alternative was asking Steam. Both lists sent the
+    /// Epic triple to Steam's store endpoint, which of course had never heard
+    /// of it: the card opened nothing at all, and the failed lookup put the
+    /// Epic id into the Steam blacklist on its way out.
+    static func epicOwned(id: String, name: String, catalog item: EpicCatalogItem? = nil,
+                          store: EpicStoreContent? = nil, cover: URL? = nil) -> Game {
+        let blank = epicBlank(name: name, catalog: item, store: store, cover: cover)
+        var game = Game(from: blank, id: id, isNative: false, downloadProgress: 0,
+                        isInstalled: false, appNames: [])
+        game.store = .epic
+        return game
+    }
+
+    static func epic(_ title: EpicInstalled, catalog item: EpicCatalogItem? = nil, store: EpicStoreContent? = nil) -> Game {
+        // The launcher's catalogue, when it has been cached, is the only place
+        // Epic keeps a title's art and description. The NAME comes from the
+        // manifest, which is what the launcher itself shows: the cache had
+        // "Borderlands?4" where the manifest had "Borderlands®4", the mark
+        // lost somewhere on the way into the cache. The cache names a title
+        // only when the manifest does not.
+        let name = title.title.isEmpty ? (item?.title ?? title.appName) : title.title
+        // The store page, when one was found for the title, fills what the
+        // catalogue leaves blank: the long description, the publisher, the
+        // screenshots, the requirements, the languages, the date.
+        let developer = store?.developer ?? item?.developer
+        let requirements: Requirements? = store?.minimumRequirements.map {
+            Requirements(minimum: $0, recommended: store?.recommendedRequirements)
+        }
+        let screenshots: [Screenshot]? = store.map { s in
+            s.screenshots.enumerated().map { Screenshot(id: $0.offset, pathThumbnail: $0.element, pathFull: $0.element) }
+        }.flatMap { $0.isEmpty ? nil : $0 }
+        return epicBlankGame(name: name, id: title.id, title: title, catalog: item, store: store)
+    }
+
+    /// Everything an Epic card knows that does not come from a manifest.
+    private static func epicBlank(name: String, catalog item: EpicCatalogItem?,
+                                  store: EpicStoreContent?, cover: URL? = nil) -> SteamGame {
+        let developer = store?.developer ?? item?.developer
+        let requirements: Requirements? = store?.minimumRequirements.map {
+            Requirements(minimum: $0, recommended: store?.recommendedRequirements)
+        }
+        let screenshots: [Screenshot]? = store.map { s in
+            s.screenshots.enumerated().map { Screenshot(id: $0.offset, pathThumbnail: $0.element, pathFull: $0.element) }
+        }.flatMap { $0.isEmpty ? nil : $0 }
+        return SteamGame(type: "game", name: name, steamAppID: 0, requiredAge: "0",
+                              isFree: false, controllerSupport: nil, dlc: nil,
+                              detailedDescription: store?.description ?? item?.description ?? "", aboutTheGame: "",
+                              shortDescription: store?.shortDescription ?? item?.description ?? "",
+                              supportedLanguages: store?.languages,
+                              headerImage: item?.cover?.absoluteString ?? store?.background ?? "",
+                              capsuleImage: item?.tallCover?.absoluteString ?? cover?.absoluteString ?? "",
+                              capsuleImageV5: nil, website: nil, pcRequirements: requirements,
+                              macRequirements: nil, linuxRequirements: nil, legalNotice: nil,
+                              developers: developer.map { [$0] }, publishers: store?.publisher.map { [$0] },
+                              priceOverview: nil, packages: nil,
+                              packageGroups: nil, platforms: Platforms(windows: true, mac: false, linux: false),
+                              metacritic: nil, categories: nil, genres: nil, screenshots: screenshots,
+                              movies: nil, recommendations: nil, achievements: nil,
+                              releaseDate: ReleaseDate(comingSoon: false, date: store?.releaseDate ?? ""), supportInfo: nil,
+                              background: store?.background, backgroundRaw: nil, contentDescriptors: nil, ratings: nil)
+    }
+
+    private static func epicBlankGame(name: String, id: String, title: EpicInstalled,
+                                      catalog item: EpicCatalogItem?, store: EpicStoreContent?) -> Game {
+        let blank = epicBlank(name: name, catalog: item, store: store)
+        var game = Game(from: blank, id: id, isNative: false, downloadProgress: 100,
+                        isInstalled: title.presence == .installed,
+                        appNames: title.executable.map { [$0.lastPathComponent] } ?? [])
+        game.store = .epic
+        game.appExeURL = title.executable
+        return game
+    }
+
     static let mock = Game(from: Game.steamMock, id: "example", isNative: true, downloadProgress: 100, isInstalled: true, appNames: ["test.exe"], isCustom: true)
     static let steamEmptyGame = SteamGame(
         type: "game",
@@ -799,6 +990,9 @@ struct LibraryRow: Identifiable {
     let lastPlayed: Date?
     let coverURL: URL?
     let isInstalled: Bool
+    /// Which store it came from, so the list can be filtered by it without
+    /// going back to the game it was built from.
+    let store: Store
 }
 
 class LibraryPageGlobals: ObservableObject {
@@ -842,6 +1036,11 @@ class LibraryPageGlobals: ObservableObject {
     /// somebody who never looks at it.
     @Published var ownedGames: [OwnedGame] = []
     @Published var ownedLoaded: Bool = false
+    /// Empty means every store; a non-empty set is a whitelist. Shown even
+    /// with one store configured, on Mathias's decision of 2026-09-03: a
+    /// control that stays where it was put is worth more than one that
+    /// appears when a second store does.
+    @Published var storeFilter: Set<Store> = []
     /// Empty means every platform; a non-empty set is a whitelist.
     @Published var platformFilter: Set<String> = []
     /// app id -> how long, and when last. Read from localconfig.vdf, which is
@@ -885,16 +1084,61 @@ class LibraryPageGlobals: ObservableObject {
         self.loadCustomAddedGames()
     }
     
+    /// What the Epic launcher in the configured Epic bottle has installed.
+    /// Read from that one bottle and no other; see EpicLibrary.
+    @Published var epicGames: [Game] = []
+    /// Games in the Epic account that no manifest says are installed. From
+    /// the launcher's catalogue cache; empty when there is none.
+    @Published var epicOwnedGames: [OwnedGame] = []
+    /// Bumped at every library load, so a slow store answer for an earlier
+    /// load does not land on top of a later one's titles.
+    var epicLoadGeneration = 0
+    /// What the "not installed" tab shows: Steam's owned titles and Epic's,
+    /// each from its own source, drawn by one list.
+    /// The identifiers a scan found installed, in the same shape OwnedGame's
+    /// own id uses: a Steam appid, or an Epic triple. `gamesMeta` is where
+    /// both live, because it is the one list a fresh install reaches without
+    /// waiting on anything -- it is rebuilt on every load(), where the two
+    /// owned lists are not.
+    var installedIDs: Set<String> { Set(gamesMeta.map(\.appid)) }
+
+    /// Steam's owned list and Epic's, each read once and each capable of
+    /// going stale in its own way -- see `ownedGames`'s and `epicOwnedGames`'s
+    /// own comments -- with nothing that resets either the moment a title
+    /// gets installed. Filtered here, at the one place both are read
+    /// together, rather than trusted: an owned list that still names an
+    /// installed title is wrong regardless of why, and a game that is
+    /// installed must never also read as not installed, in the not-installed
+    /// tab or folded into "All". This is the fix for that, not a report of
+    /// how it happened -- the staleness itself is left as it is, because a
+    /// title excluded here is excluded correctly no matter when either list
+    /// was last read.
+    var allOwnedGames: [OwnedGame] {
+        let installed = installedIDs
+        return (ownedGames + epicOwnedGames).filter { !installed.contains($0.appID) }
+    }
+
     var allGamesCount: Int {
-        return self.games.count + self.customAddedGames.count
+        return self.games.count + self.customAddedGames.count + self.epicGames.count
     }
     
     var allGames: [Game] {
-        self.games + self.customAddedGames
+        self.games + self.customAddedGames + self.epicGames
     }
     
+    /// What the grid draws.
+    ///
+    /// Each filter narrows what the one before it left. It used to reassign
+    /// `games = self.allGames` before searching, which threw the platform
+    /// filtering away every time: in grid view, filtering by platform did
+    /// nothing at all, while the same filter worked in list view, which goes
+    /// through `rows`. Found 2026-09-03 while adding the store filter beside
+    /// it, which would have been just as silently ignored.
     var filteredGames: [Game] {
         var games: [Game] = self.allGames
+        if !storeFilter.isEmpty {
+            games = games.filter { storeFilter.contains($0.storeOrSteam) }
+        }
         if !platformFilter.isEmpty {
             games = games.filter { game in
                 (game.platforms.windows && platformFilter.contains("windows"))
@@ -902,12 +1146,11 @@ class LibraryPageGlobals: ObservableObject {
                 || (game.platforms.linux && platformFilter.contains("linux"))
             }
         }
-        if self.filter.isEmpty || self.filter.count < 3 {
-            games = self.allGames
-        } else {
-            games = allGames.filter { item in
-                self.filter.isEmpty || item.name.lowercased().contains(self.filter.lowercased())
-            }
+        // Under three characters is not a search: it would leave one letter
+        // matching most of a library.
+        if self.filter.count >= 3 {
+            let needle = self.filter.lowercased()
+            games = games.filter { $0.name.lowercased().contains(needle) }
         }
         return games.sorted { lhs, rhs in
             switch self.sortBy {
@@ -934,8 +1177,8 @@ class LibraryPageGlobals: ObservableObject {
     var tabTotal: Int {
         switch tab {
         case .installed:    return allGamesCount
-        case .notInstalled: return ownedGames.count
-        case .all:          return allGamesCount + ownedGames.count
+        case .notInstalled: return allOwnedGames.count
+        case .all:          return allGamesCount + allOwnedGames.count
         }
     }
 
@@ -947,6 +1190,9 @@ class LibraryPageGlobals: ObservableObject {
         case .all:          rows = installedRows + ownedRows
         }
         var shown = rows
+        if !storeFilter.isEmpty {
+            shown = shown.filter { storeFilter.contains($0.store) }
+        }
         if !platformFilter.isEmpty {
             shown = shown.filter { !$0.platforms.isDisjoint(with: platformFilter) }
         }
@@ -1014,12 +1260,13 @@ class LibraryPageGlobals: ObservableObject {
                               sizeBytes: sizes[game.id] ?? nil,
                               lastPlayed: stats?.lastPlayed,
                               coverURL: game.headerImage.isEmpty ? nil : URL(string: game.headerImage),
-                              isInstalled: true)
+                              isInstalled: true,
+                              store: game.storeOrSteam)
         }
     }
 
     private var ownedRows: [LibraryRow] {
-        ownedGames.filter { !hiddenAppIDs.contains($0.appID) }.map {
+        allOwnedGames.filter { !hiddenAppIDs.contains($0.appID) }.map {
             LibraryRow(id: $0.appID, appID: $0.appID, name: $0.displayName,
                        platforms: $0.platforms,
                        // Nothing is installed, so there is nothing it is
@@ -1027,12 +1274,19 @@ class LibraryPageGlobals: ObservableObject {
                        installedOn: nil,
                        playtimeMinutes: $0.playtimeMinutes,
                        sizeBytes: nil, lastPlayed: $0.lastPlayed,
-                       coverURL: $0.coverURL, isInstalled: false)
+                       coverURL: $0.coverURL, isInstalled: false, store: $0.store)
         }
     }
 
     var filteredOwnedGames: [OwnedGame] {
-        var owned = self.ownedGames.filter { !hiddenAppIDs.contains($0.appID) }
+        // Every store's, not Steam's alone. `allOwnedGames` reached exactly one
+        // place before this -- an isEmpty check for the empty state -- so the
+        // Epic titles were read off the disk, counted, and then drawn by
+        // nothing.
+        var owned = self.allOwnedGames.filter { !hiddenAppIDs.contains($0.appID) }
+        if !storeFilter.isEmpty {
+            owned = owned.filter { storeFilter.contains($0.store) }
+        }
         if !platformFilter.isEmpty {
             owned = owned.filter { !$0.platforms.isDisjoint(with: platformFilter) }
         }
@@ -1144,7 +1398,17 @@ final class AppGlobals: ObservableObject {
     /// consequence should be a choice on screen, not a constant in a patcher.
     @Published var bottlesRoot: String = ""
     @Published var windowsSteamFolder: URL?
-    
+
+    /// Whether the engine carries MacGameVideoFix's controller-bus set: the
+    /// winebus, setupapi and ntoskrnl that tell a Windows client which bus a
+    /// controller is on, so a DualSense on Bluetooth rumbles. An improvement
+    /// rather than a fix -- no title needs it -- so it is a switch, and off
+    /// puts CrossOver's own three files back. On by default for an engine the
+    /// set was built for, decided 2026-09-08. What the engine actually holds
+    /// is read separately; see `ControllerBusSwitch`.
+    @Published var controllerBusEnabled: Bool
+    static let controllerBusKey = "controllerBus"
+
     /// The bottles this application is configured with -- the one set anything
     /// that writes into a bottle is allowed to touch. One question, one place
     /// that answers it; see `ConfiguredBottles`.
@@ -1159,6 +1423,9 @@ final class AppGlobals: ObservableObject {
         // Falls back to where they have always lived, so an existing install
         // keeps working and simply starts showing what it was already doing.
         self.bottlesRoot = readUsrDefOptionString(key: "bottlesRoot") ?? DEFAULT_BOTTLES_ROOT
+        // Unset means on: the set is the better answer for a pad, and an
+        // install that predates the switch should get it, not lose it.
+        self.controllerBusEnabled = readUsrDefOptionBool(key: Self.controllerBusKey, unset: true)
     }
 }
 

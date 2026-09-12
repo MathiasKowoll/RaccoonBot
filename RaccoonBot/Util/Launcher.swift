@@ -22,14 +22,27 @@ import AppKit
 ///
 /// Save data is already safe by the time this runs: the caller waits for
 /// Steam's exit sync to finish before asking Steam to quit at all.
+/// `clients` are the name prefixes of the store clients waited for: "steam"
+/// for Steam, "epic" for the Epic launcher, whose processes are
+/// EpicGamesLauncher, EpicWebHelper and EpicOnlineServices.
+///
+/// More than one because a bottle can hold more than one: the Epic launcher
+/// is installed into whichever bottle the user pointed at, which here is the
+/// Steam one, and a teardown that waited only for Epic's processes would
+/// reach `wineserver -k` while Steam was still winding down.
 func closeBottle(cxAppPath: String, bottle: String,
                  waitingUpTo settleTimeout: TimeInterval = 30,
-                 decidedAt generation: Int = LaunchGeneration.shared.current) async throws {
+                 clients: [String] = ["steam"],
+                 decidedAt generation: Int? = nil) async throws {
+    // Taken here rather than as a default argument: the generation belongs to
+    // a bottle now, and Swift will not let one default argument read another
+    // parameter.
+    let generation = generation ?? LaunchGeneration.shared.current(for: bottle)
     // Asked before every destructive step, not once at the top. The waits below
     // run for half a minute, and a launch inside that window was destroyed by a
     // decision taken before it existed.
     func superseded() -> Bool {
-        if LaunchGeneration.shared.supersedes(generation) {
+        if LaunchGeneration.shared.supersedes(generation, for: bottle) {
             console.log("a game has been launched since this was decided; leaving the bottle up")
             return true
         }
@@ -57,16 +70,16 @@ func closeBottle(cxAppPath: String, bottle: String,
             console.log("the bottle closed on its own")
             return
         }
-        if !here.contains(where: { $0.name.lowercased().hasPrefix("steam") }) {
-            console.log("steam has gone; ending what wine keeps running")
+        if !here.contains(where: { p in clients.contains { p.name.lowercased().hasPrefix($0) } }) {
+            console.log("\(clients.joined(separator: " and ")) has gone; ending what wine keeps running")
             break
         }
         try await Task.sleep(nanoseconds: 500_000_000)
     }
 
     let left = BottleProcesses.running(inBottleAt: directory)
-    if left.contains(where: { $0.name.lowercased().hasPrefix("steam") }) {
-        console.warn("steam did not go in \(Int(settleTimeout))s: "
+    if left.contains(where: { p in clients.contains { p.name.lowercased().hasPrefix($0) } }) {
+        console.warn("\(clients.joined(separator: " and ")) did not go in \(Int(settleTimeout))s: "
                      + left.map(\.name).sorted().joined(separator: ", "))
     }
 
@@ -108,6 +121,38 @@ func quitSteam(cxAppPath: String, bottle: String, isNative: Bool) async throws -
     }
 }
 
+/// Ask the Epic launcher to leave. `taskkill` without /F sends WM_CLOSE, the
+/// same request the launcher's own close button makes; /F would be the kill
+/// that this whole path exists to avoid. The launcher has no `-shutdown` of
+/// Steam's kind (read from the 5.5.4 binary: it has -silent, -noselfupdate,
+/// -nullrhi, nothing to end it). If it stays in the tray anyway, closeBottle
+/// waits for it as it waits for Steam and then ends the prefix; by then the
+/// launcher has been given its time.
+func quitEpic(cxAppPath: String, bottle: String) async throws {
+    console.log("asking the epic launcher to leave...")
+    guard let ref = BottleReference(bottle) else {
+        console.error("cannot quit the epic launcher: \(bottle) does not name a bottle")
+        return
+    }
+    try safeShell("\(ref.environmentPrefix)\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \"\(ref.name)\" taskkill /IM EpicGamesLauncher.exe")
+}
+
+/// Stop an Epic title by hand: the GAME is asked to close, not the launcher.
+///
+/// Stopping a Steam title asks Steam to shut down, which takes the game with
+/// it and syncs on the way. The Epic launcher has no such request, and ending
+/// the bottle under a running game is a save lost. So the game itself gets
+/// WM_CLOSE -- most titles quit and save on it -- and the session's tracker
+/// then does what it does when a game exits on its own: waits for the
+/// launcher to finish syncing, asks it to leave, closes the bottle.
+func stopEpicGame(appNames: [String], cxAppPath: String, bottle: String) async throws {
+    guard let ref = BottleReference(bottle) else { return }
+    for name in appNames where name.lowercased().hasSuffix(".exe") {
+        console.log("asking \(name) to close...")
+        try safeShell("\(ref.environmentPrefix)\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \"\(ref.name)\" taskkill /IM \"\(name)\"")
+    }
+}
+
 func quitWine(cxAppPath: String, bottle: String) async throws -> Void {
     console.log("quitting wine...")
     guard let ref = BottleReference(bottle) else {
@@ -135,6 +180,47 @@ func openSteam(cxAppPath: String?, selectedBottle: String?, SteamX86AppPath: Str
     }
 }
 
+/// Open the Epic Games Launcher.
+///
+/// Ours showed "Unsupported Graphics Card". Its log: a Direct3D 11 device,
+/// then every CreateVertexShader and CreatePixelShader returning E_INVALIDARG,
+/// then "failed to initialise slate renderer". It was a 32-bit UE 4.27 launcher
+/// from a March-2025 installer that had never managed its first self-update.
+/// The bottle that works runs a self-updated UE 5.5.4, x86-64 -- on the same
+/// generation-4 toolkit build as ours, byte for byte. The launcher was the
+/// difference, and putting generation 3 in first was tried and changed
+/// nothing, so this no longer touches the toolkit: whatever the last game
+/// asked for stays, and the launcher is what gets fixed.
+///
+/// Refuses a bottle newer than the engine. Wine updates a bottle it meets
+/// with a different engine, and with an older engine that is a downgrade of
+/// the bottle's system files -- the one way to take a working Epic bottle and
+/// leave it like ours.
+/// `uri`, when given, is handed to the launcher as its one argument, the way
+/// its own shortcuts do it: that is how the client is asked to install a
+/// title. With no argument the launcher just opens.
+func openEpic(cxAppPath: String?, bottle: String, clientPath: String, uri: String? = nil) {
+    guard let cxAppPath, !cxAppPath.isEmpty, let bottleURL = URL(string: bottle) else { return }
+    if let made = EpicLaunch.bottleVersion(of: bottle),
+       let engine = (NSDictionary(contentsOfFile: cxAppPath + "/Contents/Info.plist")?["CFBundleVersion"] as? String),
+       EpicLaunch.bottleIsNewer(bottleVersion: made, engineVersion: engine) {
+        console.error("epic: refusing to open a bottle made by CrossOver \(made) with engine \(engine); wine would downgrade it")
+        return
+    }
+    let bottleName = bottleURL.lastPathComponent
+    let bottleRoot = bottleURL.deletingLastPathComponent().path(percentEncoded: false)
+    let command = "CX_BOTTLE_PATH=\"\(bottleRoot)\" MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=0 "
+        + "CX_GRAPHICS_BACKEND=\"d3dmetal\" "
+        + "\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \"\(clientPath)\""
+        + (uri.map { " \"\($0)\"" } ?? "")
+    do {
+        try safeShell(command)
+        console.log(command)
+    } catch {
+        console.error(String(reflecting: error))
+    }
+}
+
 /// What the Steam client inside the bottle can be asked to do.
 ///
 /// Steam registers the `steam://` protocol on Windows and steam.exe accepts one
@@ -148,12 +234,21 @@ enum SteamAction {
     /// Verifies the files and repairs what is wrong, which is also how a title
     /// that failed to update gets fixed.
     case validate(String)
+    /// Steam's own way out, not ours: for every installed title Steam writes
+    /// `UninstallString = "steam.exe" steam://uninstall/<appid>` under
+    /// Uninstall in the bottle's registry, so this is the exact command
+    /// Windows would run from Add/Remove Programs. The client asks for
+    /// confirmation itself and removes the files, the manifest and the
+    /// shortcut together -- which is what deleting the folder by hand does
+    /// not do.
+    case uninstall(String)
 
     var url: String {
         switch self {
-        case .install(let id):  return "steam://install/\(id)"
-        case .run(let id):      return "steam://run/\(id)"
-        case .validate(let id): return "steam://validate/\(id)"
+        case .install(let id):   return "steam://install/\(id)"
+        case .run(let id):       return "steam://run/\(id)"
+        case .validate(let id):  return "steam://validate/\(id)"
+        case .uninstall(let id): return "steam://uninstall/\(id)"
         }
     }
 }
@@ -207,7 +302,30 @@ func copyMoltenVK(cxAppPath: String, vulkanLibID: String) throws -> Void {
     }
 }
 
-func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, steamExePath: String, options: GameOptions? = nil, appExeURL: URL? = nil) async throws -> Void {
+/// `launcherURI`, when given, is handed to `appExeURL` as its one argument:
+/// that is how an Epic title starts -- the Epic launcher is the executable and
+/// the com.epicgames.launcher:// URI names the game -- so everything this
+/// function sets up for a Steam or a custom title (the winebus keys, the
+/// D3DMetal generation, the environment from the game's options, msync) is set
+/// up for the launcher, and the game inherits it from there. If a launcher is
+/// ALREADY running in the bottle, the new one hands the URI over and exits,
+/// and the game inherits the running launcher's environment instead: opened
+/// from the Epic panel, say, without any of this. That is the one case in
+/// which the game's options do not reach it.
+/// Where a HID trace of this launch is kept.
+///
+/// The Desktop, named by the clock, the same shape
+/// MacGameVideoFix's diagnostics/capture-hid-trace.sh uses -- so the reader
+/// that answers these logs takes either without being told which made it.
+func hidTraceLogPath() -> String {
+    let f = DateFormatter()
+    f.dateFormat = "HHmmss"
+    return FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Desktop/hid-\(f.string(from: Date())).log")
+        .path(percentEncoded: false)
+}
+
+func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, steamExePath: String, options: GameOptions? = nil, appExeURL: URL? = nil, launcherURI: String? = nil) async throws -> Void {
     console.log("options: \(options.debugDescription)")
     if let vulkanLibID = options?.vulkanLib {
         try copyMoltenVK(cxAppPath: cxAppPath, vulkanLibID: vulkanLibID)
@@ -242,32 +360,141 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
     
     let registryURL = bottleURL.appendingPathComponent("system.reg")
     let registry = WineRegistryFile(fileURL: registryURL)
-    try registry.load()
-    if let controllersSection = registry.section(forPath: "System\\\\CurrentControlSet\\\\Services\\\\winebus") {
-        // Written only when it would change something. This rewrites the
-        // bottle's entire system.reg -- 160,000 lines on this machine -- and
-        // after a bottle's first launch these two values already hold what we
-        // are about to set, so every launch after the first was a rewrite for
-        // nothing. A file not written is a file not at risk.
-        var changed = false
-        regOptionsDictionary.keys.forEach { key in
-            let value = regOptionsDictionary[key]!
-            if controllersSection.addOrSetDword(forKey: key, value: value) {
-                console.log("setting \(key) to \(value)")
-                changed = true
-            }
-        }
-        if changed { try registry.save() }
+    // Not while the bottle is up. Before the per-game pad option, these two
+    // or three values changed only when the pad's transport did, so this file
+    // was almost never written; now a value is written for both DualSense
+    // models on every launch, and alternating between a title set to wired and
+    // one set to as-is would rewrite all 160,000 lines of it every time --
+    // possibly under a wineserver that holds its own copy and flushes it on
+    // shutdown, which would both lose our write and put the file at risk. So
+    // the bottle that is up keeps its registry, and the console says so: a
+    // running bottle read these values when it booted and cannot be told
+    // otherwise from here anyway.
+    if !BottleProcesses.registryIsOursToWrite(inBottleAt: bottleURL) {
+        console.warn("this bottle is already running, so its registry was left alone: the controller settings for this title -- Enable SDL, Disable Hidraw, what a DualSense is seen as and what its motors do -- were not written. A bottle reads them when it boots, so close what is running in it (the launcher and its games) and start this title again.")
     } else {
-        console.error("\\\\winebus section not found in system.reg file for the bottle \(selectedBottle)")
+        try registry.load()
+        if let controllersSection = registry.section(forPath: "System\\\\CurrentControlSet\\\\Services\\\\winebus") {
+            // Written only when it would change something. This rewrites the
+            // bottle's entire system.reg -- 160,000 lines on this machine -- and
+            // after a bottle's first launch these two values already hold what we
+            // are about to set, so every launch after the first was a rewrite for
+            // nothing. A file not written is a file not at risk.
+            var changed = false
+            regOptionsDictionary.keys.forEach { key in
+                let value = regOptionsDictionary[key]!
+                if controllersSection.addOrSetDword(forKey: key, value: value) {
+                    console.log("setting \(key) to \(value)")
+                    changed = true
+                }
+            }
+            // A DualSense goes through SDL when it is on Bluetooth and stays raw
+            // when it is not -- see DualSenseRoute for the measurement behind it --
+            // and, on an engine that can do it, is presented to this title the way
+            // this title's own options ask for and its motors do what they ask
+            // for. Written the same way as the two keys above, into the same
+            // file, on the same condition: only when something would change.
+            //
+            // All five values are written for both models on every launch, the
+            // neutral ones included, and whatever is attached at this moment.
+            // That is what makes these per game -- the title that wants the pad
+            // as it is clears what the last title set rather than inheriting it
+            // -- and it is what lets the console's own advice work: winebus reads
+            // them as the pad arrives, so the pad plugged in or woken up after
+            // this finds them already there. Neutral is not all zeros: a
+            // VibrationGain of 0 is silence, and 100 is the value that leaves a
+            // game's rumble alone.
+            let pads = SonyPads.attached()
+            let sdlEnabled = options!.enableSDL
+            let tellsTheBus = DualSenseRoute.engineTellsTheBus(cxAppPath: cxAppPath)
+            let presentation = DualSensePresentation(rawValue: options!.dualSensePresentation) ?? .byDefault
+            let canEmulateUSB = DualSenseRoute.engineCanEmulateUSB(cxAppPath: cxAppPath)
+            // The motors, asked of the same engine and by the same means: the
+            // name of a value in the binary, never a version number.
+            let vibration = DualSenseVibration(rawValue: options!.dualSenseVibration) ?? .byDefault
+            // Each path keeps its own strength; the launch writes the one the
+            // chosen path uses.
+            let vibrationPercent = options![keyPath: vibration.gainKeyPath]
+            let canRewriteVibration = DualSenseRoute.engineCanRewriteVibration(cxAppPath: cxAppPath)
+            // And whether this title asked for its motors to be reachable by a
+            // game that reads XInput, asked of the same engine by the same
+            // means: the name of a value in the binary. Off for every title
+            // that has not asked, which is what makes it safe to write on
+            // every launch -- a title that wants the pad untouched clears what
+            // the last one set rather than inheriting it.
+            let xinputRumble = options!.xinputRumble
+            let canXInputRumble = DualSenseRoute.engineCanXInputRumble(cxAppPath: cxAppPath)
+            if let summary = DualSenseRoute.summary(for: pads, sdlEnabled: sdlEnabled, engineTellsTheBus: tellsTheBus,
+                                                    presentation: presentation, engineCanEmulateUSB: canEmulateUSB,
+                                                    vibration: vibration, vibrationPercent: vibrationPercent,
+                                                    engineCanRewriteVibration: canRewriteVibration) {
+                console.log("controller: \(summary)")
+            }
+            for override in DualSenseRoute.overrides(for: pads, sdlEnabled: sdlEnabled, engineTellsTheBus: tellsTheBus,
+                                                     presentation: presentation, engineCanEmulateUSB: canEmulateUSB,
+                                                     vibration: vibration, vibrationPercent: vibrationPercent,
+                                                     engineCanRewriteVibration: canRewriteVibration,
+                                                     xinputRumble: xinputRumble,
+                                                     engineCanXInputRumble: canXInputRumble) {
+                let section: WineRegSection
+                if let existing = registry.section(forPath: override.path) {
+                    section = existing
+                } else {
+                    section = WineRegSection(header: "[\(override.path)] \(Int(Date().timeIntervalSince1970))")
+                    registry.sections.append(section)
+                }
+                let values: [(String, UInt32)] = [
+                    (DualSenseRoute.hidrawValue, override.hidraw),
+                    (DualSenseRoute.usbEmulationValue, override.usbEmulation),
+                    (DualSenseRoute.productIDValue, override.askedProductID),
+                    (DualSenseRoute.vibrationModeValue, override.vibrationMode),
+                    (DualSenseRoute.vibrationGainValue, override.vibrationGain),
+                    (DualSenseRoute.xinputRumbleValue, override.xinputRumble),
+                ]
+                for (key, value) in values {
+                    // The call is the write; keeping it out of a `where` clause so
+                    // that what changes the bottle is on a line of its own.
+                    if section.addOrSetDword(forKey: key, value: value) {
+                        console.log("setting \(override.path) \(key) to \(value)")
+                        changed = true
+                    }
+                }
+            }
+            if changed { try registry.save() }
+        } else {
+            console.error("\\\\winebus section not found in system.reg file for the bottle \(selectedBottle)")
+        }
     }
     
+    // An Unreal title reads its own Engine.ini at startup, so whatever it needs
+    // from us has to be on disk before the process exists. Today that is one
+    // console variable: D3DMetal presents the adapter as "AMD Compatibility
+    // Mode" with NVIDIA's vendor id and a driver version of "10.00", Unreal
+    // matches its NVIDIA deny-list, and every Unreal title opens with a
+    // graphics-driver warning that has nothing to do with the title.
+    //
+    // Written on every launch rather than once, because a title can delete an
+    // Engine.ini it did not write -- Beast of Reincarnation does, on exit --
+    // and making the file read-only does not stop it: unlink needs write
+    // permission on the directory, not on the file.
+    //
+    // A Steam launch has no executable path here, only the app id, so the two
+    // stores are answered from different sources. Quiet when it cannot name a
+    // directory: nothing is guessed into one that might be another title's.
+    UnrealConfig.applyAtLaunch(
+        bottle: bottleURL,
+        steamAppID: Int(id) != nil ? id : nil,
+        steamRoot: bottleURL.appendingPathComponent(DEFAULT_STEAM_WINE_PATH.hasPrefix("/")
+                                                    ? String(DEFAULT_STEAM_WINE_PATH.dropFirst())
+                                                    : DEFAULT_STEAM_WINE_PATH),
+        exe: appExeURL)
+
     console.warn("applying config changes to the bottle \(selectedBottle)...")
     
     let bottleName = URL(string: selectedBottle)?.lastPathComponent ?? ""
     // From here on, any teardown decided before this moment is about a session
     // that no longer exists.
-    LaunchGeneration.shared.launched()
+    LaunchGeneration.shared.launched(bottle: selectedBottle)
     console.warn("attempting to run steam.exe on game id \(id)")
     let arguments = options != nil ? " " + options!.gameArguments : ""
     // A guard for an engine configured before the block existed, or chosen
@@ -289,11 +516,39 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
     // to carry the redirection in its own configuration -- an accident to
     // depend on, not a design.
     let bottleRoot = URL(string: selectedBottle)?.deletingLastPathComponent().path(percentEncoded: false) ?? ""
-    let wineEnvs = "CX_BOTTLE_PATH=\"\(bottleRoot)\" CX_ROOT=\"\(cxAppPath)/Contents/SharedSupport/CrossOver\" WINEPREFIX=\"\(URL(string: selectedBottle)?.path ?? "")\" WINEDEBUG=-all WINEMSYNC=\(options!.wineMSync ? "1" : "0")"
+    // CX_DEBUGMSG, not WINEDEBUG, and it took a whole session to learn why.
+    // The command below goes through CrossOver's bin/wine, which is a Perl
+    // script that BUILDS the environment of everything it starts and feeds
+    // WINEDEBUG from its own CX_DEBUGMSG:
+    //
+    //     $ENV{WINEDEBUG} = $opt_debugmsg if (defined $opt_debugmsg);
+    //
+    // So a WINEDEBUG set here never reaches the wineserver it forks, and so
+    // never reaches winedevice.exe -- which is where winebus lives and the only
+    // process whose traces answer a controller question. What that failure
+    // looks like is a log full of msync and MoltenVK lines and not one line of
+    // trace:hid: output flowing, channel off, every count reading as "the pad
+    // did nothing". The WINEDEBUG below is kept because it costs nothing and
+    // would be read if this ever stopped going through the Perl script.
+    //
+    // "-all" first and then "+hid": asking for +hid alone leaves unwind,
+    // module, process, seh and loaddll on as well -- 1.6 million lines in under
+    // two minutes, a third of them nothing to do with the pad, and the game too
+    // slow to reach the thing being investigated. The trace would change what
+    // it measures.
+    let traceChannels = options!.hidTraceEnabled ? "-all,+timestamp,+hid" : "-all"
+    let wineEnvs = "CX_BOTTLE_PATH=\"\(bottleRoot)\" CX_ROOT=\"\(cxAppPath)/Contents/SharedSupport/CrossOver\" WINEPREFIX=\"\(URL(string: selectedBottle)?.path ?? "")\" WINEDEBUG=\(traceChannels) CX_DEBUGMSG=\(traceChannels) WINEMSYNC=\(options!.wineMSync ? "1" : "0")"
     
 //    try cpyd8d9DLLs(to: bottleURL, enable: options!.dx9PatchEnabled)
     
-    let gameLaunchCommand = appExeURL != nil ? "\"\(appExeURL!.path(percentEncoded: false))\"" : "\"\(steamExePath)\" \(steamBootOptions) -applaunch \(String(id))"
+    let gameLaunchCommand: String
+    if let appExeURL, let launcherURI {
+        gameLaunchCommand = "\"\(appExeURL.path(percentEncoded: false))\" \"\(launcherURI)\""
+    } else if let appExeURL {
+        gameLaunchCommand = "\"\(appExeURL.path(percentEncoded: false))\""
+    } else {
+        gameLaunchCommand = "\"\(steamExePath)\" \(steamBootOptions) -applaunch \(String(id))"
+    }
     let cxAppURL = URL(fileURLWithPath: cxAppPath)
     // D3DMetal is x86 and an ARM bottle never loads it: there Direct3D goes
     // through DXMT. Copying ~60 MB of toolkit into the engine on every launch
@@ -340,11 +595,33 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
     // Reduced precision itself stays: on 27 it is FEX_X87REDUCEDPRECISION and
     // on 26 ROSETTA_X87_PATH, both environment, neither needing a bundle.
         command = "env \(EnvAssignments.removalArguments(options!.envVariables))\(getInlineEnvs(from: options!, cxAppPath: cxAppPath) + wineEnvs) \(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \(bottleName) \(gameLaunchCommand) \(arguments)"
+
+        // The trace goes to a file rather than to this application's console.
+        // A +hid session is hundreds of thousands of lines and the console is
+        // where a person reads what the launcher decided; drowning it would
+        // cost more than the trace is worth. The redirect also outlives this
+        // command: Steam forks and returns, and the descriptor stays open in
+        // the processes that keep writing, which is what makes the log cover
+        // the whole session and not just the launch.
+        if options!.hidTraceEnabled {
+            let log = hidTraceLogPath()
+            command += " > \"\(log)\" 2>&1"
+            console.log("HID trace: keeping this session's controller traffic in \(log)")
+            console.log("read it with MacGameVideoFix's diagnostics/read-hid-trace.sh")
+        }
     
     #if DEBUG
     console.log(command)
     #endif
     try safeShell(command)
+
+    // While a game runs under wine, macOS sees no input at all: the pad is
+    // opened exclusively by the bottle, so not one of its reports reaches the
+    // system, and a game asks for no keyboard and no mouse. Half an hour in,
+    // the idle timer runs out and the screen saver comes up over the game. So
+    // it is told, the way a video player tells it, for as long as this bottle
+    // has a game in it.
+    ScreenAwake.watch(bottleAt: bottleURL)
 }
 
 func launchNativeGame(id: String, cxAppPath: String, selectedBottle: String, options: GameOptions? = nil, appExeURL: URL? = nil) async throws {
@@ -368,5 +645,75 @@ func launchNativeGame(id: String, cxAppPath: String, selectedBottle: String, opt
 /// wants nothing, and Steam asks the user itself.
 func installGame(id: String, cxAppPath: String?, selectedBottle: String?, SteamX86AppPath: String) {
     runSteamAction(.install(id), cxAppPath: cxAppPath,
+                   selectedBottle: selectedBottle, SteamX86AppPath: SteamX86AppPath)
+}
+
+/// Carry out an install, whichever client it belongs to.
+///
+/// One function for both lists: the not-installed tab and the mixed grid both
+/// offer Install, and each used to work it out for itself.
+/// Install through the Epic launcher, which will not take one on its own
+/// command line -- see `EpicReadiness`. Start it plain, wait for its own log to
+/// say it is up, then knock: delivering to a launcher already running is the
+/// only shape ever measured to reach the install dialog.
+///
+/// The wait is visible without any spinner of ours: the launcher window opens
+/// within a second or two, and the install dialog lands on top of it about ten
+/// seconds later.
+func openEpicForInstall(cxAppPath: String?, bottle: String, clientPath: String, uri: String) async {
+    guard let directory = BottleReference(bottle)?.directory else {
+        console.error("epic: cannot resolve the bottle directory for \(bottle)")
+        return
+    }
+    if EpicReadiness.isRunning(inBottleAt: directory) {
+        openEpic(cxAppPath: cxAppPath, bottle: bottle, clientPath: clientPath, uri: uri)
+        return
+    }
+    // Read the header BEFORE starting, or the log we later find is this same
+    // file and its old marker answers for the new session.
+    let log = EpicLauncherLogWatcher.logURL(inBottleAt: directory)
+    let previousHeader = (try? String(contentsOf: log, encoding: .utf8))
+        .flatMap(EpicReadiness.header(of:))
+    console.log("epic: launcher not running; starting it before the install")
+    openEpic(cxAppPath: cxAppPath, bottle: bottle, clientPath: clientPath)
+    let ready = await EpicReadiness.waitUntilInstallable(log: log, after: previousHeader)
+    if !ready {
+        console.error("epic: the launcher never said it was ready; sending the install anyway")
+    }
+    openEpic(cxAppPath: cxAppPath, bottle: bottle, clientPath: clientPath, uri: uri)
+}
+
+func runInstall(_ route: Install.Route, cxAppPath: String?, selectedBottle: String,
+                windowsSteamFolder: URL?) async {
+    switch route {
+    case .steamOnMac(let appID):
+        guard let url = URL(string: "steam://install/\(appID)") else { return }
+        NSWorkspace.shared.open(url)
+    case .steamInBottle(let appID):
+        let steamX86AppPath = windowsSteamFolder?
+            .appendingPathComponent("Steam.exe").path(percentEncoded: false)
+            ?? "C:\\Program Files (x86)\\Steam\\Steam.exe"
+        installGame(id: appID, cxAppPath: cxAppPath, selectedBottle: selectedBottle,
+                    SteamX86AppPath: steamX86AppPath)
+    case .epicInBottle(let uri):
+        guard let epic = EpicLaunch.target(settings: StoreConfig.settings(for: .epic),
+                                           selectedBottle: selectedBottle) else {
+            console.error("epic: no bottle configured for the launcher; nothing can install this")
+            return
+        }
+        guard let uri else {
+            console.error("epic: the id is missing the namespace or the catalogue item, so there is no install URI; opening the launcher instead")
+            openEpic(cxAppPath: cxAppPath, bottle: epic.bottle, clientPath: epic.clientPath)
+            return
+        }
+        await openEpicForInstall(cxAppPath: cxAppPath, bottle: epic.bottle,
+                                 clientPath: epic.clientPath, uri: uri)
+    }
+}
+
+/// Asks Steam to uninstall the title. The removal, and the confirmation in
+/// front of it, are the client's: this only knocks on the door.
+func uninstallSteamGame(id: String, cxAppPath: String?, selectedBottle: String?, SteamX86AppPath: String) {
+    runSteamAction(.uninstall(id), cxAppPath: cxAppPath,
                    selectedBottle: selectedBottle, SteamX86AppPath: SteamX86AppPath)
 }

@@ -56,4 +56,15 @@ fi
 DEST="$HERE/build/$BUNDLE"
 mkdir -p "$HERE/build"
 rm -rf "$DEST" && cp -R "$PRODUCT/$BUNDLE" "$DEST" || exit 1
+
+# A test run leaves XCTest's frameworks and the .xctest plug-in inside the
+# built product, and a copy that carries them fails codesign's seal check
+# ("a sealed resource is missing or invalid") the next time it is verified.
+# Prune them and seal the copy again, ad hoc like the build itself.
+rm -rf "$DEST/Contents/PlugIns"
+for fw in Testing XCTest XCTAutomationSupport XCUIAutomation XCUnit; do
+  rm -rf "$DEST/Contents/Frameworks/$fw.framework"
+done
+[ -d "$DEST/Contents/Frameworks" ] && [ -z "$(ls -A "$DEST/Contents/Frameworks")" ] && rmdir "$DEST/Contents/Frameworks"
+codesign --force --deep --sign - "$DEST" >/dev/null 2>&1 || exit 1
 echo "installed: $DEST"

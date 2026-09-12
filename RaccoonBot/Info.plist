@@ -15,7 +15,29 @@
 	      required to be eligible for Game Mode in a future OS release."
 	     Declared here rather than as a build setting because Xcode has no
 	     INFOPLIST_KEY for it yet. -->
+	<!-- Off, on purpose, on Mathias's decision of 2026-09-01. Game Mode
+	     prioritises the frontmost declared game and lowers everything else;
+	     the game itself runs under wine, which gamepolicyd does not see, so
+	     the only thing Game Mode could ever have prioritised here is this
+	     launcher -- at the game's expense. The key stays, set to false, so
+	     the intent is stated rather than inferred from its absence.
+
+	     What happened after, reported by Mathias on 2026-09-03: about 30 fps
+	     more, and Mortal Shell in particular much steadier. Worth writing
+	     down, and worth not over-reading. The change that removed this
+	     shipped a second one beside it -- the launcher also lets go of the
+	     controller while a game runs -- so neither is separated from the
+	     other by this evidence. And it sits oddly with what was measured
+	     before removing: gamepolicyd had logged nothing in 24 hours, which
+	     was taken to mean Game Mode was not engaging at all. A gain that
+	     size says either that silence was not evidence of inaction, or the
+	     gain belongs to the controller change.
+
+	     Which of the two it was stays unseparated, on Mathias's decision of
+	     2026-09-03: telling them apart means turning this back on for a
+	     session, and turning it back on has no upside to buy that answer
+	     with. So the credit is not assigned, and this key does not move. -->
 	<key>LSSupportsGameMode</key>
-	<true/>
+	<false/>
 </dict>
 </plist>

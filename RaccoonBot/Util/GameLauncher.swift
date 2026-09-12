@@ -47,10 +47,14 @@ final class GameLauncher {
     /// every caller asks the same question.
     nonisolated static func outcome(for game: Game,
                                     isPlaying: Bool,
-                                    needsFix: Bool) -> LaunchOutcome {
+                                    needsFix: Bool,
+                                    hasEpicLauncher: Bool = true) -> LaunchOutcome {
         if isPlaying { return .alreadyPlaying }
         if game.isNative { return .started }
         if game.isCustom == true && game.appExeURL == nil { return .noExecutable }
+        // An Epic title is started by the Epic launcher, through its URI
+        // scheme; with no launcher in the bottle there is nothing to start it.
+        if game.isEpic && !hasEpicLauncher { return .noExecutable }
         if needsFix { return .needsFix }
         return .started
     }
@@ -65,10 +69,15 @@ final class GameLauncher {
               fixes: MGVFLibrary) -> LaunchOutcome {
 
         let needsFix = gameFolder.map { fixes.needsPatch(folder: $0) } ?? false
-        let outcome = Self.outcome(for: item, isPlaying: isPlaying, needsFix: needsFix)
+        let epicPlan = item.isEpic
+            ? EpicLaunch.plan(for: item, settings: StoreConfig.settings(for: .epic), selectedBottle: appGlobals.selectedBottle)
+            : nil
+        let outcome = Self.outcome(for: item, isPlaying: isPlaying, needsFix: needsFix,
+                                   hasEpicLauncher: !item.isEpic || epicPlan != nil)
         guard outcome == .started else {
             if outcome == .noExecutable {
-                console.error("custom game doesn't have an executable associated")
+                console.error(item.isEpic ? "epic: no Epic Games Launcher in the bottle to start \(item.name); set one up from the Epic panel"
+                                          : "custom game doesn't have an executable associated")
             }
             return outcome
         }
@@ -96,11 +105,25 @@ final class GameLauncher {
                                   + "launching on defaults, which may not be what is configured")
                 }
 
+                // Where this title actually runs, decided once.
+                //
+                // The launch below worked this out for itself and the watcher
+                // above was given something else: for a title with the ARM
+                // toggle on, the game started in the ARM bottle while the
+                // watcher polled, closed and quit the other one. Since the
+                // launch generation began counting per bottle, a disagreement
+                // here also means a teardown comparing a counter its own
+                // launch never bumped -- which reads as "nothing has been
+                // launched since" and is the answer that kills a running
+                // game. One value, both places.
+                let launchBottle = epicPlan?.bottle
+                    ?? (gameOptions.useArmBottle ? appGlobals.selectedArmBottle : appGlobals.selectedBottle)
+
                 Task(priority: .background) {
                     let observer = try await getGameTracker(
                         appNames: updatedItem.appNames,
                         cxAppPath: appGlobals.cxAppPath!,
-                        bottle: appGlobals.selectedBottle,
+                        bottle: launchBottle,
                         onLoad: { appName in
                             libraryPageGlobals.playingID = item.id
                             DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
@@ -114,8 +137,9 @@ final class GameLauncher {
                             Task { @MainActor in self.observers[item.id] = nil }
                         },
                         isNative: item.isNative,
-                        steamID: item.isCustom == true ? nil : item.steamAppID,
-                        steamPath: appGlobals.windowsSteamFolder?.path(percentEncoded: false) ?? "")
+                        steamID: (item.isCustom == true || item.isEpic) ? nil : item.steamAppID,
+                        steamPath: appGlobals.windowsSteamFolder?.path(percentEncoded: false) ?? "",
+                        isEpic: item.isEpic)
                     await MainActor.run { self.observers[item.id] = observer }
                 }
 
@@ -131,12 +155,12 @@ final class GameLauncher {
                         ?? "C:\\Program Files (x86)\\Steam\\Steam.exe"
                     try await launchWindowsGame(id: String(item.steamAppID),
                                                 cxAppPath: appGlobals.cxAppPath ?? "",
-                                                selectedBottle: gameOptions.useArmBottle
-                                                    ? appGlobals.selectedArmBottle
-                                                    : appGlobals.selectedBottle,
+                                                // An Epic title runs where its launcher is.
+                                                selectedBottle: launchBottle,
                                                 steamExePath: steamExePath,
                                                 options: gameOptions,
-                                                appExeURL: item.appExeURL)
+                                                appExeURL: epicPlan?.launcher ?? item.appExeURL,
+                                                launcherURI: epicPlan?.uri)
                 }
             } catch {
                 console.error(String(reflecting: error))

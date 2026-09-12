@@ -167,9 +167,20 @@ final class SteamAPI {
             console.error(String(reflecting: error))
         }
     }
+    /// How many titles this run has given up on, beyond the ones that were
+    /// never going to be games. Shown beside the button that undoes it, so
+    /// the button can say whether there is anything to undo.
+    var skippedCount: Int {
+        cacheBlacklist.filter { !BLACKLIST.contains($0) }.count
+    }
+
     func deleteBlacklistCache() {
         try? FileManager.default.removeItem(at: cacheBlacklistURL)
-        self.cacheBlacklist.removeAll()
+        // Back to the built-in exclusions, not to nothing. Emptying it
+        // altogether puts Steamworks Common Redistributables back in the
+        // queue -- a request, a two-second wait and a store answer, to learn
+        // again what the constant already says: it is not a game.
+        self.cacheBlacklist = BLACKLIST
         console.warn("Blacklist Cache deleted")
     }
     func loadProfileDataCache() {

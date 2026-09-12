@@ -21,14 +21,14 @@ import Foundation
 /// Exactly these four words, and nothing else is an answer. A script that
 /// cannot determine the state refuses instead of guessing -- so `unknown` here
 /// means the run failed, never that the fix is absent.
-enum FixState: String {
+nonisolated enum FixState: String {
     case installed
     case broken
     case half
     case absent
 }
 
-struct MGVFResult {
+nonisolated struct MGVFResult {
     let state: FixState?
     let stdout: String
     let stderr: String
@@ -83,7 +83,7 @@ final class MGVFRunner: @unchecked Sendable {
     // MGVF_STATUS_ONLY is not a read-only guarantee either: that same script is
     // the one of eleven that does not read it, so with the variable set and no
     // verb it performs a real installation. Only `--status` is safe to ask.
-    enum Verb {
+    nonisolated enum Verb {
         case install
         case status
         case restore
@@ -325,7 +325,7 @@ final class MGVFRunner: @unchecked Sendable {
     /// to stderr -- a reader that took the first line of stdout once came back
     /// with "warning:" as the state. And not a substring search either:
     /// "not installed" contains "installed".
-    static func stateWord(in text: String) -> FixState? {
+    nonisolated static func stateWord(in text: String) -> FixState? {
         let separators = CharacterSet.whitespacesAndNewlines
         for token in text.components(separatedBy: separators) {
             let word = token.trimmingCharacters(in: .punctuationCharacters)
@@ -338,7 +338,7 @@ final class MGVFRunner: @unchecked Sendable {
     ///
     /// The error paths in these scripts print absolute paths, and those name
     /// the user and the whole layout of their Steam library.
-    static func redacted(_ text: String) -> String {
+    nonisolated static func redacted(_ text: String) -> String {
         text.replacingOccurrences(of: NSHomeDirectory(), with: "~")
     }
 }

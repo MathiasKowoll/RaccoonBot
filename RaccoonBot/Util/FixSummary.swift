@@ -45,8 +45,8 @@ nonisolated enum FixSummary {
         }
         if unverified > 0 {
             said.append(unverified == 1
-                ? "1 is in a bottle that has been updated since it was patched"
-                : "\(unverified) are in bottles that have been updated since they were patched")
+                ? "1 is in a bottle not yet checked"
+                : "\(unverified) are in bottles not yet checked")
         }
         guard !said.isEmpty else { return allWell }
         return said.joined(separator: "; ") + "."

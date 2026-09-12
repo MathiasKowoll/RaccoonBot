@@ -4,8 +4,8 @@
 
 # RaccoonBot
 
-**A Steam launcher for macOS that runs Windows games through CrossOver —
-and fixes the ones whose cutscenes do not play.**
+**A launcher for macOS that runs your Steam and Epic Games Store libraries
+through CrossOver — and fixes the ones whose cutscenes do not play.**
 
 </div>
 
@@ -243,10 +243,20 @@ issue with the game and what you see, and it can be looked at.
 
 ### Does it send my library anywhere?
 
-No. The library is read from Steam's own files on your disk. The only requests
-RaccoonBot makes are to Steam's public store endpoint, for a title's name and
-cover art — no key, no account, no cookies — and to GitHub, for the fixes
-bundle. It does not use the metadata proxy Procyon uses, and cannot: that is one
+Not as a library, no. It is read from Steam's and the Epic launcher's own files
+on your disk, and no list of what you own is ever sent anywhere.
+
+Three kinds of request leave the machine, all of them public and none of them
+carrying a key, an account or a cookie:
+
+- **Steam's public store endpoint**, for a Steam title's name and cover art.
+- **Epic's public store-content endpoint**, for an Epic title's description,
+  publisher, screenshots and requirements. The address is built from the
+  title's own name, so the name of a game you own is what goes out, one title
+  at a time, and the answer is cached so it is asked once.
+- **GitHub**, for the fixes bundle.
+
+It does not use the metadata proxy Procyon uses, and cannot: that is one
 person's server and his quota.
 
 ### Will you upstream this to Procyon?

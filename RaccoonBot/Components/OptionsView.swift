@@ -41,8 +41,10 @@ struct OptionsView: View {
     }
     @State var creatingBottle: Bool = false
     @EnvironmentObject var appGlobals: AppGlobals
+    @EnvironmentObject private var gamepad: GamepadInput
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
     @MainActor var load: @Sendable () async -> Void
+    @State private var showEpicImport = false
     @State var createBtlPrc: Process?
     @State var cleard3dmCacheStatus: DeleteStatus = DeleteStatus.idle
     /// Read once, off the main thread, and remembered. NEVER computed in the
@@ -52,6 +54,10 @@ struct OptionsView: View {
     @State private var gstStatus: GStreamerStatus?
     @StateObject private var patchAll = PatchAll()
     @StateObject private var fixLibrary = MGVFLibrary.shared
+    /// The controller-bus set: what is wanted, what the engine holds, and
+    /// the script's refusal when it would not write. Read off the main actor
+    /// like `gstStatus`, for the same reason.
+    @StateObject private var controllerBus = ControllerBusSwitch()
     
     var body: some View {
         Modal(
@@ -62,73 +68,148 @@ struct OptionsView: View {
                 // Shown before the button that uses it, because this is the
                 // value the copy is made with and it decides which bottles the
                 // engine will ever see.
-                HStack(spacing: 6) {
-                    Text("Bottles in").font(.footnote)
-                    Button(URL(fileURLWithPath: appGlobals.bottlesRoot).lastPathComponent) {
-                        if let picked = openFolderSelectorPanel(
-                            initialDirectory: URL(fileURLWithPath: appGlobals.bottlesRoot),
-                            title: "Where RaccoonBot keeps its bottles") {
-                            let path = picked.path(percentEncoded: false)
-                            appGlobals.bottlesRoot = path
-                            persistUsrDefOptionString(key: "bottlesRoot", value: path)
+                // One row: where the bottles live, and which engine runs them.
+                // Two short buttons, and the sheet is wide enough for both.
+                HStack(alignment: .center, spacing: 16) {
+                    HStack(spacing: 6) {
+                        Text("Bottles in").font(.footnote)
+                        Button(URL(fileURLWithPath: appGlobals.bottlesRoot).lastPathComponent) {
+                            if let picked = openFolderSelectorPanel(
+                                initialDirectory: URL(fileURLWithPath: appGlobals.bottlesRoot),
+                                title: "Where RaccoonBot keeps its bottles") {
+                                let path = picked.path(percentEncoded: false)
+                                appGlobals.bottlesRoot = path
+                                persistUsrDefOptionString(key: "bottlesRoot", value: path)
+                            }
                         }
+                        .help(appGlobals.bottlesRoot)
                     }
-                    .help(appGlobals.bottlesRoot)
-                }
-                Button(URL(string: appGlobals.cxAppPath ?? "")?.lastPathComponent ?? "Select a Crossover App...") {
-                    shouldShowBottleSelector = false
-                    if let url = openFolderSelectorPanel(type: .application) {
-                        // Refused before anything is copied, rather than after
-                        // an hour of patching. One rule, in EngineLayout.
-                        if let refusal = EngineLayout.refusal(for: url) {
-                            console.error(refusal)
-                            progressLabel = refusal
-                            return
-                        }
-                        appGlobals.selectedBottle = ""
-                        Task { @MainActor in
-                            // MacGameVideoFix makes the copy now, with the
-                            // script this application carries. What comes out
-                            // declares itself in mgvf-origin.json; the patcher
-                            // this replaced left 26.3p0.1.x and nothing else,
-                            // which is how a copy's maker can be told apart.
-                            downloading = true
-                            let patchedAppURL: URL
-                            do {
-                                patchedAppURL = try await EngineMaker.make(
-                                    from: url,
-                                    bottlesRoot: appGlobals.bottlesRoot,
-                                    replacing: true,
-                                    progress: { p, m in Task { @MainActor in progress = p; progressLabel = m } })
-                            } catch {
-                                downloading = false
-                                progress = 0
-                                progressLabel = error.localizedDescription
-                                console.error(error.localizedDescription)
+                    Button(URL(string: appGlobals.cxAppPath ?? "")?.lastPathComponent ?? "Select a Crossover App...") {
+                        shouldShowBottleSelector = false
+                        if let url = openFolderSelectorPanel(type: .application) {
+                            // Refused before anything is copied, rather than after
+                            // an hour of patching. One rule, in EngineLayout.
+                            if let refusal = EngineLayout.refusal(for: url) {
+                                console.error(refusal)
+                                progressLabel = refusal
                                 return
                             }
-                            downloading = false
-                            progress = 0
-                            appGlobals.cxAppPath = patchedAppURL.path(percentEncoded: false)
-                            persistUsrDefOptionString(key: "cxAppPath", value: patchedAppURL.relativePath)
-                            persistUsrDefOptionString(key: "cxCompleteAppPath", value: patchedAppURL.path(percentEncoded: false))
-                            if !bottles.isEmpty {
+                            appGlobals.selectedBottle = ""
+                            Task { @MainActor in
+                                // MacGameVideoFix makes the copy now, with the
+                                // script this application carries. What comes out
+                                // declares itself in mgvf-origin.json; the patcher
+                                // this replaced left 26.3p0.1.x and nothing else,
+                                // which is how a copy's maker can be told apart.
+                                downloading = true
+                                let patchedAppURL: URL
+                                do {
+                                    patchedAppURL = try await EngineMaker.make(
+                                        from: url,
+                                        bottlesRoot: appGlobals.bottlesRoot,
+                                        replacing: true,
+                                        progress: { p, m in Task { @MainActor in progress = p; progressLabel = m } })
+                                } catch {
+                                    downloading = false
+                                    progress = 0
+                                    progressLabel = error.localizedDescription
+                                    console.error(error.localizedDescription)
+                                    return
+                                }
+                                downloading = false
+                                progress = 0
+                                appGlobals.cxAppPath = patchedAppURL.path(percentEncoded: false)
+                                persistUsrDefOptionString(key: "cxAppPath", value: patchedAppURL.relativePath)
+                                persistUsrDefOptionString(key: "cxCompleteAppPath", value: patchedAppURL.path(percentEncoded: false))
+                                // The optional set goes in after the copy is made
+                                // and signed -- the media set is already in, from
+                                // the script's step [3/6] -- and only when the
+                                // switch says so. The installer re-signs. A refusal
+                                // (a bottle up, an engine the set was not built
+                                // for) is a sentence in the controller-bus row,
+                                // not a failed engine: the copy is made and usable.
+                                if appGlobals.controllerBusEnabled {
+                                    await controllerBus.apply(.install, engine: patchedAppURL.path(percentEncoded: false))
+                                }
+                                if !bottles.isEmpty {
+                                    shouldShowBottleSelector = true
+                                }
+                                if (DEBUG_ENABLED) {
+                                    console.saveLogs()
+                                }
+                            }
+                            do {
+                                bottles = try getAllBottles(appDir: url)
+                            } catch {
+                                console.error(String(reflecting: error))
+                            }
+                        } else {
+                            if !bottles.isEmpty{
                                 shouldShowBottleSelector = true
                             }
-                            if (DEBUG_ENABLED) {
-                                console.saveLogs()
-                            }
-                        }
-                        do {
-                            bottles = try getAllBottles(appDir: url)
-                        } catch {
-                            console.error(String(reflecting: error))
-                        }
-                    } else {
-                        if !bottles.isEmpty{
-                            shouldShowBottleSelector = true
                         }
                     }
+                    Spacer()
+                }
+                // Off means this application registers nothing on any pad, so a
+                // game reading the same device through wine is its only reader.
+                // A diagnostic as much as a preference: Mortal Shell 2 lost its pad
+                // minutes into play, and this is how to find out whether we were
+                // the second reader. The arrow keys work either way.
+                Toggle("Use a game controller", isOn: $gamepad.enabled)
+                    .font(.footnote)
+                    .help("Off: RaccoonBot does not touch the controller at all. Arrow keys still navigate.")
+                // Which bus a pad is on, told to the games: MacGameVideoFix's
+                // controller-bus set, an improvement rather than a fix. No title
+                // needs it, so it is a switch, and off puts CrossOver's own
+                // files back. The set was three files, then four, and is ten
+                // now -- so the label and the help say what it DOES rather than
+                // counting them, which is a number that has been wrong twice. The switch is what is wanted; the row under it is
+                // what the engine holds, read from the engine, and the two are
+                // allowed to disagree out loud -- see ControllerBusSwitch.
+                Toggle("Tell games which bus a controller is on", isOn: $appGlobals.controllerBusEnabled)
+                    .font(.footnote)
+                    .disabled(controllerBus.busy || !(controllerBus.status?.isBundled ?? true))
+                    .help("On: the engine carries MacGameVideoFix's controller set, and a DualSense on Bluetooth keeps rumble, the touchpad and the PS button. It is also what the per-title controller options need: with this off they have nothing to talk to. Off: CrossOver's own files are put back.")
+                    .onChange(of: appGlobals.controllerBusEnabled) { _, on in
+                        persistUsrDefOptionBool(key: AppGlobals.controllerBusKey, value: on)
+                        Task { await controllerBus.apply(on ? .install : .remove, engine: appGlobals.cxAppPath) }
+                    }
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .top, spacing: 6) {
+                        if let bus = controllerBus.status {
+                            let light = bus.light(enabled: appGlobals.controllerBusEnabled)
+                            Image(systemName: light == .good ? "checkmark.circle"
+                                            : light == .warning ? "exclamationmark.triangle" : "circle.dashed")
+                                .foregroundStyle(light == .good ? Color.green
+                                                 : light == .warning ? Color.orange : Color.secondary)
+                            Text(bus.summary(enabled: appGlobals.controllerBusEnabled))
+                                .font(.footnote)
+                                .foregroundStyle(light == .warning ? Color.primary : Color.secondary)
+                            Spacer()
+                            if controllerBus.busy {
+                                ProgressView().controlSize(.small)
+                            } else if let action = bus.wantsAction(enabled: appGlobals.controllerBusEnabled) {
+                                // The one action that makes the engine agree with
+                                // the switch. Its own verb, not the switch's value:
+                                // a half-installed set is removed first even with
+                                // the switch on.
+                                Button(action == .install ? "Install" : "Remove") {
+                                    Task { await controllerBus.apply(action, engine: appGlobals.cxAppPath) }
+                                }
+                            }
+                        } else {
+                            ProgressView().controlSize(.small)
+                            Text("Checking the engine's controller bus…").font(.footnote).foregroundStyle(.secondary)
+                        }
+                    }
+                    // Refused rather than attempted: not an error, a reason.
+                    if let refused = controllerBus.refusedReason {
+                        Text(refused).font(.footnote).foregroundStyle(.orange)
+                    }
+                }
+                .task(id: appGlobals.cxAppPath ?? "") {
+                    await controllerBus.refresh(engine: appGlobals.cxAppPath)
                 }
                 if(downloading){
                     ProgressView(value: progress, total: 100) {
@@ -147,7 +228,7 @@ struct OptionsView: View {
                     // been updated.
                     // Every installed title that needs its fix, in one go.
                     let targets = PatchAll.targets(from: libraryPageGlobals.gamesMeta,
-                                                   needsPatch: { fixLibrary.needsPatch(folder: $0) })
+                                                   needsPatch: { fixLibrary.need(folder: $0) != .none })
                     VStack(alignment: .leading, spacing: 4) {
                         // Which fixes are running, where a person can see it.
                         //
@@ -370,37 +451,81 @@ struct OptionsView: View {
                         }
                         Text("Running \(configuringStore.label) in an ARM bottle has not been tested, so the option is off.")
                             .font(.footnote).foregroundStyle(.secondary)
+                        if configuringStore == .epic,
+                           let epic = EpicLaunch.target(settings: StoreConfig.settings(for: .epic),
+                                                        selectedBottle: appGlobals.selectedBottle) {
+                            HStack(alignment: .center, spacing: 12) {
+                                ProminentButton("Open Epic Games Launcher", systemImage: "e.circle.fill") {
+                                    openEpic(cxAppPath: appGlobals.cxAppPath, bottle: epic.bottle, clientPath: epic.clientPath)
+                                }
+                                .disabled(!EpicLaunch.isInstalled(epic))
+                                Text(EpicLaunch.isInstalled(epic)
+                                     ? "Opens the launcher in this bottle, on whatever the engine holds."
+                                     : "Not installed in this bottle. Install it from CrossOver first.")
+                                    .font(.footnote).foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                            }
+                        }
                     }
 
                     GameLibrariesList(store: configuringStore, load: load)
+                    // Games already on the disk that the launcher does not
+                    // know: it is told, rather than made to download them.
+                    if configuringStore == .epic,
+                       let epic = EpicLaunch.target(settings: StoreConfig.settings(for: .epic),
+                                                    selectedBottle: appGlobals.selectedBottle),
+                       EpicLaunch.isInstalled(epic),
+                       let bottleDir = BottleReference(epic.bottle)?.directory,
+                       !StoreConfig.settings(for: .epic).libraries.isEmpty {
+                        HStack(alignment: .center, spacing: 12) {
+                            ProminentButton("Register games on the disk", systemImage: "externaldrive.badge.plus") {
+                                showEpicImport = true
+                            }
+                            Text("Tells the launcher about games already in the Epic folders above, so it lists them installed instead of downloading them again.")
+                                .font(.footnote).foregroundStyle(.secondary).lineLimit(2)
+                        }
+                        .sheet(isPresented: $showEpicImport) {
+                            EpicImportSheet(bottle: bottleDir,
+                                            // Stored as POSIX paths by GameLibrariesList; URL(string:) would take
+                                            // a path without spaces for a scheme-less URL that no file API opens.
+                                            libraries: StoreConfig.settings(for: .epic).libraries.map { URL(fileURLWithPath: $0) },
+                                            load: load)
+                        }
+                    }
                 }
                 .task(id: configuringStore) {
                     storeBottle = StoreConfig.settings(for: configuringStore).bottle
                 }
 
                 .padding(.vertical)
-                VStack(alignment: .leading) {
-                    if appGlobals.selectedBottle != "" {
-                        ProminentButton("Set Steam path", image: "steam-fill") {
-                            if let bottlePath = URL(string: appGlobals.selectedBottle) {
-                                if let url = openFolderSelectorPanel(type: .directory, initialDirectory: bottlePath.appendingPathComponent("drive_c"), title: "Select your Steam folder (where steam.exe is located)") {
-                                    let fallbackPath = bottlePath.appendingPathComponent(DEFAULT_STEAM_WINE_PATH).path(percentEncoded: false)
-                                    appGlobals.windowsSteamFolder = url
-                                    persistUsrDefOptionString(key: "windowsSteamFolder", value: appGlobals.windowsSteamFolder?.path(percentEncoded: false) ?? fallbackPath)
-                                    let from = appGlobals.windowsSteamFolder?.appendingPathComponent("config") ?? URL(string: appGlobals.selectedBottle)!.appendingPathComponent(DEFAULT_STEAM_WINE_CONFIG_PATH)
-                                    let steamLibrariesURLs = getSteamLibraryFolders(bottleURL: URL(string: appGlobals.selectedBottle)! ,from: from)
-                                    steamLibrariesURLs.forEach { url in
-                                        validateAddSteamFolder(url, to: &libraryPageGlobals.folders)
+                // Steam's own. The other stores do not have a Windows client in
+                // the bottle to point at, so the button only appears for Steam --
+                // and only once a bottle is chosen, since the path lives inside it.
+                if configuringStore == .steam, appGlobals.selectedBottle != "" {
+                    HStack(alignment: .center, spacing: 12) {
+                            ProminentButton("Set Steam path", image: "steam-fill") {
+                                if let bottlePath = URL(string: appGlobals.selectedBottle) {
+                                    if let url = openFolderSelectorPanel(type: .directory, initialDirectory: bottlePath.appendingPathComponent("drive_c"), title: "Select your Steam folder (where steam.exe is located)") {
+                                        let fallbackPath = bottlePath.appendingPathComponent(DEFAULT_STEAM_WINE_PATH).path(percentEncoded: false)
+                                        appGlobals.windowsSteamFolder = url
+                                        persistUsrDefOptionString(key: "windowsSteamFolder", value: appGlobals.windowsSteamFolder?.path(percentEncoded: false) ?? fallbackPath)
+                                        let from = appGlobals.windowsSteamFolder?.appendingPathComponent("config") ?? URL(string: appGlobals.selectedBottle)!.appendingPathComponent(DEFAULT_STEAM_WINE_CONFIG_PATH)
+                                        let steamLibrariesURLs = getSteamLibraryFolders(bottleURL: URL(string: appGlobals.selectedBottle)! ,from: from)
+                                        steamLibrariesURLs.forEach { url in
+                                            validateAddSteamFolder(url, to: &libraryPageGlobals.folders)
+                                        }
+                                        Task { await load() }
                                     }
-                                    Task { await load() }
                                 }
                             }
-                        }
-                        Text("\(appGlobals.windowsSteamFolder?.path(percentEncoded: false) ?? "Not set")")
+                            Text(appGlobals.windowsSteamFolder?.path(percentEncoded: false) ?? "Not set")
+                                .font(.footnote).foregroundStyle(.secondary)
+                                .lineLimit(1).truncationMode(.middle)
+                                .help(appGlobals.windowsSteamFolder?.path(percentEncoded: false) ?? "Not set")
                     }
                 }
             }
-            .frame(width: 300)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical)
         }
         .onAppear() {

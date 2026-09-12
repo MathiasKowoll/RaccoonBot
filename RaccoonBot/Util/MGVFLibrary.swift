@@ -55,6 +55,14 @@ final class MGVFLibrary: ObservableObject {
 
     private init() {}
 
+    /// A library over a known catalogue, for a test to ask the same questions
+    /// the rows ask without loading a bundle. Not for the application: there
+    /// is one library and it loads its own.
+    init(catalog: MGVFCatalog) {
+        self.catalog = catalog
+        self.generation = 1
+    }
+
     /// Load the catalogue once. Safe to call from every view that appears.
     func loadIfNeeded() async {
         guard catalog == nil, !loading else { return }
@@ -199,24 +207,81 @@ final class MGVFLibrary: ObservableObject {
                                      arm: readUsrDefOptionString(key: "selectedArmBottle") ?? "")
     }
 
+    // MARK: - What a bottle fix's row says
+
+    /// The installer's answer for a bottle-scoped fix, kept per title.
+    ///
+    /// A fix that installs into a bottle leaves nothing beside the game, so a
+    /// row used to read the record of "we installed it" -- and that record is
+    /// per application identity and only ever written from here. NINJA GAIDEN
+    /// 3, installed from the released application and fully present in the
+    /// bottle, read as unpatched in the development build; a fix installed by
+    /// hand read as unpatched in both. The disk was right and the row was not.
+    ///
+    /// So the row asks the installer, which is the only thing that can say,
+    /// and keeps the answer. The key is the bottles' stamp joined to the
+    /// record: wine moves the stamp when it updates a bottle, and installing
+    /// or restoring from here moves the record, so either kind of change asks
+    /// again and nothing else does. One process per real change, not one per
+    /// redraw, which is the cost the old comment was right to refuse.
+    private var bottleAnswers: [String: (key: String, need: FixNeed)] = [:]
+    private var asking: Set<String> = []
+
+    private func bottleNeed(folder: String, entry: MGVFGame, catalog: MGVFCatalog) -> FixNeed {
+        let bottles = configuredBottles
+        let key = BottleStamp.current(for: bottles) + "|" + (catalog.appliedFingerprint(folder: folder) ?? "-")
+        if let known = bottleAnswers[folder], known.key == key { return known.need }
+        if !asking.contains(folder) {
+            asking.insert(folder)
+            Task { @MainActor in
+                let state = await catalog.state(forFolder: folder, bottles: bottles)
+                bottleAnswers[folder] = (key, Self.need(from: state))
+                asking.remove(folder)
+                generation += 1
+            }
+        }
+        // Not known yet. Said as such rather than guessed either way.
+        return .unverified
+    }
+
+    /// The installer's word, as the row's.
+    static func need(from state: GameFixState) -> FixNeed {
+        switch state {
+        case .patched:            return .none
+        case .outdated:           return .outdated
+        case .needsPatch:         return .missing
+        case .unknown:            return .unverified
+        case .noFix, .dismissed:  return .none
+        }
+    }
+
     func need(folder: String?) -> FixNeed {
         guard let folder, let catalog, let entry = catalog.entry(forFolder: folder) else { return .none }
         if catalog.isDismissed(folder) { return .none }
         if entry.installsIntoBottle {
-            guard catalog.hasApplied(folder: folder) else { return .missing }
-            if catalog.isOutdated(folder: folder, game: entry) { return .outdated }
-            // Asked last, because a fix we know to be the wrong version is
-            // worth saying so about whether or not the bottle also moved.
-            if catalog.bottlesChanged(folder: folder, bottles: configuredBottles) { return .unverified }
-            return .none
+            return bottleNeed(folder: folder, entry: entry, catalog: catalog)
         }
-        var url = URL(fileURLWithPath: folder)
-        if !entry.carrierDir.isEmpty { url.appendPathComponent(entry.carrierDir) }
-        let keptAside = url.appendingPathComponent(entry.keptAs).path(percentEncoded: false)
-        if !FileManager.default.fileExists(atPath: keptAside) { return .missing }
+        // Where the installer actually put the original, not where the
+        // manifest says the carrier lives: for the Unreal titles that is one
+        // subfolder further down, and looking only where told refused four
+        // patched titles at launch.
+        guard entry.keptAsideOriginal(inGameFolder: folder) != nil else { return .missing }
         return catalog.isOutdated(folder: folder, game: entry) ? .outdated : .none
     }
 
+    /// Is the fix NOT on this title? Only that.
+    ///
+    /// This drives the card's badge and the launch gate, and both used to
+    /// fire for an older fix as well as for none: the badge is one icon and
+    /// the gate says "needs its video fix", so a title whose fix was on and
+    /// working read as unpatched the day the bundle moved. It happened to NINJA
+    /// GAIDEN 3 the moment 5.0.5 was embedded -- its installer had changed,
+    /// so its fingerprint had, and a fix that played video yesterday was
+    /// refused at launch as absent today.
+    ///
+    /// An older fix is present. It is reported by need(folder:) as .outdated,
+    /// counted in the summary, and offered to the sweep; it is not a reason
+    /// to refuse a launch or to mark a card as broken.
     func needsPatch(folder: String?) -> Bool {
         guard let folder, let catalog, let entry = catalog.entry(forFolder: folder) else { return false }
         if catalog.isDismissed(folder) { return false }
@@ -234,21 +299,16 @@ final class MGVFLibrary: ObservableObject {
         // asked before installing or restoring, where being wrong matters, and
         // not while drawing a row, where it does not.
         if entry.installsIntoBottle {
-            guard catalog.hasApplied(folder: folder) else { return true }
-            if catalog.isOutdated(folder: folder, game: entry) { return true }
-            // An updated bottle makes this a title worth offering, not a title
-            // known to need anything. Offering costs one `--status` in the
-            // coordinator that handles it, which answers properly; a fix that
-            // is still there comes back installed and is skipped.
-            return catalog.bottlesChanged(folder: folder, bottles: configuredBottles)
+            // The launch gate and the sweep. "Not checked yet" is not a reason
+            // to refuse a launch, so only a known absence or a known older fix
+            // counts here; the sweep offers the unverified ones separately,
+            // through need(folder:), and the coordinator asks properly.
+            return bottleNeed(folder: folder, entry: entry, catalog: catalog) == .missing
         }
-        var url = URL(fileURLWithPath: folder)
-        if !entry.carrierDir.isEmpty { url.appendPathComponent(entry.carrierDir) }
-        let keptAside = url.appendingPathComponent(entry.keptAs).path(percentEncoded: false)
-        if !FileManager.default.fileExists(atPath: keptAside) { return true }
-        // The fix is on. Is it the one the bundle carries now? The catalogue
-        // memoises the answer, so this stays a dictionary lookup per row
-        // rather than a hash of every file the fix installs.
-        return catalog.isOutdated(folder: folder, game: entry)
+        // Same lookup as need(folder:), through the entry, so the two cannot
+        // disagree about where a fix leaves its evidence.
+        // The fix is on or it is not. Whether it is the newest is a different
+        // question, answered by need(folder:), and not this one's to conflate.
+        return entry.keptAsideOriginal(inGameFolder: folder) == nil
     }
 }

@@ -46,7 +46,7 @@
 		</data>
 		<key>Resources/dstorage-ng4.dll</key>
 		<data>
-		Zg40WDZvVP9rtktQ+mqYTaMiJmw=
+		ZwAXz/EjS+Y5wuppps3AaHnPs1c=
 		</data>
 		<key>Resources/engine-built-for-stock.json</key>
 		<data>
@@ -55,6 +55,50 @@
 		<key>Resources/engine-built-for.json</key>
 		<data>
 		eh4FP7ez2uMOMePsrEISsIxgkEg=
+		</data>
+		<key>Resources/engine-controller-built-for.json</key>
+		<data>
+		9Xylpp7gGjCGPwYFmwDApA9QAMI=
+		</data>
+		<key>Resources/engine-controller-hidclass.sys</key>
+		<data>
+		xlqPsGMHbXp13II4AB7HqqNcUcY=
+		</data>
+		<key>Resources/engine-controller-ntoskrnl.exe</key>
+		<data>
+		HZfnp6wOYH2T1HpD9r9verw0jSQ=
+		</data>
+		<key>Resources/engine-controller-setupapi.dll</key>
+		<data>
+		s9QUm/tEPFKMYkW6xrYQhyPHYyo=
+		</data>
+		<key>Resources/engine-controller-winebus.so</key>
+		<data>
+		P8Et6ZB9cuujnUgbJMFoMQkNCYI=
+		</data>
+		<key>Resources/engine-controller-winebus.sys</key>
+		<data>
+		zCgm5QcKyt+JcUxGO8JfqKpkbvw=
+		</data>
+		<key>Resources/engine-controller-xinput1_1.dll</key>
+		<data>
+		dAoIBOw2/NDW7rqJWg+KwpQ9Jq8=
+		</data>
+		<key>Resources/engine-controller-xinput1_2.dll</key>
+		<data>
+		x4bd2En0Q03L0yiND6tzylQolis=
+		</data>
+		<key>Resources/engine-controller-xinput1_3.dll</key>
+		<data>
+		TNrerE8zpQyxwgLSA1SZoQuHnLA=
+		</data>
+		<key>Resources/engine-controller-xinput1_4.dll</key>
+		<data>
+		zp+SdMqjGjMN7qz6OADogUL+TtY=
+		</data>
+		<key>Resources/engine-controller-xinputuap.dll</key>
+		<data>
+		JU/0M0sNS2Ya5FcY4n9UxGwiESU=
 		</data>
 		<key>Resources/engine-winegstreamer-stock.dll</key>
 		<data>
@@ -79,6 +123,10 @@
 		<key>Resources/install-dwo-bridge.sh</key>
 		<data>
 		9UhzAATLLAyfxS3DabCo+Q8y4sc=
+		</data>
+		<key>Resources/install-engine-controller.sh</key>
+		<data>
+		L7Q9k7e3MgvdypR+h6FijStFK0k=
 		</data>
 		<key>Resources/install-engine-media.sh</key>
 		<data>
@@ -162,7 +210,7 @@
 		</data>
 		<key>Resources/libogg_64.dll</key>
 		<data>
-		nr+67N2Fji3j/mjX+dVCbeQ4fEk=
+		rFcnIiFFedodayu5OHySSH/rV8s=
 		</data>
 		<key>Resources/liborc-0.4.0.dylib</key>
 		<data>
@@ -186,11 +234,11 @@
 		</data>
 		<key>Resources/make-engine-copy.sh</key>
 		<data>
-		9Od2Bm/EctL+VTt15csoj0ONuEA=
+		j7XDTws8p/vXDWzkDIen7Q42Gcw=
 		</data>
 		<key>Resources/manifest.json</key>
 		<data>
-		j3rNgdf3yl7VzSbUGY7Q7El2zx4=
+		HeqhLPtGsM5cTXdsumtdgWPZbkQ=
 		</data>
 		<key>Resources/ng3-THIRD-PARTY-LICENCES.md</key>
 		<data>
@@ -305,7 +353,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			HLhrlRImzEDdYU28b6deAQonhx1lc6EYb6oLrQb+BIk=
+			L/gBZvQr3SOQKj1QfFcYnycuJ9QDOLjokm1Zf4XA4G8=
 			</data>
 		</dict>
 		<key>Resources/engine-built-for-stock.json</key>
@@ -320,6 +368,83 @@
 			<key>hash2</key>
 			<data>
 			HTU7hJF0T+3fJderEdFOFGuGpJcbmzkkuDT7bgNQXlg=
+			</data>
+		</dict>
+		<key>Resources/engine-controller-built-for.json</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			QNxBFm4RFexh1aVX5Hr8IxT2iLGY434GaJuKFEWsh14=
+			</data>
+		</dict>
+		<key>Resources/engine-controller-hidclass.sys</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			MYdqxhpdYnar0a96iYcUFwMvCYhA0Fs7ZluIa6YcGZg=
+			</data>
+		</dict>
+		<key>Resources/engine-controller-ntoskrnl.exe</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			kjHLI71z4My6yjfxKT6y11rUK7NMe50Tn/dtHIEok6g=
+			</data>
+		</dict>
+		<key>Resources/engine-controller-setupapi.dll</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			mAb64j4bDujv/CIhKZKxFeGJY4ETnA9OS+ROreI0eho=
+			</data>
+		</dict>
+		<key>Resources/engine-controller-winebus.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			yE6tECYE4Bs0veg2xNtseW38e412GzXKxR8210sCIiQ=
+			</data>
+		</dict>
+		<key>Resources/engine-controller-winebus.sys</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			pqZa9i3o1cEjApNYiVrdP2973/hhCegjmrFG0JJUOwA=
+			</data>
+		</dict>
+		<key>Resources/engine-controller-xinput1_1.dll</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			2YmVX0vl6iRRnj9/VdVohGN7V9LpbNbv44uM4jS8R40=
+			</data>
+		</dict>
+		<key>Resources/engine-controller-xinput1_2.dll</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			LcBpD2rJpfqWdy5nhKyPacRo6KxG3/LcUOvhQd1A+9Q=
+			</data>
+		</dict>
+		<key>Resources/engine-controller-xinput1_3.dll</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			KG+i6kgLpLuGiesJ1ymWa3pHXqNGa0LNYuUaif4CpKo=
+			</data>
+		</dict>
+		<key>Resources/engine-controller-xinput1_4.dll</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			6lk91ACCF6pXeZNgXsue0QycPFZidmTb6Nle9fojBMA=
+			</data>
+		</dict>
+		<key>Resources/engine-controller-xinputuap.dll</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			AJ4PTa/DCnmPSLMRBZl503QpKlQtUp/abl894BZFwZk=
 			</data>
 		</dict>
 		<key>Resources/engine-winegstreamer-stock.dll</key>
@@ -362,6 +487,13 @@
 			<key>hash2</key>
 			<data>
 			vxS7O/6Yuu+VbzwIIgq8g0gcGUthu8CToOSK+dmWSA0=
+			</data>
+		</dict>
+		<key>Resources/install-engine-controller.sh</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			rC/V/ICtJjtvw+/EpivKXh6bc1oIm1AbzyMQZqvVjjQ=
 			</data>
 		</dict>
 		<key>Resources/install-engine-media.sh</key>
@@ -508,7 +640,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			RnI3WoHToa/muXJyBAJXOHE8kQEi5b4sbLofXwUaKcU=
+			eqH9SSpOOFnU5V1XNbBlAf4RgggMwwRcCgNDPFvgGRw=
 			</data>
 		</dict>
 		<key>Resources/liborc-0.4.0.dylib</key>
@@ -550,14 +682,14 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			YTJ+RtpXsLEEzzfyWGzExgs60Q1kcfJrorC6jBsWeb0=
+			kjmYFPKKq9djljgSj4SQIHHzhNoHO34bwRUlAMxQMEA=
 			</data>
 		</dict>
 		<key>Resources/manifest.json</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			xvQP3j3dD1evR26BqGuY7xoltSuw5ej38E0n7e4dNig=
+			/LCz/Trz22hfCHYQM5fWO6pJ8+Fm/gxCy4SaBS38MyY=
 			</data>
 		</dict>
 		<key>Resources/ng3-THIRD-PARTY-LICENCES.md</key>

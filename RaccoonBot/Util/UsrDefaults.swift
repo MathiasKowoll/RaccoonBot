@@ -30,7 +30,26 @@ func resolvePersistedFolders() -> [URL] {
             urls.append(url)
         }
     }
-    return urls
+    return uniqueLibraryFolders(urls)
+}
+
+/// The same folder once, however many bookmarks point at it.
+///
+/// A library can be added twice -- once by hand and once from Steam's own
+/// libraryfolders.vdf, or simply twice by hand -- and each time it is one more
+/// bookmark. Two scans of one folder gave every game in it two cards, and the
+/// load's own "already scanned" check then ended the whole load rather than
+/// skipping the folder. Compared by standardised path without a trailing
+/// slash, so "file:///X/steamapps/" and "file:///X/steamapps" are the same.
+nonisolated func uniqueLibraryFolders(_ urls: [URL]) -> [URL] {
+    var seen: Set<String> = []
+    var out: [URL] = []
+    for url in urls {
+        var key = url.standardizedFileURL.path(percentEncoded: false)
+        while key.count > 1 && key.hasSuffix("/") { key.removeLast() }
+        if seen.insert(key).inserted { out.append(url) }
+    }
+    return out
 }
 
 func removePersistedFolderAccess(url: URL) {
@@ -108,6 +127,21 @@ func persistUsrDefOptionString(key: String, value: String) {
 
 func readUsrDefOptionString(key: String) -> String? {
     return UserDefaults(suiteName: suiteName)!.value(forKey: key) as? String
+}
+
+/// A switch, kept the same way the strings are.
+///
+/// Absent is not false. Every switch added after the first release has a
+/// "before it existed" behaviour, and the reader says what that was, because
+/// `bool(forKey:)` answers false for a key nobody has set and would turn a
+/// default of on into off on every install that predates the switch.
+func persistUsrDefOptionBool(key: String, value: Bool) {
+    UserDefaults(suiteName: suiteName)!.set(value, forKey: key)
+}
+
+func readUsrDefOptionBool(key: String, unset: Bool) -> Bool {
+    let defaults = UserDefaults(suiteName: suiteName)!
+    return defaults.object(forKey: key) == nil ? unset : defaults.bool(forKey: key)
 }
 
 func deleteUsrDefOption(key: String) {

@@ -46,6 +46,13 @@ struct GameHeader: View {
                                 // itself: ask Steam to go, let it finish, then close this
                                 // bottle -- not every bottle on the machine.
                                 if let cx = appGlobals.cxAppPath {
+                                    if game!.isEpic {
+                                        // The game is asked to close; its tracker then waits
+                                        // for the launcher's sync and closes the bottle.
+                                        let epic = EpicLaunch.target(settings: StoreConfig.settings(for: .epic), selectedBottle: appGlobals.selectedBottle)
+                                        try? await stopEpicGame(appNames: game!.appNames, cxAppPath: cx, bottle: epic?.bottle ?? appGlobals.selectedBottle)
+                                        return
+                                    }
                                     try? await quitSteam(cxAppPath: cx, bottle: appGlobals.selectedBottle, isNative: false)
                                     try? await closeBottle(cxAppPath: cx, bottle: appGlobals.selectedBottle)
                                 }
@@ -124,24 +131,6 @@ struct GameHeader: View {
         libraryPageGlobals.setLoader(state: true)
         Task {
             do {
-                Task(priority: .background) {
-                    tObserver = try await getGameTracker(appNames: game!.appNames, cxAppPath: appGlobals.cxAppPath!, bottle: appGlobals.selectedBottle, onLoad: { appName in
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
-                            libraryPageGlobals.setLoader(state: false)
-                            Task {
-                                activateApp(appName)
-                            }
-                        }
-                        libraryPageGlobals.playingID = game!.id
-                    }, onTerminate: {
-                        libraryPageGlobals.setLoader(state: false) // if doesn't get loaded i need to close the loader
-                        libraryPageGlobals.playingID = nil
-                        tObserver = nil
-                    },
-                     isNative: game!.isNative,
-                     steamID: game!.isCustom == true ? nil : game!.steamAppID,
-                     steamPath: appGlobals.windowsSteamFolder?.path(percentEncoded: false) ?? "")
-                }
                 // The saved settings, read here rather than trusted from the
                 // environment.
                 //
@@ -166,6 +155,45 @@ struct GameHeader: View {
                     console.error("no saved options for \(optionsKey) and none could be written; "
                                   + "launching on defaults, which may not be what is configured")
                 }
+                // The same route the grid takes for an Epic title: the
+                // launcher is the executable, the URI names the game.
+                let epicPlan = game!.isEpic
+                    ? EpicLaunch.plan(for: game!, settings: StoreConfig.settings(for: .epic), selectedBottle: appGlobals.selectedBottle)
+                    : nil
+                if game!.isEpic && epicPlan == nil {
+                    console.error("epic: no Epic Games Launcher in the bottle to start \(game!.name); set one up from the Epic panel")
+                    libraryPageGlobals.setLoader(state: false)
+                    return
+                }
+                // Read before the watcher is armed, and both given the same
+                // value: the launch used to work this out for itself while
+                // the watcher was handed the plain selected bottle, so an ARM
+                // title ran in one prefix and was watched in another. Asking
+                // for the options first also means the Epic refusal above
+                // returns before a watcher exists, rather than leaving one
+                // running for a game that was never launched.
+                let launchBottle = epicPlan?.bottle
+                    ?? (launchOptions.useArmBottle ? appGlobals.selectedArmBottle : appGlobals.selectedBottle)
+
+                Task(priority: .background) {
+                    tObserver = try await getGameTracker(appNames: game!.appNames, cxAppPath: appGlobals.cxAppPath!, bottle: launchBottle, onLoad: { appName in
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+                            libraryPageGlobals.setLoader(state: false)
+                            Task {
+                                activateApp(appName)
+                            }
+                        }
+                        libraryPageGlobals.playingID = game!.id
+                    }, onTerminate: {
+                        libraryPageGlobals.setLoader(state: false) // if doesn't get loaded i need to close the loader
+                        libraryPageGlobals.playingID = nil
+                        tObserver = nil
+                    },
+                     isNative: game!.isNative,
+                     steamID: (game!.isCustom == true || game!.isEpic) ? nil : game!.steamAppID,
+                     steamPath: appGlobals.windowsSteamFolder?.path(percentEncoded: false) ?? "",
+                     isEpic: game!.isEpic)
+                }
                 if(game!.isNative) {
                     try await launchNativeGame(id: String(game!.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: launchOptions, appExeURL: game!.appExeURL)
                 } else {
@@ -175,7 +203,7 @@ struct GameHeader: View {
                         return
                     }
                     let steamExePath = appGlobals.windowsSteamFolder?.appendingPathComponent("Steam.exe").path(percentEncoded: false) ?? "C:\\Program Files (x86)\\Steam\\Steam.exe"
-                    try await launchWindowsGame(id: String(game!.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: launchOptions.useArmBottle ? appGlobals.selectedArmBottle : appGlobals.selectedBottle, steamExePath: steamExePath, options: launchOptions, appExeURL: game!.appExeURL)
+                    try await launchWindowsGame(id: String(game!.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: launchBottle, steamExePath: steamExePath, options: launchOptions, appExeURL: epicPlan?.launcher ?? game!.appExeURL, launcherURI: epicPlan?.uri)
                 }
             } catch {
                 libraryPageGlobals.setLoader(state: false)

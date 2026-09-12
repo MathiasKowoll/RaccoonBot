@@ -7,7 +7,7 @@
 
 import Foundation
 
-func getGamesMeta(from: URL) throws -> [GamesMeta] {
+nonisolated func getGamesMeta(from: URL) throws -> [GamesMeta] {
     /**
      scans a folder and returns an array of steam games meta
      */
@@ -20,7 +20,9 @@ func getGamesMeta(from: URL) throws -> [GamesMeta] {
             let parsed = parseVDFToDict(from: file)
             let meta = mapDictToGamesMeta(from: parsed["AppState"] as! [String: Any])
             meta.gameURL = from.appendingPathComponent("common").appendingPathComponent(meta.installdir)
-            meta.isNative = meta.isDownloaded() ? getIsNative(fromURL: meta.gameURL!) : false
+            // Through the cache: a refresh used to work this out again for
+            // every installed game, and that is what froze the window.
+            meta.isNative = meta.isDownloaded() ? NativeKind.isNative(folder: meta.gameURL!) : false
             meta.appNames = []
             meta.libraryFolder = from
             array.append(meta)
@@ -33,7 +35,18 @@ func getMeta(_ gameMetaArray: [GamesMeta], byID: String) -> GamesMeta? {
     /**
      find the corresponding meta by id where the id is the unique id and not the steam app id
      */
-    return gameMetaArray.first(where: { $0.id == byID })
+    if let exact = gameMetaArray.first(where: { $0.id == byID }) { return exact }
+    // An Epic card carries the launcher's triple as its id, because that is
+    // what starts the title; its meta carries the same triple in `appid`, and
+    // `id` is the library folder plus that -- so the two never match and every
+    // Epic title was invisible here. Which made the video-fix badge, the launch
+    // gate and the fix panel dead for all of them, and put "Could not work out
+    // where this game is installed" on every Epic options sheet.
+    //
+    // Narrowed to Epic ids on purpose: a Steam appid is digits and could
+    // collide with something; a triple begins with "epic:" and cannot.
+    guard byID.hasPrefix("epic:") else { return nil }
+    return gameMetaArray.first(where: { $0.appid == byID })
 }
 
 func mapDictToGamesMeta(from: [String:Any]) -> GamesMeta {

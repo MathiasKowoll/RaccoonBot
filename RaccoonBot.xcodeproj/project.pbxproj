@@ -500,7 +500,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RaccoonBot/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "RaccoonBot Dev";
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSCameraUsageDescription = "A Windows game launched through this application can ask for the camera. The request is attributed to this application, so without this line macOS cannot ask you.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "A Windows game launched through this application can ask for the microphone. The request is attributed to this application, so without this line macOS cannot even ask you -- and a client waiting on that answer waits forever.";
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Events are used to dynamically update your game library as soon as drive is disconnected or become available";
@@ -514,7 +514,7 @@
 					"$(PROJECT_DIR)/Procyon/Libs",
 					"$(PROJECT_DIR)/Procyon/Libs/d3dMetal3/external",
 				);
-				MARKETING_VERSION = 0.2.1;
+				MARKETING_VERSION = 0.3.2;
 				PRODUCT_BUNDLE_IDENTIFIER = io.github.mathiaskowoll.raccoonbot.dev;
 				/* The artifact on disk is RaccoonBot-Dev.app so it cannot be
 				   confused with the stable build -- different name, different
@@ -573,7 +573,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RaccoonBot/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = RaccoonBot;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSCameraUsageDescription = "A Windows game launched through this application can ask for the camera. The request is attributed to this application, so without this line macOS cannot ask you.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "A Windows game launched through this application can ask for the microphone. The request is attributed to this application, so without this line macOS cannot even ask you -- and a client waiting on that answer waits forever.";
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Events are used to dynamically update your game library as soon as drive is disconnected or become available";
@@ -587,7 +587,7 @@
 					"$(PROJECT_DIR)/Procyon/Libs",
 					"$(PROJECT_DIR)/Procyon/Libs/d3dMetal3/external",
 				);
-				MARKETING_VERSION = 0.2.1;
+				MARKETING_VERSION = 0.3.2;
 				PRODUCT_BUNDLE_IDENTIFIER = io.github.mathiaskowoll.raccoonbot;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -617,7 +617,7 @@
 				DEVELOPMENT_TEAM = S5P3AKN3YC;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.2.1;
+				MARKETING_VERSION = 0.3.2;
 				PRODUCT_BUNDLE_IDENTIFIER = io.github.mathiaskowoll.raccoonbot.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -639,7 +639,7 @@
 				DEVELOPMENT_TEAM = S5P3AKN3YC;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.2.1;
+				MARKETING_VERSION = 0.3.2;
 				PRODUCT_BUNDLE_IDENTIFIER = io.github.mathiaskowoll.raccoonbot.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -659,7 +659,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = S5P3AKN3YC;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 0.2.1;
+				MARKETING_VERSION = 0.3.2;
 				PRODUCT_BUNDLE_IDENTIFIER = io.github.mathiaskowoll.raccoonbot.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -679,7 +679,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = S5P3AKN3YC;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 0.2.1;
+				MARKETING_VERSION = 0.3.2;
 				PRODUCT_BUNDLE_IDENTIFIER = io.github.mathiaskowoll.raccoonbot.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;

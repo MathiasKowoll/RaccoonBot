@@ -14,24 +14,19 @@
 import SwiftUI
 import Kingfisher
 
-/// Which Steam should be asked to install a title that ships for both.
-enum InstallTarget: Identifiable {
-    case choose(OwnedGame)
-    var id: String {
-        switch self { case .choose(let game): return game.appID }
-    }
-}
-
-struct OwnedGamesList: View {
+/// The states that precede the owned grid, around whatever grid is given.
+///
+/// The grid itself is GamesList's `cardGrid`, the same one the other two tabs
+/// draw, passed in from there. This view drew a grid of its own until
+/// 2026-09-04, and that grid was the one place in the library the controller
+/// could not reach: no ring, no movement, no press. Sharing the grid is what
+/// puts the tab on the pad, and it also ends the second copy of the install
+/// and open flows that lived here -- the earlier version of which, before
+/// that, had a copy that could not fire at all.
+struct OwnedGamesList<Grid: View>: View {
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
+    @ViewBuilder let grid: () -> Grid
 
-    /// The grid, with the states that precede it.
-    ///
-    /// It used to carry its own copy of the install flow -- asking, opening,
-    /// open(), install(), send() and a dialog -- left behind when the cards
-    /// moved to OwnedGamesGrid. None of it could fire: the grid builds the
-    /// cards and handles their buttons. Seventy lines that looked like the
-    /// feature and were not it.
     var body: some View {
         Group {
             if !libraryPageGlobals.ownedLoaded {
@@ -41,18 +36,15 @@ struct OwnedGamesList: View {
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if libraryPageGlobals.ownedGames.isEmpty {
+            } else if libraryPageGlobals.allOwnedGames.isEmpty {
                 VStack(spacing: 6) {
                     Text("Nothing else to install").font(.headline)
-                    Text("Every title Steam knows about on this machine is already installed.")
+                    Text("Every title Steam and Epic know about on this machine is already installed.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ScrollView {
-                    OwnedGamesGrid()
-                        .padding(.bottom, dockClearance)
-                }
+                grid()
             }
         }
     }
@@ -153,89 +145,5 @@ struct OwnedGameCard: View {
         .background(.procyonAccent.mix(with: .black, by: 0.6).opacity(0.8))
         .cornerRadius(30)
         .foregroundStyle(.white)
-    }
-}
-
-/// Just the cards, with their actions. Used on its own by the All tab, which
-/// shows them under the installed ones, and by OwnedGamesList in grid mode.
-///
-/// It carries install and open rather than taking them as closures: a first
-/// version passed `install: {}` and `open: {}` here, which is a card whose
-/// buttons quietly do nothing -- and a dead control is worse than an absent
-/// one, because it is indistinguishable from a broken one.
-struct OwnedGamesGrid: View {
-    @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
-    @EnvironmentObject var appGlobals: AppGlobals
-    @State private var asking: InstallTarget?
-    @State private var opening: String?
-
-    var body: some View {
-        LazyVGrid(columns: columns, spacing: 10) {
-            ForEach(libraryPageGlobals.filteredOwnedGames) { game in
-                OwnedGameCard(game: game,
-                              isOpening: opening == game.appID,
-                              install: { install(game) },
-                              hide: { libraryPageGlobals.hide(appID: game.appID) },
-                              open: { Task { await open(game) } })
-            }
-        }
-        .padding(.horizontal)
-        // A real binding, not .constant. SwiftUI writes false into this when the
-        // dialog dismisses, and a constant swallows that -- leaving `asking`
-        // set, so the dialog is free to come back.
-        .confirmationDialog("Which version?",
-                            isPresented: Binding(get: { asking != nil },
-                                                 set: { if !$0 { asking = nil } }),
-                            presenting: asking) { target in
-            if case .choose(let game) = target {
-                Button("Windows version") { send(game, toMac: false) }
-                Button("macOS version") { send(game, toMac: true) }
-                Button("Cancel", role: .cancel) { asking = nil }
-            }
-        } message: { target in
-            if case .choose(let game) = target {
-                Text("\(game.displayName) ships for both. The Windows version runs in the bottle, which is where the video fixes apply; the macOS version is handled by the Steam app on this Mac.")
-            }
-        }
-    }
-
-    /// One request, for the title actually being looked at, cached after that.
-    private func open(_ game: OwnedGame) async {
-        opening = game.appID
-        defer { opening = nil }
-        guard let info = try? await api.fetchGameInfo(appID: game.appID) else { return }
-        libraryPageGlobals.selectedGame = Game(from: info,
-                                               id: game.appID,
-                                               isNative: game.runsOnMac && !game.runsOnWindows,
-                                               downloadProgress: 0,
-                                               isInstalled: false,
-                                               appNames: [])
-        libraryPageGlobals.showDetailView = true
-    }
-
-    /// Only asks when there is genuinely a choice.
-    private func install(_ game: OwnedGame) {
-        if game.isCrossPlatform {
-            asking = .choose(game)
-        } else {
-            send(game, toMac: game.runsOnMac && !game.runsOnWindows)
-        }
-    }
-
-    private func send(_ game: OwnedGame, toMac: Bool) {
-        asking = nil
-        if toMac {
-            if let url = URL(string: "steam://install/\(game.appID)") {
-                NSWorkspace.shared.open(url)
-            }
-            return
-        }
-        let steamX86AppPath = appGlobals.windowsSteamFolder?
-            .appendingPathComponent("Steam.exe").path(percentEncoded: false)
-            ?? "C:\\Program Files (x86)\\Steam\\Steam.exe"
-        installGame(id: game.appID,
-                    cxAppPath: appGlobals.cxAppPath,
-                    selectedBottle: appGlobals.selectedBottle,
-                    SteamX86AppPath: steamX86AppPath)
     }
 }

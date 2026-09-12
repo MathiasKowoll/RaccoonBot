@@ -11,6 +11,10 @@ import Kingfisher
 
 struct LibraryPage: View {
     @StateObject var libraryPageGlobals = LibraryPageGlobals()
+    /// One controller reader for the page. Shared, because two readers of the
+    /// same pad would both act on every press: the grid keeps it while the
+    /// library is showing, and hands it to whichever sheet is on top.
+    @StateObject private var gamepad = GamepadInput()
     @EnvironmentObject var appGlobals: AppGlobals
     @State private var isLoading = false
     /// One library reload at a time.
@@ -161,24 +165,43 @@ struct LibraryPage: View {
                 mntObserver = nil
             }
             .environmentObject(libraryPageGlobals)
+            .environmentObject(gamepad)
         }
     }
     
     @MainActor
+    /// Asked for a reload while one was running. Kept, and honoured when the
+    /// running one ends -- because a click that lands mid-load used to be
+    /// dropped on the floor with a log line, and the person clicking cannot
+    /// see the log line. The first load at start includes a store request for
+    /// every title and takes a while; the mount observer starts loads of its
+    /// own; a refresh pressed during either did nothing, or worse.
+    @State private var reloadRequested = false
+
     private func load() async {
         guard !isReloading else {
-            console.log("library reload already running; not starting a second")
+            console.log("library reload already running; will run again when it ends")
+            reloadRequested = true
             return
         }
         isReloading = true
-        defer { isReloading = false }
         isLoading = true
+        progress = 0
         defer {
-            Task {
-                isLoading = false
+            isReloading = false
+            if reloadRequested {
+                // Straight into the next one, loader still up: the list must
+                // not flash a half-built state in between.
+                reloadRequested = false
+                Task { await load() }
+            } else {
+                Task { isLoading = false }
             }
         }
-        progress = 0
+        // The only place this is cleared. The refresh button used to clear it
+        // too, before calling here -- and when its call was then dropped as a
+        // duplicate, the load already in flight went on to build the list from
+        // the metadata it had just lost, and published an empty library.
         libraryPageGlobals.gamesMeta.removeAll()
         libraryPageGlobals.folders = getSteamFolderPaths()
         if libraryPageGlobals.folders.isEmpty {
@@ -186,17 +209,97 @@ struct LibraryPage: View {
         } else {
             for folder in libraryPageGlobals.folders {
                 let folderURL = URL(string: folder)!
+                // Already scanned in this pass -- the same folder listed twice.
+                // Skip the folder, not the rest of the load: this was a
+                // `return`, and a duplicate bookmark ended the whole load here,
+                // before the list was ever rebuilt.
                 if (!libraryPageGlobals.gamesMeta.filter { $0.libraryFolder == folderURL }.isEmpty) {
-                    console.log("skipping gamesMeta processing")
-                    return // in memory cache just in case you disconnect/reconnect an external drive that has been scanned already
+                    console.log("skipping \(folderURL.lastPathComponent): already scanned in this pass")
+                    continue
                 }
-                do {
-                    let foldergamesMeta = try getGamesMeta(from: folderURL)
-                    libraryPageGlobals.gamesMeta.append(contentsOf: foldergamesMeta)
-                } catch {
-                    console.error(String(reflecting: error))
+                // Off the main thread. This reads a library folder's
+                // manifests and then looks inside every installed game to
+                // tell a Mac one from a Windows one, and it is disk work on
+                // whatever the games are stored on -- an external drive
+                // here. Run on the main thread it froze the window for
+                // forty-five seconds cold, and for forty-four minutes before
+                // the walk itself was fixed. The window now stays live while
+                // it happens.
+                let scanned: [GamesMeta] = await Task.detached(priority: .userInitiated) {
+                    do { return try getGamesMeta(from: folderURL) }
+                    catch { console.error(String(reflecting: error)); return [] }
+                }.value
+                libraryPageGlobals.gamesMeta.append(contentsOf: scanned)
+            }
+        }
+        // Epic, from the one bottle configured for it. The launcher's records
+        // are cloned across several bottles on this machine, so scanning every
+        // bottle that holds a launcher would list the same titles several
+        // times; the configured bottle is the only one that counts.
+        if let epic = EpicLaunch.target(settings: StoreConfig.settings(for: .epic),
+                                        selectedBottle: appGlobals.selectedBottle),
+           let bottleDir = BottleReference(epic.bottle)?.directory {
+            let installed = EpicLibrary.read(bottle: bottleDir)
+            // The launcher's catalogue cache, if it has one: titles, art and
+            // the rest of the account. Read off the main thread; it is a
+            // 400 KB base64 blob on this machine.
+            let catalog = await Task.detached(priority: .utility) {
+                EpicLibrary.dataDirectory(bottle: bottleDir).flatMap(EpicCatalog.read)
+            }.value
+            let catalogued: [(EpicInstalled, EpicCatalogItem?)] = installed.map { title in
+                (title, catalog?.item(forAppName: title.appName, namespace: title.catalogNamespace, catalogItemId: title.catalogItemId))
+            }
+            libraryPageGlobals.epicGames = catalogued.map { Game.epic($0.0, catalog: $0.1) }
+            // The store page for each title, from the cache first and the
+            // store once. After the cards are up, not before: the store is
+            // slow and may be absent, and a card needs neither.
+            libraryPageGlobals.epicLoadGeneration += 1
+            let generation = libraryPageGlobals.epicLoadGeneration
+            let globals = libraryPageGlobals
+            Task.detached(priority: .utility) {
+                var cache = EpicStoreCache.load()
+                var enriched: [Game] = []
+                var asked = false
+                for (title, item) in catalogued {
+                    guard let ns = item?.namespace, !ns.isEmpty else { enriched.append(Game.epic(title, catalog: item)); continue }
+                    let known = cache.lookup(namespace: ns)
+                    let page: EpicStoreContent?
+                    if case .some(let c) = known {
+                        page = c
+                    } else {
+                        page = await EpicStore.content(for: item?.title ?? title.title, namespace: ns)
+                        cache.record(namespace: ns, content: page); asked = true
+                    }
+                    enriched.append(Game.epic(title, catalog: item, store: page))
+                }
+                if asked { cache.save() }
+                let games = enriched
+                await MainActor.run {
+                    // A reload since then has its own titles; do not overwrite them.
+                    guard generation == globals.epicLoadGeneration else { return }
+                    globals.epicGames = games
                 }
             }
+            let installedNames = Set(installed.map(\.appName))
+            libraryPageGlobals.epicOwnedGames = (catalog?.ownedNotInstalled(installedAppNames: installedNames) ?? []).map { item in
+                OwnedGame(appID: item.tripleID(appName: item.appNames.first ?? ""),
+                          name: item.title ?? "", platforms: ["windows"],
+                          lastPlayed: nil, playtimeMinutes: nil, coverURL: item.tallCover,
+                          store: .epic)
+            }
+            console.log("epic: catalogue \(catalog == nil ? "absent" : "\(catalog!.items.count) items"), \(libraryPageGlobals.epicOwnedGames.count) owned and not installed")
+            // A meta entry per title, so the fix catalogue and everything else
+            // that asks "where is this game" by id can answer for Epic too.
+            let known = Set(libraryPageGlobals.gamesMeta.map(\.appid))
+            for title in installed where !known.contains(title.id) {
+                libraryPageGlobals.gamesMeta.append(
+                    GamesMeta(appid: title.id, installdir: title.folder.lastPathComponent,
+                              gameURL: title.folder, isNative: false,
+                              libraryFolder: title.folder.deletingLastPathComponent(),
+                              bytesDownloaded: "0", BytesTodownload: "0",
+                              appNames: title.executable.map { [$0.lastPathComponent] } ?? []))
+            }
+            console.log("epic: \(installed.count) installed title(s) in the configured bottle")
         }
         do {
             if(appGlobals.userID != nil) {
@@ -235,7 +338,12 @@ struct LibraryPage: View {
         // have a cover in Steam's own art cache, so the library is complete
         // enough to use before a single request goes out -- and stays that way
         // if every one of them fails. It used to come up empty and silent.
-        libraryPageGlobals.games = libraryPageGlobals.gamesMeta.map { Game(local: $0) }
+        // Steam's metadata only. The Epic titles have a meta entry each so the
+        // fix catalogue can find their folders, and turning those into cards
+        // here gave every Epic game a second card named after its folder,
+        // with a Play button that would have run steam://rungameid/0.
+        let steamMeta = libraryPageGlobals.gamesMeta.filter { Int($0.appid) != nil }
+        libraryPageGlobals.games = steamMeta.map { Game(local: $0) }
         progress = 100
 
         // Then the store, if there is one, to fill in what the disk does not
@@ -243,7 +351,7 @@ struct LibraryPage: View {
         // must not delete the seventeen the disk knew about.
         do {
             let enriched = try await api.fetchGamesInfo(
-                meta: libraryPageGlobals.gamesMeta,
+                meta: steamMeta,
                 setProgress: { self.progress = $0 },
                 // Each record replaces its placeholder the moment it lands, so
                 // the grid fills in rather than sitting still and then changing

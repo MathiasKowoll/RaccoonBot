@@ -108,6 +108,22 @@ struct BottleProcessesTests {
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         #expect(BottleProcesses.running(inBottleAt: dir).isEmpty)
         #expect(BottleProcesses.serverIsAlive(inBottleAt: dir) == false)
+        #expect(BottleProcesses.registryIsOursToWrite(inBottleAt: dir),
+                "nothing is holding this one open")
+    }
+
+    /// The rule the launch applies before it rewrites system.reg, both answers
+    /// of it, without needing a live bottle to produce one.
+    ///
+    /// A wineserver keeps its own copy of the registry and flushes it when it
+    /// shuts down, so a write underneath it is lost at best and lands in the
+    /// middle of that flush at worst -- on a file the bottle cannot be repaired
+    /// without. And it would change nothing anyway: winebus reads what we set
+    /// when the bottle boots, so a bottle that is already up is using what it
+    /// booted with whatever we write into it.
+    @Test func aLiveBottlesRegistryIsNotOursToWrite() {
+        #expect(BottleProcesses.registryIsOursToWrite(serverIsAlive: true) == false)
+        #expect(BottleProcesses.registryIsOursToWrite(serverIsAlive: false))
     }
 
     /// Against the real thing: the bottle this application actually uses must

@@ -6,7 +6,12 @@ import Foundation
 /// applying it to a different one does not degrade: media stops loading, which
 /// is the exact shape of the fault it repairs. So all three are read, and a
 /// field that cannot be read stays nil rather than being guessed.
-struct EngineIdentity: Equatable {
+///
+/// Nonisolated because it is read where the engine is written: the
+/// controller-bus switch compares it in Task.detached, and a main-actor
+/// initialiser called from there would hop straight back onto the main actor
+/// to scan ntdll.so.
+nonisolated struct EngineIdentity: Equatable {
     /// The bundle's own name: "Crossover_MGVF.app".
     ///
     /// The only one of the three that tells a patched copy from a stock one.
@@ -35,6 +40,23 @@ struct EngineIdentity: Equatable {
     /// appears is inside ntdll.so, so that is where this looks.
     let wine: String?
 
+    /// What the engine records it was copied from, when MacGameVideoFix made
+    /// it: `copied_from` in `Contents/SharedSupport/CrossOver/mgvf-origin.json`,
+    /// "CrossOver.app" for a copy of the stock one.
+    ///
+    /// A copy this project made is not a different engine; it is the same
+    /// engine under another name, and the name is the only thing a stamp can
+    /// see. So a stamp naming the original serves the copy through this, the
+    /// way install-engine-media.sh and install-engine-controller.sh resolve
+    /// it. Nil for an engine that records nothing -- stock CrossOver, or a
+    /// copy something else made -- and nil is not a match.
+    let copiedFrom: String?
+
+    /// "Crossover_MGVF.app 26.3.0.39832", for a sentence.
+    var described: String {
+        [app, version].compactMap { $0 }.joined(separator: " ")
+    }
+
     init(ofEngineAt app: URL) {
         self.app = app.lastPathComponent
         let plist = app.appendingPathComponent("Contents/Info.plist")
@@ -45,6 +67,17 @@ struct EngineIdentity: Equatable {
             version = nil
         }
         wine = Self.wineTag(inEngineAt: app)
+        copiedFrom = Self.origin(ofEngineAt: app)
+    }
+
+    /// `copied_from` out of the marker MacGameVideoFix leaves in a copy it made.
+    static func origin(ofEngineAt app: URL) -> String? {
+        let marker = app.appendingPathComponent("Contents/SharedSupport/CrossOver/mgvf-origin.json")
+        guard let data = try? Data(contentsOf: marker),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let from = json["copied_from"] as? String, !from.isEmpty
+        else { return nil }
+        return from
     }
 
     /// Scans ntdll.so for the tag wine stamps into it.

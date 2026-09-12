@@ -25,11 +25,17 @@ struct GameOptionsSheet: View {
     /// Owned here, so a caller cannot forget to supply it.
     @StateObject private var gameOptions = GameOptions()
 
+    /// What the panel owes the file when it closes. Owned beside the form it
+    /// measures, and handed down so Save and Undo act on the same baseline the
+    /// closing check uses.
+    @StateObject private var session = OptionsSession()
+
     var body: some View {
         Modal("Options for \(game?.name ?? "this title")", showModal: $isPresented) {
             if game != nil {
                 GameOptionsView(game: $game)
                     .environmentObject(gameOptions)
+                    .environmentObject(session)
                     // Loaded HERE, once per title, rather than in the view's
                     // onAppear.
                     //
@@ -55,6 +61,7 @@ struct GameOptionsSheet: View {
                         GameDefaults.seedIfAbsent(key: key)
                         if let saved: GameOptionsData = readUsrDefData(key: key) {
                             gameOptions.set(data: saved)
+                            session.begin(key: key, form: gameOptions)
                         }
                         // The fold lives in GameOptions.set(data:) now, so the panel
                         // and the launch cannot disagree about it.
@@ -68,5 +75,23 @@ struct GameOptionsSheet: View {
                     .padding()
             }
         }
+        // The one place the file is brought up to date, whatever closed the
+        // panel: the close button, Escape, a controller's B, or the parent
+        // taking the title away. `closing` writes only when the form differs
+        // from the file, so being reached twice costs nothing and moves no
+        // baseline -- which is why onDisappear can stand behind onChange
+        // without Undo losing what it points at.
+        .onChange(of: isPresented) { _, shown in
+            if !shown { session.closing(gameOptions) }
+        }
+        .onDisappear { session.closing(gameOptions) }
+        // The one place this screen's size is decided, for both the places it
+        // is opened from -- the games list and a title's own page. It had no
+        // size of its own at all: a macOS sheet takes the width its content
+        // asks for, and the content asked for as little as it could get away
+        // with, which is how the controller picker's label came to render as
+        // "Vibra...". A minimum rather than a width, so the sheet can still
+        // grow for a long game name in the title bar.
+        .frame(minWidth: 820)
     }
 }

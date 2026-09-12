@@ -285,3 +285,12 @@ Add a launch-failure signal. `wine start` returns 0 regardless, and EGL **silent
 - What EGL writes on quit, and therefore how long the Epic post-game grace period should be.
 - Why `WINEDLLOVERRIDES` was removed from the project previously.
 - Whether Battle.net's `--exec="launch <id>"` shape holds under CrossOver — asserted from dlss-swapper source, not tested here.
+
+---
+
+## See also
+
+- [Epic Games Store: bringing your own bottle](epic-bottle.md) — what it takes
+  to have a working Epic bottle, why CrossOver's cached installer does not,
+  how to back a bottle up and restore it, and the one rule about versions.
+

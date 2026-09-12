@@ -250,11 +250,82 @@ func getIDsFromFolder(dest: URL) throws -> [String] {
 //    } ?? []
 }
 
-func getIsNative(fromURL: URL) -> Bool {
-    if !folderContainsFile(withExtension: "exe", at: fromURL) && folderContainsFile(withExtension: "app", at: fromURL) {
-        return true
+/// A Mac game is one with an application bundle and no Windows executable.
+///
+/// Asked as two questions, in this order, and never as one. A Windows
+/// executable settles it wherever it turns up, so that search stops at the
+/// first one -- which for most games is in the folder's own listing, one
+/// directory read. Asking for the bundle in the same pass is what kept it
+/// going: an extension that is not there is only ever proved absent by
+/// looking everywhere, so every Windows game paid for a bundle it was never
+/// going to have. Measured on this machine: Tiebreak's executable sits at
+/// the top of its folder and the pass that also wanted a bundle spent 192
+/// seconds below it, among 74,000 files.
+///
+/// The cost that is left is a folder with no executable at all, which is a
+/// Mac game or an empty install, and there are few of those. It is paid once
+/// -- see `NativeKind`.
+nonisolated func getIsNative(fromURL: URL) -> Bool {
+    if !folderContains(extensions: ["exe"], at: fromURL).isEmpty { return false }
+    return !folderContains(extensions: ["app"], at: fromURL).isEmpty
+}
+
+/// Whether a game folder is a Mac game, remembered between refreshes.
+///
+/// The answer cannot change while the folder does not, and a refresh asks it
+/// of every installed game. Keyed by the folder and stamped with the folder's
+/// own modification date, so a game that is replaced or reinstalled is asked
+/// about again and nothing else ever is.
+nonisolated enum NativeKind {
+    private static let key = namespacedKey("NativeKind", "byFolder")
+    /// The whole map is read, changed and written back, so two callers doing
+    /// that at once would lose one of the answers. Sequential in the app --
+    /// the scan walks one folder at a time -- and not in the tests, which is
+    /// where it was noticed.
+    private static let lock = NSLock()
+    /// Where the answers live. Injectable so a test has its own, rather than
+    /// three tests sharing one key and overwriting each other.
+    static var sharedStore: UserDefaults { UserDefaults(suiteName: suiteName) ?? .standard }
+
+    struct Entry: Codable, Equatable {
+        var isNative: Bool
+        /// The folder's modification date, as an interval. A game whose top
+        /// level changes is looked at again.
+        var stamp: Double
     }
-    return false
+
+    /// Asked of the file system, not of the URL: a URL caches the resource
+    /// values it has already been asked for, so a folder that changed after
+    /// the first look still reported the first look's date -- and the answer
+    /// would never have been worked out again.
+    static func stamp(of url: URL, fileManager f: FileManager = .default) -> Double {
+        let date = (try? f.attributesOfItem(atPath: url.path(percentEncoded: false)))?[.modificationDate] as? Date
+        return date?.timeIntervalSince1970 ?? 0
+    }
+
+    /// The remembered answer, or the one just worked out and now remembered.
+    static func isNative(folder: URL,
+                         measure: (URL) -> Bool = getIsNative(fromURL:),
+                         store: UserDefaults? = nil,
+                         fileManager f: FileManager = .default) -> Bool {
+        let defaults = store ?? sharedStore
+        let path = folder.path(percentEncoded: false)
+        let now = stamp(of: folder, fileManager: f)
+        lock.lock()
+        defer { lock.unlock() }
+        var all = read(from: defaults)
+        if let known = all[path], known.stamp == now { return known.isNative }
+        let answer = measure(folder)
+        all[path] = Entry(isNative: answer, stamp: now)
+        if let data = try? JSONEncoder().encode(all) { defaults.set(data, forKey: key) }
+        return answer
+    }
+
+    static func read(from defaults: UserDefaults) -> [String: Entry] {
+        guard let data = defaults.data(forKey: key),
+              let all = try? JSONDecoder().decode([String: Entry].self, from: data) else { return [:] }
+        return all
+    }
 }
 
 /// Run a command and do not wait for it.
@@ -689,6 +760,16 @@ final class LoadedGame: @unchecked Sendable {
 /// somebody watch two minutes of Steam processes to prove it is a cost with
 /// nothing bought. A game that stopped seconds after starting is the ambiguous
 /// one, and that is where the patience belongs.
+/// How long an empty Epic bottle has to stay empty before the session is over.
+///
+/// Chosen, not measured, and said so rather than dressed up: no Epic title
+/// with a launcher chain of its own has been watched exiting here yet. Steam's
+/// equivalent earns its two minutes from a title that is known to exit and
+/// come back forty-four seconds later; this is the same fear with less
+/// evidence behind it, so it is generous. Shorten it once a real chain has
+/// been seen.
+let epicIdleGrace: TimeInterval = 60
+
 func steamIdleGrace(forSessionLasting duration: TimeInterval,
                     crashed: Bool = false) -> TimeInterval {
     // A game that fell over is not a launcher chain about to come back, however
@@ -717,9 +798,17 @@ func runningExecutable(among names: [String]) -> String? {
 /// If Steam never records the game at all, this waits and nothing happens: the
 /// executable-name path is still armed, and lingering is the failure worth
 /// having.
+/// `onFirstRunning` is called once, the first time the game reads as running.
+/// Nothing in the application passes it: it exists so a test can wait on the
+/// fact that the watcher has seen the 1, rather than on a length of time.
+/// That distinction is the whole difficulty here -- the transition this
+/// function reports is a 1 followed by a 0, so a test that writes the 0 before
+/// the watcher has been scheduled even once has quietly removed the thing it
+/// then waits for, and fails as a mystery rather than as contention.
 func watchSteamSession(_ state: SteamAppState,
                        appID: Int,
                        every interval: UInt64 = 2_000_000_000,
+                       onFirstRunning: (() -> Void)? = nil,
                        then shutDown: @escaping (String) async -> Void) async {
     var seenRunning = false
     while !Task.isCancelled {
@@ -729,6 +818,7 @@ func watchSteamSession(_ state: SteamAppState,
             if !seenRunning {
                 console.log("steam reports \(appID) running; watching for it to finish")
                 seenRunning = true
+                onFirstRunning?()
             }
         case .notRunning where seenRunning:
             await shutDown("steam reports \(appID) is no longer running, closing steam...")
@@ -739,7 +829,7 @@ func watchSteamSession(_ state: SteamAppState,
     }
 }
 
-func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoad: @escaping (_ appName: String) -> Void, onTerminate: @escaping () -> Void, isNative: Bool, steamID: Int?, steamPath: String) async throws -> TerminationObserver {
+func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoad: @escaping (_ appName: String) -> Void, onTerminate: @escaping () -> Void, isNative: Bool, steamID: Int?, steamPath: String, isEpic: Bool = false) async throws -> TerminationObserver {
     // `appNames` lists every executable a game is known by, and for a game with
     // a launcher that is two: the launcher, and the game the launcher starts.
     // The launcher exits as soon as it has handed off -- that is its whole job.
@@ -777,13 +867,19 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
         cloudSync = SteamCloudSyncWatcher(steamID: String(steamID), steamPath: steamPath)
         processLog = SteamGameProcessLog(steamPath: steamPath, steamID: String(steamID))
     }
+    // An Epic title has no Steam to ask; its launcher's log is followed
+    // instead, from now, for the same reason the Steam watcher is built now.
+    var epicLog: EpicLauncherLogWatcher? = nil
+    if isEpic, let dir = BottleReference(bottle)?.directory {
+        epicLog = EpicLauncherLogWatcher(bottle: dir)
+    }
 
     // The generation this tracker belongs to. A teardown decided here must not
     // arrive in the middle of a session started afterwards.
-    let generation = LaunchGeneration.shared.current
+    let generation = LaunchGeneration.shared.current(for: bottle)
 
     func shutDown(because reason: String) async {
-        if LaunchGeneration.shared.supersedes(generation) {
+        if LaunchGeneration.shared.supersedes(generation, for: bottle) {
             console.log("not closing down: a game has been launched since (\(reason))")
             return
         }
@@ -809,17 +905,45 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
         guard loaded.claimShutdown() else { return }
         console.log(reason)
         do {
-            // Steam uploads save data when a game exits. Killing it mid-upload
-            // leaves the cloud copy behind whatever was actually played, and it
-            // has already happened here.
-            if let cloudSync { // not for native steam games
-                try await cloudSync.waitForSteamCloudSync()
+            if isEpic {
+                // The Epic launcher uploads save data when a game exits, as
+                // Steam does, and is killed mid-upload just as easily. It is
+                // given its time, asked to leave, and only then is the
+                // prefix ended. Steam's own shutdown is NOT sent here: with
+                // no Steam running, "Steam.exe -shutdown" would start one.
+                try await epicLog?.waitForLauncherToSettle()
+                try await quitEpic(cxAppPath: cxAppPath, bottle: bottle)
+                // Steam may be in this very prefix, and usually is: the Epic
+                // launcher is installed into whichever bottle the user
+                // pointed at, which on this machine is the Steam one. The
+                // rule stays "never start a Steam that is not running", so it
+                // is asked to leave only when the bottle says it is there --
+                // otherwise `wineserver -k` a moment later would take a
+                // running Steam down without a word to it, mid-download or
+                // mid-cloud-sync of its own.
+                var clients = ["epic"]
+                if let dir = BottleReference(bottle)?.directory,
+                   BottleProcesses.running(inBottleAt: dir)
+                       .contains(where: { $0.name.lowercased().hasPrefix("steam") }) {
+                    console.log("steam is in this bottle too; asking it to leave before the prefix goes")
+                    try await quitSteam(cxAppPath: cxAppPath, bottle: bottle, isNative: false)
+                    clients.append("steam")
+                }
+                try await closeBottle(cxAppPath: cxAppPath, bottle: bottle,
+                                      clients: clients, decidedAt: generation)
+            } else {
+                // Steam uploads save data when a game exits. Killing it mid-upload
+                // leaves the cloud copy behind whatever was actually played, and it
+                // has already happened here.
+                if let cloudSync { // not for native steam games
+                    try await cloudSync.waitForSteamCloudSync()
+                }
+                try await quitSteam(cxAppPath: cxAppPath, bottle: bottle, isNative: isNative)
+                // Steam has been asked, not told. Give it time to finish writing
+                // its own state before ending anything.
+                try await closeBottle(cxAppPath: cxAppPath, bottle: bottle,
+                                      decidedAt: generation)
             }
-            try await quitSteam(cxAppPath: cxAppPath, bottle: bottle, isNative: isNative)
-            // Steam has been asked, not told. Give it time to finish writing
-            // its own state before ending anything.
-            try await closeBottle(cxAppPath: cxAppPath, bottle: bottle,
-                                  decidedAt: generation)
         } catch {
             // Whatever failed on the way out, the game is over as far as the
             // window is concerned. Leaving the loader spinning helps nobody.
@@ -835,6 +959,20 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
         let terminatedAppName = String(terminatedAppPath.split(separator: "/").last ?? "unknown")
         guard appNames.contains(terminatedAppName) || appNames.contains(terminatedAppProcessName) else { return }
         console.log(output.userInfo?.description ?? "no userInfo")
+        // An Epic session is not decided here.
+        //
+        // This path tears down the instant a name in `appNames` exits, with
+        // no grace at all. For an Epic title that name is the one executable
+        // the manifest carries, which for a title with a chain of its own is
+        // the bootstrap: it exits seconds before the real game appears, and
+        // this would have killed the bottle in between. The Epic block below
+        // owns that decision, from the bottle census and epicIdleGrace, which
+        // is the only authority the measured facts support -- the launcher
+        // writes nothing when a title exits.
+        if isEpic {
+            console.log("\(terminatedAppProcessName) exited; the epic watch decides when the session is over")
+            return
+        }
 
         guard let game = loaded.name else {
             if steamID != nil {
@@ -929,6 +1067,165 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
                     console.log("the game is running again; it was still starting")
                     onLoad(loaded.name ?? "")
                     reportedIdle = false
+                }
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
+        }
+    }
+
+    // The Epic session, which has no Steam to ask about either half of it.
+    //
+    // Up: the launcher's own log names the executable it started -- the one
+    // party that knows, since the title is started by the launcher and not by
+    // us. Down: what is actually running in the bottle, which is the same
+    // last word the Steam path falls back to, because the launcher writes
+    // nothing at all when a title exits -- measured across every session on
+    // this machine, and the reason this cannot be done from the log.
+    //
+    // Without this, `onLoad` was never called for an Epic title at all:
+    // it lives inside the `if let steamID` below, and an Epic title has none.
+    // The loader it turns off stayed up for the rest of the run -- "Launching
+    // Alan Wake 2..." over a dimmed window, for ever.
+    if isEpic, let dir = BottleReference(bottle)?.directory {
+        Task.detached(priority: .background) {
+            // Up: whichever of the two answers first.
+            //
+            // The launcher's log names the executable, and is the nicer
+            // answer -- but the line can be written before this tracker's
+            // tail exists at all. When the launcher is ALREADY running, the
+            // whole sequence it writes (pull the saves, then "Launching
+            // app") takes under a second, and this tracker is built at the
+            // same moment the URI is handed over. Waiting only on the log
+            // would then wait out the full deadline for a line already gone
+            // by, and leave the window saying "Launching..." for three
+            // minutes before giving up on a game that is running.
+            //
+            // So the bottle is watched for the same fact from the other
+            // side: a process that is neither wine's furniture, nor Steam's,
+            // nor the launcher's own is the game.
+            let deadline = Date().addingTimeInterval(180)
+            var found: String?
+            while Date() < deadline, found == nil {
+                if let named = await epicLog?.launchedExecutableInNewLines() {
+                    console.log("epic: the launcher started \(named)")
+                    found = named
+                } else if let seen = BottleProcesses.gamesRunning(inBottleAt: dir).first {
+                    console.log("epic: \(seen) is running in the bottle")
+                    found = seen
+                } else {
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                }
+            }
+            // Nothing yet is not nothing ever.
+            //
+            // A first run can sit past this deadline on a prerequisite
+            // install, an EOS setup, a EULA or a shader step, and returning
+            // here ended the session's only two watchers at once: this task
+            // stops, and the `onTerminate` it calls releases the
+            // TerminationObserver as well (GameLauncher drops it from
+            // `observers`). The bottle would then never be torn down and the
+            // save never waited for. So the window is released -- that is
+            // what onTerminate is for -- and the search goes on.
+            if found == nil {
+                console.warn("epic: nothing started in this bottle in 180s; releasing the window, still watching")
+                await MainActor.run { onTerminate() }
+                // Still watching, but not for ever and not for anyone.
+                //
+                // This is a detached task nobody holds, so `Task.isCancelled`
+                // is never true and the loop below was literally endless. An
+                // abandoned launch -- the launcher closed, a sign-in or EULA
+                // cancelled, a cold start that failed -- left it polling lsof
+                // for the life of the application, and the first game started
+                // in this bottle afterwards satisfied it: a title the user
+                // launched later would pin the ABANDONED card as playing, with
+                // no way to clear it.
+                //
+                // Two ways out, then. A launch of something else in this bottle
+                // means this watcher is watching for a game nobody is waiting
+                // for -- and by now this launch's own generation is three
+                // minutes old, so a change can only be somebody else's. And a
+                // half hour of nothing is nothing: whatever this was, it is not
+                // still starting.
+                let mine = LaunchGeneration.shared.current(for: bottle)
+                let giveUpAt = Date().addingTimeInterval(1800)
+                while found == nil, Date() < giveUpAt {
+                    if LaunchGeneration.shared.supersedes(mine, for: bottle) {
+                        console.log("epic: another launch has taken this bottle; standing down")
+                        return
+                    }
+                    if let named = await epicLog?.launchedExecutableInNewLines() {
+                        found = named
+                    } else if let seen = BottleProcesses.gamesRunning(inBottleAt: dir).first {
+                        found = seen
+                    } else {
+                        try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    }
+                }
+                if found == nil {
+                    console.warn("epic: nothing started in this bottle in half an hour; standing down")
+                    return
+                }
+            }
+            guard let exe = found else { return }
+            // Everything written up to here belongs to the launch, including
+            // the save sync the launcher runs BEFORE it starts a title. Left
+            // unread, that sync's "Exiting Cloud Sync" would satisfy the
+            // teardown's wait for the sync that runs AFTER the title exits --
+            // and the launcher would be asked to leave mid-upload.
+            await epicLog?.drainPastLaunch()
+            await MainActor.run {
+                loaded.name = exe
+                onLoad(exe)
+            }
+
+            // Said to have started is not the same as running.
+            //
+            // The idle watch below counts an empty bottle towards a teardown,
+            // and when the launcher's log is what answered above, the bottle
+            // is still empty -- the process takes its own time to appear, and
+            // on a first run it can take minutes. Entering the loop then
+            // starts the clock on a game that is still coming up, which is
+            // how the bottle would be pulled out from under it. Nothing is
+            // counted until the game has actually been seen once.
+            var everSeen = false
+            let appearBy = Date().addingTimeInterval(600)
+            while !Task.isCancelled, !everSeen, Date() < appearBy {
+                if !BottleProcesses.gamesRunning(inBottleAt: dir).isEmpty { everSeen = true; break }
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
+            guard everSeen else {
+                console.warn("epic: \(exe) never appeared in the bottle; leaving it alone rather than closing it")
+                await MainActor.run { onTerminate() }
+                return
+            }
+
+            // Down. A gap is not an ending: a title with a launcher chain of
+            // its own exits and comes back, which is what the grace is for --
+            // the same reasoning as the Steam idle grace, chosen rather than
+            // measured for Epic, and safe to shorten once a real chain has
+            // been watched here.
+            var idleSince: Date?
+            var reportedIdle = false
+            while !Task.isCancelled {
+                let playing = BottleProcesses.gamesRunning(inBottleAt: dir)
+                if playing.isEmpty {
+                    if idleSince == nil { idleSince = Date() }
+                    if !reportedIdle {
+                        console.log("nothing of the game is running; the window is free again")
+                        await MainActor.run { onTerminate() }
+                        reportedIdle = true
+                    }
+                    if let since = idleSince, Date().timeIntervalSince(since) >= epicIdleGrace {
+                        await shutDown(because: "nothing has run in this bottle for \(Int(epicIdleGrace))s, closing down...")
+                        return
+                    }
+                } else {
+                    idleSince = nil
+                    if reportedIdle {
+                        console.log("the game is running again; it was still starting")
+                        await MainActor.run { onLoad(exe) }
+                        reportedIdle = false
+                    }
                 }
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
             }

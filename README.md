@@ -201,9 +201,10 @@ picture, because the luma and chroma planes are handled separately.
 
 ## Controllers
 
-A PlayStation pad under CrossOver used to be half a pad: connect a DualSense by
-cable and it rumbled in every game, connect the same pad by Bluetooth and it
-never rumbled in any of them, and the PS button and the touchpad went quiet too.
+A PlayStation pad under CrossOver used to be unpredictable. By cable a DualSense
+rumbled; by Bluetooth it depended on the title — some rumbled, some did not, the
+adaptive triggers were the same lottery, and the PS button and the touchpad could
+go quiet as well.
 It is none of the things people blame — the pad speaks a different protocol on
 each transport and **silently ignores the wrong one**, and nothing under Wine
 ever told Windows which transport it was on.

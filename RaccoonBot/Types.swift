@@ -223,8 +223,27 @@ struct GameOptionsData: Codable, Equatable { // this is used for reading saved p
     var d3dMEnableMetalFX: String?
     var d3dSupportDXR: String?
     var d3dMaxFPS: Double?
-    
+
+    /// The machine this record was last written on, as `MachineIdentity`
+    /// describes it.
+    ///
+    /// NOT A SETTING, which is why it is the one field here that does not
+    /// appear in the panel and does not come back through `set(data:)`. Nobody
+    /// chooses it, nothing reads it to decide a launch, and a record that
+    /// arrives from another machine keeps the machine it came from rather than
+    /// being rewritten to this one on sight -- it is only stamped when this
+    /// machine is the one doing the saving, which is exactly here.
+    ///
+    /// It exists because a configuration that makes a game playable is a claim,
+    /// and a claim without the machine behind it is what makes a catalog of
+    /// them worthless. See MachineIdentity for what is recorded and what
+    /// deliberately is not concluded from it.
+    var savedOnMachine: MachineIdentity?
+
     init(data: GameOptions) {
+        // Stamped rather than copied: `data` is the panel, and the panel has no
+        // opinion about which Mac it is running on.
+        self.savedOnMachine = MachineIdentity.current
         self.cxGraphicsBackend = data.cxGraphicsBackend
         self.wineMSync = data.wineMSync
         // Every field this initialiser forgets is a field that survives the

@@ -19,7 +19,11 @@
 # hidapi asks the HID device's parent devnode for its compatible ids and looks
 # for BTHENUM. Under wine CM_Get_Parent was a stub and winebus named no bus at
 # all, so the answer was always "not Bluetooth" -- Steam's log says
-# "bluetooth 0" for a pad that is -- and the pad never rumbled. With the files
+# "bluetooth 0" for a pad that is -- and every client that asks that way then
+# built the wrong report, which the pad ignores in silence. Which is why the
+# symptom was never a flat "no rumble" but a lottery: a title that writes the
+# pad's own report by some other route rumbles, one that trusts the bus answer
+# does not. With the files
 # here the answer is the true one: rumble, the PS button and the touchpad
 # work over Bluetooth, measured on 2026-09-08; trigger effects ride in the same
 # report, and the owner reports them in a title that sends them.
@@ -146,12 +150,18 @@ case "$ACTION" in
   --restore)
       refuse_if_bottle_up
       n=0
+      # Counted rather than written down. It said "of 4" for as long as the set
+      # was four files, and went on saying it when the set became ten -- so a
+      # complete restore reported "restored 10 of 4", which reads as a fault in
+      # a script whose whole job is putting somebody's engine back.
+      total=0
       for d in $(for f in $PE_NAMES; do pe_dest "$f"; done) "$USO_DEST"; do
+        total=$((total+1))
         if [ -f "$d.mgvf-stock" ]; then mv -f "$d.mgvf-stock" "$d"; n=$((n+1)); fi
       done
       if [ "$n" -gt 0 ]; then
         reseal
-        echo "restored $n of 4"
+        echo "restored $n of $total"
       else
         echo "nothing to restore"
       fi

@@ -103,18 +103,21 @@ nonisolated enum DualSenseRumble {
     /// A quarter, 64, fixed that for a slider that stopped at 400%.
     ///
     /// Then the ceiling became x10, and 64 saturated at x4 again: the top
-    /// three fifths of the slider could not be previewed. 25 reaches 250 at
-    /// x10, so the whole range is a range in the hand -- and it is far closer
-    /// to what a game actually asks. Measured over Bluetooth on 2026-09-10,
-    /// Beast of Reincarnation asked for 1, 7, 9, 22 and 42 of 255 across a
-    /// session. At 64 this pulse was some nine times whatever that title was
-    /// asking, which is why the button always felt strong while the game felt
-    /// thin, and why the button was a poor preview of it.
+    /// three fifths of the slider could not be previewed. 25 reached 250 at
+    /// x10, so the whole range was a range in the hand again.
+    ///
+    /// AND THE BAR CAME BACK TO 400, so the number follows it: 62 reaches 248
+    /// at the top, just short of the byte, and the whole bar is previewable
+    /// once more. The rule has never changed even though the number has three
+    /// times -- the pulse must be a preview of the WHOLE bar, which means the
+    /// top of the bar has to land just under saturation. Any time the bar's
+    /// ceiling moves, this moves with it, and the test beside it says so by
+    /// asserting both ends.
     ///
     /// It stays a reference and not a promise: a game that already asks for
     /// 255 cannot be made louder by any of this, and no test pulse can show
     /// that. What the pulse shows is the shape of the multiplier.
-    static let referenceRequest: Double = 25
+    static let referenceRequest: Double = 62
 
     /// Both motor bytes, saturated at 255 the way the driver saturates.
     ///

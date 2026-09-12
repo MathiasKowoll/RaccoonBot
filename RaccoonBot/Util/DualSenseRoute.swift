@@ -198,22 +198,32 @@ nonisolated enum DualSenseVibration: String, CaseIterable {
     /// explicitly -- see `overrides(for:)` for why.
     static let neutralGain: UInt32 = 100
 
-    /// What the slider offers: the whole range the driver accepts.
+    /// What the bar offers.
     ///
-    /// It stopped at 400 on the reasoning that "a byte of 26 already saturates
-    /// at 1000, so a wider range would only be a longer way to reach the same
-    /// 255". That was true of the legacy motors, where a title's requests
-    /// arrive high. It is not true of the pad's own haptic path, which is what
-    /// a title asks for and what mgvf-0020 now delivers at the game's own rate:
-    /// measured on Beast of Reincarnation over Bluetooth on 2026-09-10, its
-    /// requests in one session were 1, 7, 9, 22 and 42 of 255. At 400% the
-    /// loudest of those reaches 168 and nothing saturates at all -- so the
-    /// ceiling was not a limit of the pad, it was a limit of the slider, and
-    /// the rumble felt thin for it. 42 saturates around 600%.
+    /// BACK TO 400, and this time with the measurement that settles it. It was
+    /// raised to 1000 on 2026-09-10 because the rumble felt thin and the
+    /// ceiling looked like the slider's fault. It was not. Two things were
+    /// wrong underneath and both are fixed: the deadband was comparing the
+    /// movement a game ASKED for against a band that applies at the pad, so a
+    /// high setting made the rumble coarser rather than stronger (mgvf-0026),
+    /// and the driver was sending the legacy motors for both menu entries, so
+    /// the finer path was never actually being heard (mgvf-0024).
+    ///
+    /// With those fixed, the top of a 1000 bar is a lie. Measured on Beast of
+    /// Reincarnation over Bluetooth: its loudest request in a session is 143 of
+    /// 255, so 175% is where that reaches the ceiling and nothing clips at all.
+    /// Past about 600% every request the game makes saturates, and from there
+    /// to 1000 the identical byte reaches the motors -- a stretch of bar that
+    /// moves and changes nothing, which is exactly what a control must never
+    /// do. 400 leaves room above the point where any title measured here
+    /// saturates and stops promising what the pad cannot give.
+    ///
+    /// A stored value above the new ceiling is folded by `pickableGain` rather
+    /// than left pinned off its own scale.
     ///
     /// It starts at 0, which is silence and not a quiet pad: the driver reads
     /// 0 as a request and every other value as a multiplier.
-    static let gainRange: ClosedRange<Double> = 0...1000
+    static let gainRange: ClosedRange<Double> = 0...400
 
     /// Both paths carry a strength now, and each carries its OWN. A single
     /// shared number would make switching paths a shock: the haptic path is
@@ -255,9 +265,24 @@ nonisolated enum DualSenseVibration: String, CaseIterable {
     ///
     /// One decimal only where it is not whole, so x1.5 is reachable and x4 does
     /// not become "x4.0".
-    static func multiplierLabel(_ percent: Double) -> String {
-        let x = pickableGain(percent) / 100
-        return x == x.rounded() ? "x\(Int(x))" : String(format: "x%.1f", x)
+    /// Where the bar is sitting, in words, because the number was worse than
+    /// nothing.
+    ///
+    /// It used to read "x4". A multiplier invites arithmetic that does not
+    /// survive contact with the pad: the two paths saturate at different
+    /// points, a title already asking for everything cannot be multiplied
+    /// higher, and past the middle of the old bar the identical byte reached
+    /// the motors either way. A number that is right about the request and
+    /// wrong about what is felt is worse than no number at all, so nothing the
+    /// person reads carries one now -- not the bar, not the console line.
+    /// This is a bar of intensity and nothing else.
+    static func strengthWord(_ percent: Double) -> String {
+        let g = pickableGain(percent)
+        if g == 0 { return "silenced" }
+        if g < Double(neutralGain) { return "below what the game asks" }
+        if g == Double(neutralGain) { return "at what the game asks" }
+        if g <= 200 { return "a little above what the game asks" }
+        return "well above what the game asks"
     }
 
     /// Whether this asks the driver for anything at all. `asAsked` at 100 does
@@ -733,8 +758,7 @@ nonisolated enum DualSenseRoute {
         }
         let gain = vibration.gainValue(percent: percent)
         if gain == 0 { return "the motors are silenced for this title, whatever the game asks for" }
-        let strength = gain == DualSenseVibration.neutralGain ? "at what the game asks"
-                     : "at \(DualSenseVibration.multiplierLabel(percent)) what the game asks"
+        let strength = DualSenseVibration.strengthWord(percent)
         switch vibration {
         case .stronger:
             // The comparison behind this sentence: both paths driven to 252 of
@@ -743,15 +767,17 @@ nonisolated enum DualSenseRoute {
             // holding it. That is still one hand -- but it is one hand on two
             // packets that differ in two bits, which the six-pulse ladder this
             // sentence used to cite was not.
-            return "the motors: the legacy compatible motors \(strength) -- coarser than the pad's own path and harder at the same command"
+            return "the motors: the legacy compatible motors, \(strength) -- coarser than the pad's own path and harder at the same command"
         case .asAsked:
-            // The saturation is worth a clause: somebody who asks for x10 and
-            // feels nothing new should read why here rather than conclude the
-            // option is broken. Measured: a title asking 42 of 255 saturates
-            // around x6, and nothing above it changes a byte.
+            // The saturation is still worth a clause: somebody at the top of
+            // the bar who feels nothing new should read why here rather than
+            // conclude the option is broken. Measured on the title traced here,
+            // whose loudest request is 143 of 255: everything it asks saturates
+            // past about six times, and the bar now stops at four for that
+            // reason.
             return gain == DualSenseVibration.neutralGain
                 ? "the motors: whatever the game asks for, on the path it chose, untouched"
-                : "the motors: the pad's own haptic path \(strength) -- finer than the legacy motors, and it saturates, so past about x6 nothing more reaches them"
+                : "the motors: the pad's own haptic path, \(strength) -- finer than the legacy motors, and it saturates, so near the top of the bar nothing more reaches them"
         }
     }
 }

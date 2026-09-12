@@ -505,15 +505,21 @@ struct DualSenseRouteTests {
         #expect(DualSenseVibration.pickableGain(100000) == DualSenseVibration.gainRange.upperBound)
         // The ceiling is the driver's own clamp, not a number the panel chose:
         // a value the slider can reach must be a value the driver will honour.
-        #expect(DualSenseVibration.gainRange.upperBound == 1000)
+        #expect(DualSenseVibration.gainRange.upperBound == 400)
         // The label is a multiplier; the stored value stays the percentage the
         // driver reads and every trace prints.
-        #expect(DualSenseVibration.multiplierLabel(100) == "x1", "the neutral point has to read as neutral")
-        #expect(DualSenseVibration.multiplierLabel(400) == "x4")
-        #expect(DualSenseVibration.multiplierLabel(1000) == "x10")
-        #expect(DualSenseVibration.multiplierLabel(150) == "x1.5")
-        #expect(DualSenseVibration.multiplierLabel(99999) == "x10", "and it folds what the slider cannot reach")
-        #expect(DualSenseVibration.asAsked.gainValue(percent: 1000) == 1000)
+        // Nothing a person reads carries a number any more -- see strengthWord
+        // for why the multiplier was worse than nothing. What is asserted is
+        // that each band of the bar says something different, and that the
+        // neutral point says it is neutral.
+        #expect(DualSenseVibration.strengthWord(100) == "at what the game asks", "the neutral point has to read as neutral")
+        #expect(DualSenseVibration.strengthWord(0) == "silenced")
+        #expect(DualSenseVibration.strengthWord(50) == "below what the game asks")
+        #expect(DualSenseVibration.strengthWord(175) == "a little above what the game asks")
+        #expect(DualSenseVibration.strengthWord(400) == "well above what the game asks")
+        #expect(DualSenseVibration.strengthWord(99999) == "well above what the game asks", "and it folds what the bar cannot reach")
+        #expect(!DualSenseVibration.strengthWord(400).contains("x"), "no multiplier reaches the person, anywhere")
+        #expect(DualSenseVibration.asAsked.gainValue(percent: 1000) == 400, "a stored value above the bar folds into it")
         #expect(DualSenseVibration.pickableGain(.nan) == 100)
         #expect(DualSenseVibration.pickableGain(175) == 175)
     }
@@ -652,7 +658,8 @@ struct DualSenseRouteTests {
     /// sets 400% and feels nothing new should read why on the launch line.
     @Test func theConsoleSaysWhereTheGainStops() {
         let sentence = said([pad(SonyPads.dualSense, "Bluetooth")], .asItIs, vibration: .asAsked, percent: 400)
-        #expect(sentence.contains("x4"), "the console speaks the multiplier the panel shows")
+        #expect(!sentence.contains("x4"), "no multiplier reaches the person, in the console or anywhere else")
+        #expect(sentence.contains("above what the game asks"), "the console says where the bar sits, in words")
         #expect(sentence.contains("saturates"))
         #expect(sentence.contains("haptic path"), "and names which path the strength is applied to")
     }

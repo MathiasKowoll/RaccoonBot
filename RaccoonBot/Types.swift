@@ -998,9 +998,18 @@ struct LibraryRow: Identifiable {
 class LibraryPageGlobals: ObservableObject {
     // Remembered across launches. Choosing the list and being handed the grid
     // again next time is not a default, it is the application forgetting.
-    @Published var tab: LibraryTab = LibraryPageGlobals.restored(.tab) {
-        didSet { UserDefaults.standard.set(tab.rawValue, forKey: Key.tab) }
-    }
+    //
+    // THE TAB IS THE EXCEPTION, and it used to be remembered with the rest.
+    // It is not a preference about how you like to look at things -- it is
+    // where you were in a task. "Not installed" is for browsing what you own
+    // and could add; you go there, you install something, you close the
+    // application. Opening it again is opening it to play, and being handed
+    // the shopping list is the application remembering the wrong half of last
+    // time.
+    //
+    // So this one always starts on what is installed, and the switch works as
+    // it always did once you are in.
+    @Published var tab: LibraryTab = .installed
     @Published var viewMode: LibraryViewMode = LibraryPageGlobals.restored(.viewMode) {
         didSet { UserDefaults.standard.set(viewMode.rawValue, forKey: Key.viewMode) }
     }
@@ -1012,6 +1021,9 @@ class LibraryPageGlobals: ObservableObject {
     }
 
     private enum Key {
+        // Left in place though nothing writes it any more: a build that reads
+        // it would find whatever the last version that wrote it left, and a key
+        // nobody writes is cheaper than a key two versions disagree about.
         static let tab = "raccoonbot.library.tab"
         static let viewMode = "raccoonbot.library.viewMode"
         static let sortColumn = "raccoonbot.library.sortColumn"
@@ -1022,9 +1034,6 @@ class LibraryPageGlobals: ObservableObject {
 
     /// Falls back to the default for anything unreadable -- a value written by
     /// a version that had a column this one does not, for instance.
-    private static func restored(_ what: Restorable) -> LibraryTab {
-        LibraryTab(rawValue: UserDefaults.standard.string(forKey: Key.tab) ?? "") ?? .installed
-    }
     private static func restored(_ what: Restorable) -> LibraryViewMode {
         LibraryViewMode(rawValue: UserDefaults.standard.string(forKey: Key.viewMode) ?? "") ?? .grid
     }

@@ -150,3 +150,31 @@ struct CatalogVerifiedOnTests {
         #expect(optional.contains { $0["id"] as? String == "controller" })
     }
 }
+
+/// Which list the library opens on.
+struct LibraryOpensOnInstalledTests {
+
+    /// It opens on what is installed, whatever you were looking at last time.
+    /// The other three library settings are still remembered, and that is the
+    /// distinction: how you like to look at things is a preference, where you
+    /// were in a task is not.
+    @Test func theLibraryAlwaysOpensOnInstalled() {
+        UserDefaults.standard.set(LibraryTab.notInstalled.rawValue, forKey: "raccoonbot.library.tab")
+        defer { UserDefaults.standard.removeObject(forKey: "raccoonbot.library.tab") }
+        #expect(LibraryPageGlobals().tab == .installed,
+                "a stale key from an older build must not decide which list you are handed")
+    }
+
+    /// And the ones that are preferences still survive a launch.
+    @Test func howYouLikeToLookAtThingsIsStillRemembered() {
+        UserDefaults.standard.set(LibraryViewMode.list.rawValue, forKey: "raccoonbot.library.viewMode")
+        UserDefaults.standard.set(false, forKey: "raccoonbot.library.sortAscending")
+        defer {
+            UserDefaults.standard.removeObject(forKey: "raccoonbot.library.viewMode")
+            UserDefaults.standard.removeObject(forKey: "raccoonbot.library.sortAscending")
+        }
+        let g = LibraryPageGlobals()
+        #expect(g.viewMode == .list, "choosing the list and being handed the grid is the application forgetting")
+        #expect(g.sortAscending == false)
+    }
+}

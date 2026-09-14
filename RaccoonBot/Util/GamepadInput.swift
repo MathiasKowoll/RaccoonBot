@@ -190,6 +190,12 @@ final class GamepadInput: ObservableObject {
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, !self.suspended else { return event }
             if let responder = NSApp.keyWindow?.firstResponder, responder is NSTextView { return event }
+            // A held Return is one press, wherever it lands. Its auto-repeat
+            // can reach whatever the first press opened -- on the grid, an
+            // alert, where the repeat is the alert's default button: for the
+            // pad notice that is Start, and the notice would be dismissed into
+            // a launch unread. Reasoned from the code, not seen happen.
+            if event.isARepeat, Self.dropsAutoRepeat(Self.action(for: event)) { return nil }
             // Step aside for a panel in front that does not drive the pad
             // itself. Only the grid and the game-options sheet ever take it, so
             // in settings, tools, the detail page, a custom game or the Epic
@@ -237,6 +243,13 @@ final class GamepadInput: ObservableObject {
         case 53:  return .press(.back)     // Escape
         default:  return nil
         }
+    }
+
+    /// Whether a key's auto-repeat is swallowed. A select only: arrows repeat
+    /// on purpose, and text never gets here.
+    nonisolated static func dropsAutoRepeat(_ action: KeyAction?) -> Bool {
+        if case .press(.select)? = action { return true }
+        return false
     }
 
     private static func action(for event: NSEvent) -> KeyAction? {

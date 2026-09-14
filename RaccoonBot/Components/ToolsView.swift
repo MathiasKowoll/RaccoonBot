@@ -89,6 +89,13 @@ struct ToolsView: View {
                 ProminentButton("Show D3dmetal Cache Folder", systemImage: "folder") {
                     NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: darwinUserCacheDir()!.appendingPathComponent(D3DM_CACHE_FOLDER, isDirectory: true).path)
                 }
+                // The only way back from "Start, and don't show this again".
+                // That button mutes a warning about a real disconnect, and a
+                // mute with no way back in the application is a trap.
+                ProminentButton("Show the DualSense disconnect notice again", systemImage: "gamecontroller") {
+                    UserDefaults.standard.removeObject(forKey: MacIdleDisconnect.suppressionKey)
+                }
+                .help("Play warns again before a game starts when macOS is set to disconnect a DualSense on Bluetooth about 15 minutes into play.")
                 // Always here, not only when a variable was set before
                 // launch. Somebody being asked "can you send me the log" has
                 // to be able to find this without a terminal.

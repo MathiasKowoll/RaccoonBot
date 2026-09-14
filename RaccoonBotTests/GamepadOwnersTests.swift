@@ -96,6 +96,13 @@ struct KeyboardMappingTests {
 
     /// Every other key is somebody else's. A letter in particular: taking
     /// one would break typing in the filter field.
+    /// A held Return is one select; held arrows keep moving.
+    @Test func onlyASelectLosesItsAutoRepeat() {
+        let codes: [UInt16] = [126, 125, 123, 124, 36, 76, 49, 53, 0]
+        #expect(codes.map { GamepadInput.dropsAutoRepeat(GamepadInput.action(forKeyCode: $0)) }
+                == [false, false, false, false, true, true, true, false, false])
+    }
+
     @Test func otherKeysAreNotOurs() {
         for code: UInt16 in [0, 1, 12, 51, 48] { #expect(GamepadInput.action(forKeyCode: code) == nil) }
     }

@@ -22,6 +22,10 @@ nonisolated enum SonyPads {
         let productID: Int
         /// IOKit's word: "USB", "Bluetooth", "BluetoothLowEnergy".
         let transport: String
+        /// IOKit's kIOHIDSerialNumberKey; over Bluetooth, the pad's address.
+        /// Defaulted, so a pad described by route and transport alone is still
+        /// one line. See MacIdleDisconnect for what it is matched against.
+        var serialNumber: String? = nil
         var isBluetooth: Bool { transport.hasPrefix("Bluetooth") }
     }
 
@@ -42,7 +46,8 @@ nonisolated enum SonyPads {
             guard let pid = IOHIDDeviceGetProperty(device, kIOHIDProductIDKey as CFString) as? Int,
                   let transport = IOHIDDeviceGetProperty(device, kIOHIDTransportKey as CFString) as? String
             else { return nil }
-            return Pad(productID: pid, transport: transport)
+            return Pad(productID: pid, transport: transport,
+                       serialNumber: IOHIDDeviceGetProperty(device, kIOHIDSerialNumberKey as CFString) as? String)
         }
     }
 }
@@ -885,6 +890,14 @@ nonisolated enum DualSenseRoute {
     static func engineCanSetLights(cxAppPath: String?) -> Bool {
         contains(literal: lightbarColourValue, inWinebusOf: cxAppPath)
             && contains(literal: playerLightsValue, inWinebusOf: cxAppPath)
+    }
+
+    /// Whether the engine carries mgvf-0006: the winebus that seizes a
+    /// DualSense on Bluetooth. Asked by the name of the registry value it
+    /// reads, like every question above. It reads the whole .sys, so the Play
+    /// gate asks it through GameLauncher's cache rather than on every press.
+    static func engineSeizesThePad(cxAppPath: String?) -> Bool {
+        contains(literal: "SeizeDevice", inWinebusOf: cxAppPath)
     }
 
     /// The engine's own winebus.sys, searched for a UTF-16 literal. A missing

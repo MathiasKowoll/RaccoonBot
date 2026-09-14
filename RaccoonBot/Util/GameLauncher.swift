@@ -29,6 +29,10 @@ enum LaunchOutcome: Equatable {
     /// A custom entry with nothing to run.
     case noExecutable
     case alreadyPlaying
+    /// A DualSense macOS will disconnect about fifteen minutes into play, and
+    /// the title was NOT started: the player is told first, then chooses. See
+    /// MacIdleDisconnect.
+    case padWillDisconnect([SonyPads.Pad])
 }
 
 /// Not observable: it publishes nothing. What the interface watches --
@@ -41,14 +45,29 @@ final class GameLauncher {
 
     private var observers: [String: TerminationObserver] = [:]
 
+    /// The engine's SeizeDevice answer, per engine file as it is on disk.
+    ///
+    /// The question reads all of winebus.sys, and it is asked on every Play
+    /// press that would start something. Keyed on the file's modification
+    /// date as well as its path -- a stat, not a read -- because an engine can
+    /// be rebuilt in place while this application runs, and a stale "no" is a
+    /// notice that stays away until the next restart.
+    private var seizeAnswers: [String: Bool] = [:]
+
     /// Decides whether a title may start, without starting it.
     ///
     /// Separate so the gate can be tested without launching anything, and so
     /// every caller asks the same question.
+    ///
+    /// The pads are a closure, called last and only when everything else
+    /// would start the title: asking IOKit, and possibly the engine binary, is
+    /// not free, and a title that is running, native, has nothing to run or
+    /// needs its fix has no business paying for it.
     nonisolated static func outcome(for game: Game,
                                     isPlaying: Bool,
                                     needsFix: Bool,
-                                    hasEpicLauncher: Bool = true) -> LaunchOutcome {
+                                    hasEpicLauncher: Bool = true,
+                                    padsToAskAbout: () -> [SonyPads.Pad] = { [] }) -> LaunchOutcome {
         if isPlaying { return .alreadyPlaying }
         if game.isNative { return .started }
         if game.isCustom == true && game.appExeURL == nil { return .noExecutable }
@@ -56,7 +75,44 @@ final class GameLauncher {
         // scheme; with no launcher in the bottle there is nothing to start it.
         if game.isEpic && !hasEpicLauncher { return .noExecutable }
         if needsFix { return .needsFix }
+        let pads = padsToAskAbout()
+        if !pads.isEmpty { return .padWillDisconnect(pads) }
         return .started
+    }
+
+    /// The pads to warn about for a launch that is about to happen, and the
+    /// console's line for each one at risk when it is not warned about.
+    ///
+    /// The lines are written only when the launch goes ahead -- after "Start",
+    /// or with the notice turned off -- so one launch leaves one set of them.
+    /// Asked of the detail page's own launch too, which does not come through
+    /// `play`.
+    func padsToAskAbout(cxAppPath: String?, isNative: Bool, acknowledged: Bool) -> [SonyPads.Pad] {
+        let started = Date()
+        let atRisk = MacIdleDisconnect.padsAtRisk(pads: SonyPads.attached(),
+                                                  driverSerials: MacIdleDisconnect.driverSerials(),
+                                                  engineSeizes: engineSeizesThePad(cxAppPath: cxAppPath))
+        let decision = MacIdleDisconnect.launchDecision(
+            atRisk: atRisk, isNative: isNative,
+            suppressed: UserDefaults.standard.bool(forKey: MacIdleDisconnect.suppressionKey),
+            acknowledged: acknowledged)
+        if !decision.ask.isEmpty { return decision.ask }
+        // Its main-actor cost has not been measured; this line is how.
+        console.log("controller: gamepad driver check took \(Int(Date().timeIntervalSince(started) * 1000)) ms")
+        decision.log.forEach { console.warn($0) }
+        return []
+    }
+
+    private func engineSeizesThePad(cxAppPath: String?) -> Bool {
+        guard let cxAppPath, !cxAppPath.isEmpty else { return false }
+        let sys = cxAppPath + "/Contents/SharedSupport/CrossOver/lib/wine/x86_64-windows/winebus.sys"
+        let modified = (try? FileManager.default.attributesOfItem(atPath: sys)[.modificationDate] as? Date)
+            .map { String($0.timeIntervalSince1970) } ?? "absent"
+        let key = sys + "|" + modified
+        if let known = seizeAnswers[key] { return known }
+        let answer = DualSenseRoute.engineSeizesThePad(cxAppPath: cxAppPath)
+        seizeAnswers[key] = answer
+        return answer
     }
 
     @discardableResult
@@ -66,14 +122,19 @@ final class GameLauncher {
               gameFolder: String?,
               appGlobals: AppGlobals,
               libraryPageGlobals: LibraryPageGlobals,
-              fixes: MGVFLibrary) -> LaunchOutcome {
+              fixes: MGVFLibrary,
+              acknowledgedPadNotice: Bool = false) -> LaunchOutcome {
 
         let needsFix = gameFolder.map { fixes.needsPatch(folder: $0) } ?? false
         let epicPlan = item.isEpic
             ? EpicLaunch.plan(for: item, settings: StoreConfig.settings(for: .epic), selectedBottle: appGlobals.selectedBottle)
             : nil
         let outcome = Self.outcome(for: item, isPlaying: isPlaying, needsFix: needsFix,
-                                   hasEpicLauncher: !item.isEpic || epicPlan != nil)
+                                   hasEpicLauncher: !item.isEpic || epicPlan != nil,
+                                   padsToAskAbout: {
+                                       padsToAskAbout(cxAppPath: appGlobals.cxAppPath, isNative: item.isNative,
+                                                      acknowledged: acknowledgedPadNotice)
+                                   })
         guard outcome == .started else {
             if outcome == .noExecutable {
                 console.error(item.isEpic ? "epic: no Epic Games Launcher in the bottle to start \(item.name); set one up from the Epic panel"

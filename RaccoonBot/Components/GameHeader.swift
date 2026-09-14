@@ -14,6 +14,7 @@ struct GameHeader: View {
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
     @EnvironmentObject var gameOptions: GameOptions
     @State private var showGameOptions: Bool = false
+    @State private var padNotice: [SonyPads.Pad]? = nil
     var isPlaying: Bool {
         libraryPageGlobals.playingID == game!.id
     }
@@ -36,7 +37,7 @@ struct GameHeader: View {
             }
             HStack(alignment: .center) {
                 if(game!.downloadProgress == 100 && game!.isInstalled) {
-                    PlayButtonExtras(playAction: playGame,
+                    PlayButtonExtras(playAction: { playGame() },
                     stopAction: {
                         if(game!.isNative) {
                             console.log("stop action not implemented for macOS")
@@ -124,10 +125,30 @@ struct GameHeader: View {
         .sheet(isPresented: $showGameOptions) {
             GameOptionsSheet(game: $game, isPresented: $showGameOptions)
         }
+        .padDisconnectNotice($padNotice) { playGame(acknowledgedPadNotice: true) }
     }
-    
+
     @MainActor
-    func playGame() {
+    func playGame(acknowledgedPadNotice: Bool = false) {
+        // The pad notice, asked the way GameLauncher asks it and before
+        // anything is started. This page does not go through GameLauncher --
+        // and so has no fix gate of its own -- but a player who starts from
+        // here is as much at risk of the cut as one who starts from the card.
+        // needsFix is false because this path never asked; the pads are only
+        // looked at when nothing else would stop the launch.
+        let epicPlan = game!.isEpic
+            ? EpicLaunch.plan(for: game!, settings: StoreConfig.settings(for: .epic), selectedBottle: appGlobals.selectedBottle)
+            : nil
+        if case .padWillDisconnect(let pads) = GameLauncher.outcome(
+            for: game!, isPlaying: isPlaying, needsFix: false,
+            hasEpicLauncher: !game!.isEpic || epicPlan != nil,
+            padsToAskAbout: {
+                GameLauncher.shared.padsToAskAbout(cxAppPath: appGlobals.cxAppPath, isNative: game!.isNative,
+                                                   acknowledged: acknowledgedPadNotice)
+            }) {
+            padNotice = pads
+            return
+        }
         libraryPageGlobals.setLoader(state: true)
         Task {
             do {

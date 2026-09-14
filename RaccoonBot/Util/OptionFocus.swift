@@ -42,9 +42,12 @@ nonisolated enum OptionControl: String, CaseIterable, Hashable {
     /// Buzzes the attached pad now, with what is on screen. A button, not a
     /// setting: nothing is written and nothing is read back.
     case rumbleTest
-    /// Keeps a HID trace of the next launch. A diagnostic, last in the section
-    /// because it is the one control here that is not about how the pad
-    /// behaves.
+    /// The lightbar colour and the player lights, in the pad's column under
+    /// "Pad seen as": they are about how the pad looks rather than how it
+    /// buzzes.
+    case lightbar, playerLights
+    /// Keeps a HID trace of the next launch. A diagnostic, at the foot of the
+    /// pad's column because the pad is what it traces.
     case hidTrace
     // DXMT
     case dxmtCap, dxmtMaxFPS, dxmtMetalFX, dxmtUpscale
@@ -67,7 +70,7 @@ nonisolated enum OptionControl: String, CaseIterable, Hashable {
     /// screen, and cycling is what a click does there too.
     var opensMenu: Bool {
         switch self {
-        case .backend, .hudAlignment, .padSeenAs, .vibration: return true
+        case .backend, .hudAlignment, .padSeenAs, .vibration, .lightbar, .playerLights: return true
         default: return false
         }
     }
@@ -161,11 +164,16 @@ nonisolated struct OptionFocus: Equatable {
         // The controller section, which follows the generic one on screen. A
         // native title has no bottle to write any of it into, so it has no
         // section either.
+        //
+        // Two columns on screen, walked the way they are read: down the pad's
+        // column, then down the vibration column. Rumble through XInput is in
+        // it now; it was on screen and out of this list, so a pad could not
+        // reach it.
         if !state.isNative {
-            list += [.sdl, .hidraw, .padSeenAs, .vibration]
+            list += [.sdl, .hidraw, .padSeenAs, .lightbar, .playerLights, .hidTrace]
+            list.append(.vibration)
             if state.vibrationGainShown { list.append(.vibrationGain) }
-            list.append(.rumbleTest)
-            list.append(.hidTrace)
+            list += [.xinputRumble, .rumbleTest]
         }
         if state.backend == "dxmt" {
             list.append(.dxmtCap)

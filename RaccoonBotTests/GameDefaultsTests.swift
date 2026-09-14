@@ -26,14 +26,20 @@ struct GameDefaultsTests {
         form.hidTraceEnabled = true
         form.wineMSync = false
         form.mtlHudEnabled = true
+        form.dualSenseLightbar = "8000ff"
+        form.dualSensePlayerLights = DualSensePlayerLights.player2.rawValue
         let saved = GameOptionsData(data: form)
         #expect(saved.hidTraceEnabled == true, "the trace toggle reached the panel and not the save once already")
         #expect(saved.wineMSync == false)
         #expect(saved.mtlHudEnabled == true)
+        #expect(saved.dualSenseLightbar == "8000ff")
+        #expect(saved.dualSensePlayerLights == "player-2")
         // and back again, which is what the launcher will read
         let reloaded = GameOptions()
         reloaded.set(data: saved)
         #expect(reloaded.hidTraceEnabled == true)
+        #expect(reloaded.dualSenseLightbar == "8000ff")
+        #expect(reloaded.dualSensePlayerLights == "player-2")
     }
 
     @Test func aFreshTitleGetsTheHudAndTheFourthToolkit() {

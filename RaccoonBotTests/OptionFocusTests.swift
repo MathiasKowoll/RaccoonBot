@@ -45,7 +45,8 @@ struct OptionFocusTests {
     /// so this is the section being where it looks like it is.
     @Test func theControllerControlsAreOneRun() {
         let all = OptionFocus.visibleControls(for: windows)
-        let section: [OptionControl] = [.sdl, .hidraw, .padSeenAs, .vibration, .vibrationGain, .rumbleTest, .hidTrace]
+        let section: [OptionControl] = [.sdl, .hidraw, .padSeenAs, .lightbar, .playerLights, .hidTrace,
+                                         .vibration, .vibrationGain, .xinputRumble, .rumbleTest]
         let start = all.firstIndex(of: .sdl)
         #expect(start != nil)
         #expect(Array(all[start!..<(start! + section.count)]) == section)
@@ -62,8 +63,10 @@ struct OptionFocusTests {
         s.vibrationGainShown = false
         let hidden = OptionFocus.visibleControls(for: s)
         #expect(!hidden.contains(.vibrationGain))
-        #expect(hidden.firstIndex(of: .rumbleTest) == hidden.firstIndex(of: .vibration).map { $0 + 1 },
-                "and the test button closes the section either way")
+        #expect(hidden.firstIndex(of: .xinputRumble) == hidden.firstIndex(of: .vibration).map { $0 + 1 },
+                "without the slider, the XInput switch follows the picker")
+        #expect(hidden.firstIndex(of: .rumbleTest) == hidden.firstIndex(of: .xinputRumble).map { $0 + 1 },
+                "and the test button closes the vibration column either way")
         s.vibrationGainShown = true
         #expect(OptionFocus.visibleControls(for: s).contains(.vibrationGain))
     }
@@ -205,6 +208,8 @@ struct MenuFocusTests {
     @Test func onlyThePopupsOpenAMenu() {
         #expect(OptionControl.backend.opensMenu)
         #expect(OptionControl.hudAlignment.opensMenu)
+        #expect(OptionControl.lightbar.opensMenu)
+        #expect(OptionControl.playerLights.opensMenu)
         #expect(!OptionControl.hudDetail.opensMenu, "segmented: every choice is already on screen")
         #expect(!OptionControl.mtlHud.opensMenu)
     }

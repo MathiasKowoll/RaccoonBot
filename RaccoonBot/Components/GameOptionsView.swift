@@ -43,11 +43,23 @@ struct GameOptionsView: View {
     @State private var rumbleFailed = false
     @State private var rumbleRunning = false
 
-    /// One width for every control in the controller section, so that
-    /// choosing a longer entry in a picker moves nothing beside it, and the
-    /// width for the sentence under the test button.
-    private static let controllerControlWidth: CGFloat = 330
-    private static let controllerSentenceWidth: CGFloat = 560
+    /// The controller section is two grids side by side, each a column of
+    /// labels and a column of controls. One width for every picker and the
+    /// slider, so choosing a longer entry moves nothing beside it; wide enough
+    /// for "Wired standard DualSense", the longest entry any of them has.
+    private static let controllerControlWidth: CGFloat = 210
+    private static let controllerColumnSpacing: CGFloat = 36
+    private static let controllerLabelSpacing: CGFloat = 12
+    private static let controllerRowSpacing: CGFloat = 12
+
+    /// What each controller row says on hover. Constants because a row says
+    /// it twice: on its label in the first column and on its control.
+    private static let padSeenAsHelp = "What a DualSense looks like to this game. Needs the engine controller set built with the USB-emulation patch, in Options. It applies when the pad next arrives, not at once: start with Steam closed, or reconnect the pad afterwards. For a title whose own Sony library only accepts a wired pad -- and Steam Input must be off for that title, or Steam hands the game an Xbox pad whatever this says. Both DualSense models are served, so an Edge asked to look like a plain DualSense is created as one. The choice is written whether or not a pad is attached at launch, so it is already there when the pad comes back; the console says what each pad actually got."
+    private static let vibrationHelp = "Which way the pad is asked to vibrate. A preference and not a repair: both work, and they feel different rather than better or worse. \"Modern\" is the DualSense's own haptic path, the one Sony's library asks for on every packet -- finer, and what a title gets unless you say otherwise. \"Legacy\" asks the pad to imitate a pair of rotating-mass motors instead, which is clearly harder at the same command: measured by running one Sony title twice with nothing changed but this. Each keeps its own strength, so switching lands where you left it. Strength scales what the game asks; it saturates, so a game already asking for everything cannot be made louder, and at the bottom of the bar the pad stays silent for this title whatever the game asks. It needs the engine controller set from Options, applies to a DualSense on either transport, and takes effect when the pad next arrives: start with Steam closed, or reconnect the pad."
+    private static let xinputRumbleHelp = "For a game that has a controller but no vibration. Some titles drive the pad themselves and rumble it directly; others only know how to rumble through XInput, and a DualSense is not an XInput device, so they stay silent. This offers the pad's motors to XInput as a small device of its own, beside the pad -- the pad itself is not replaced, wrapped or hidden, so its adaptive triggers, touchpad and PlayStation glyphs are exactly as they were. It costs nothing in frames: the motors ride inside a packet the game is already sending, so nothing of ours is added to the Bluetooth link. Titles using Sony's own library used to refuse to start with this on, because the small device carried the pad's vendor and product ids and that library enumerates by them; it is offered to XInput alone now, and one such title was measured starting with it on. It was also measured alongside Steam Input -- which presents an XInput pad of its own -- on a title that reaches its controller only that way, and both worked together. Needs the engine controller set from Options, and takes effect when the pad next arrives: start with Steam closed, or reconnect the pad."
+    private static let lightbarHelp = "The colour of the light on both sides of the touchpad, for this game. \"As the game asks\" changes nothing. Any other choice replaces the colour inside the light changes the game or Steam Input sends to the pad. On Bluetooth the engine sends one short release packet of its own just before the first of those after the pad connects, and nothing else of its own while you play; whether the pad needs that release is not measured yet. A game or Steam setup that never sends a light change gets nothing from this yet. A game that animates its lightbar loses the animation. Every DualSense of the same model in this bottle gets the same choice. Needs the engine controller set from Options, and is read when the pad next connects: start with Steam closed, or reconnect the pad."
+    private static let playerLightsHelp = "The small white lights under the touchpad. A Windows game using XInput never tells the pad which player it is, so the number here is yours to choose: Player 1 to 4, or Off. \"As the game asks\" changes nothing. Same rules as Lightbar, except that the release packet comes only with a lightbar colour: a player choice alone adds no packet of its own."
+    private static let hidTraceHelp = "Keeps everything winebus says about the controller for this launch, in a dated file on the Desktop. For diagnosing a pad that does not rumble, is not seen, or costs frames -- read it with MacGameVideoFix's diagnostics/read-hid-trace.sh. It slows the game while it runs and the file grows to hundreds of megabytes, so turn it off again afterwards."
 
     /// What the sentence under the test button says before it has been
     /// pressed. It states the two things somebody would otherwise have to
@@ -197,139 +209,188 @@ struct GameOptionsView: View {
                     if !current.isNative {
                         Divider()
                         // The pad's own section, in the idiom the DXMT and HUD
-                        // sections already use. Five settings and a button
-                        // that describe a physical device rather than a
-                        // rendering choice, and two of them are pickers whose
-                        // entries are sentences -- "Wired standard DualSense"
-                        // has nowhere to go in a column sized for the word
-                        // "MSync".
+                        // sections already use: settings that describe a
+                        // physical device rather than a rendering choice.
                         //
-                        // Every control here is pinned to one width. A picker
-                        // that is as wide as whatever is selected moves its
-                        // neighbours every time the choice changes, which is
-                        // what this panel was doing; the strength slider keeps
-                        // its row whether or not the choice uses one, for the
-                        // same reason. Room is spent rather than saved: the
-                        // sheet is wider than it was, and it is wider in the
-                        // one place the width is decided.
+                        // Two columns, because one ran down the whole sheet
+                        // and left the right half empty. The left is the pad
+                        // itself -- the route it takes into the game, what it
+                        // looks like there, and the trace of it; the right is
+                        // how it buzzes, ending in the button that tries it
+                        // and the sentence that says what that test proves.
+                        // Each column is a grid of labels and controls, so the
+                        // switches and the menus stand on one line instead of
+                        // wherever their label happened to end.
+                        //
+                        // Every picker and the slider are pinned to one width.
+                        // A picker as wide as whatever is selected moves its
+                        // neighbours every time the choice changes; the
+                        // strength row keeps its place whether or not the
+                        // choice uses it, for the same reason.
                         Section("Controller") {
-                            Toggle("Enable SDL", isOn: $gameOptions.enableSDL)
-                                .optionFocus(.sdl, current: focus.current, shown: gamepad.showsFocus)
-                            Toggle("Disable Hidraw", isOn: $gameOptions.disableHidraw)
-                                .optionFocus(.hidraw, current: focus.current, shown: gamepad.showsFocus)
-                            DropDown(options: DualSensePresentation.dropdownOptions,
-                                     label: "Pad seen as",
-                                     value: $gameOptions.dualSensePresentation)
-                                .pickerStyle(.menu)
-                                .frame(width: Self.controllerControlWidth, alignment: .leading)
-                                .help("What a DualSense looks like to this game. Needs the engine controller set built with the USB-emulation patch, in Options. It applies when the pad next arrives, not at once: start with Steam closed, or reconnect the pad afterwards. For a title whose own Sony library only accepts a wired pad -- and Steam Input must be off for that title, or Steam hands the game an Xbox pad whatever this says. Both DualSense models are served, so an Edge asked to look like a plain DualSense is created as one. The choice is written whether or not a pad is attached at launch, so it is already there when the pad comes back; the console says what each pad actually got.")
-                                .optionFocus(.padSeenAs, current: focus.current, shown: gamepad.showsFocus)
-                                .popover(isPresented: Binding(get: { menu?.control == .padSeenAs },
-                                                              set: { if !$0 { menu = nil } }),
-                                         arrowEdge: .bottom) { menuPopover(for: .padSeenAs) }
-                            // One control for one idea: which way the pad is
-                            // asked to buzz. The percentage below is the
-                            // detail two of the three answers need.
-                            DropDown(options: DualSenseVibration.dropdownOptions,
-                                     label: "Vibration",
-                                     value: $gameOptions.dualSenseVibration)
-                                .pickerStyle(.menu)
-                                .frame(width: Self.controllerControlWidth, alignment: .leading)
-                                .help("Which way the pad is asked to vibrate. A preference and not a repair: both work, and they feel different rather than better or worse. \"Modern\" is the DualSense's own haptic path, the one Sony's library asks for on every packet -- finer, and what a title gets unless you say otherwise. \"Legacy\" asks the pad to imitate a pair of rotating-mass motors instead, which is clearly harder at the same command: measured by running one Sony title twice with nothing changed but this. Each keeps its own strength, so switching lands where you left it. Strength scales what the game asks; it saturates, so a game already asking for everything cannot be made louder, and at the bottom of the bar the pad stays silent for this title whatever the game asks. It needs the engine controller set from Options, applies to a DualSense on either transport, and takes effect when the pad next arrives: start with Steam closed, or reconnect the pad.")
-                                .optionFocus(.vibration, current: focus.current, shown: gamepad.showsFocus)
-                                .popover(isPresented: Binding(get: { menu?.control == .vibration },
-                                                              set: { if !$0 { menu = nil } }),
-                                         arrowEdge: .bottom) { menuPopover(for: .vibration) }
-                            // Held in place rather than removed. The strength
-                            // belongs to "Custom" alone -- the other two
-                            // choices are complete sentences without a number,
-                            // and one under "As the game asks" would
-                            // contradict its own name -- so the row is faded
-                            // and dead there. Taking it away instead moved
-                            // every section below it each time the picker
-                            // changed. The controller's own list drops it
-                            // while it is unusable, so a pad cannot land on it.
-                            VStack(alignment: .leading, spacing: 2) {
-                                // 0 is the end of the slider and it is not
-                                // "no vibration at 0%": it is off, and it says
-                                // so, because a number alone would read as a
-                                // very quiet pad rather than a silent one.
-                                // A multiplier and not a percentage, since the
-                                // ceiling became ten times. "1000%" reads as a
-                                // number that must be wrong; "x10" reads as
-                                // what it is, and the neutral point stays
-                                // obvious -- x1 is the game untouched, which is
-                                // the default and the honest setting.
-                                // Each path keeps its own strength, so this
-                                // binds to whichever the chosen one uses:
-                                // switching lands where you left it instead of
-                                // at a number that meant something else. The
-                                // haptic path saturates around x6 and the
-                                // legacy one is harder at every value, so a
-                                // shared number would be a shock, not a change
-                                // of character.
-                                // NO NUMBER ON THE BAR, on purpose. It used to
-                                // read "Rumble strength x4", and a multiplier
-                                // invites arithmetic that does not survive
-                                // contact with the pad: the two paths saturate
-                                // at different points, a title that already asks
-                                // for 255 cannot be multiplied any higher, and
-                                // x10 and x4 send the identical byte on more
-                                // than half the packets of the session measured
-                                // here. A number that is right about the request
-                                // and wrong about the pad is worse than no
-                                // number. The one end worth naming is the
-                                // bottom, because silence is a state and not
-                                // just a small amount.
-                                Text(gameOptions[keyPath: vibrationChoice.gainKeyPath] == 0 ? "Rumble strength: off"
-                                     : "Rumble strength")
-                                Slider(value: $gameOptions[dynamicMember: vibrationChoice.gainKeyPath],
-                                       in: DualSenseVibration.gainRange,
-                                       step: OptionAdjust.gainStep)
-                                    .optionFocus(.vibrationGain, current: focus.current, shown: gamepad.showsFocus)
+                            HStack(alignment: .top, spacing: Self.controllerColumnSpacing) {
+                                Grid(alignment: .leading,
+                                     horizontalSpacing: Self.controllerLabelSpacing,
+                                     verticalSpacing: Self.controllerRowSpacing) {
+                                    GridRow {
+                                        Text("Enable SDL")
+                                        Toggle("Enable SDL", isOn: $gameOptions.enableSDL)
+                                            .labelsHidden()
+                                            .optionFocus(.sdl, current: focus.current, shown: gamepad.showsFocus)
+                                    }
+                                    GridRow {
+                                        Text("Disable Hidraw")
+                                        Toggle("Disable Hidraw", isOn: $gameOptions.disableHidraw)
+                                            .labelsHidden()
+                                            .optionFocus(.hidraw, current: focus.current, shown: gamepad.showsFocus)
+                                    }
+                                    GridRow {
+                                        Text("Pad seen as").help(Self.padSeenAsHelp)
+                                        DropDown(options: DualSensePresentation.dropdownOptions,
+                                                 label: "Pad seen as",
+                                                 value: $gameOptions.dualSensePresentation,
+                                                 showsLabel: false)
+                                            .pickerStyle(.menu)
+                                            .frame(width: Self.controllerControlWidth, alignment: .leading)
+                                            .help(Self.padSeenAsHelp)
+                                            .optionFocus(.padSeenAs, current: focus.current, shown: gamepad.showsFocus)
+                                            .popover(isPresented: Binding(get: { menu?.control == .padSeenAs },
+                                                                          set: { if !$0 { menu = nil } }),
+                                                     arrowEdge: .bottom) { menuPopover(for: .padSeenAs) }
+                                    }
+                                    // How the pad looks, per title. Presets and not a
+                                    // colour panel: a panel is a window no pad can
+                                    // reach. A saved colour no preset names shows as
+                                    // one more entry, so it is visible and kept.
+                                    GridRow {
+                                        Text("Lightbar").help(Self.lightbarHelp)
+                                        DropDown(options: DualSenseLightbar.dropdownOptions(current: gameOptions.dualSenseLightbar,
+                                                                                   opened: session.opened?.dualSenseLightbar),
+                                                 label: "Lightbar",
+                                                 value: $gameOptions.dualSenseLightbar,
+                                                 showsLabel: false)
+                                            .pickerStyle(.menu)
+                                            .frame(width: Self.controllerControlWidth, alignment: .leading)
+                                            .help(Self.lightbarHelp)
+                                            .optionFocus(.lightbar, current: focus.current, shown: gamepad.showsFocus)
+                                            .popover(isPresented: Binding(get: { menu?.control == .lightbar },
+                                                                          set: { if !$0 { menu = nil } }),
+                                                     arrowEdge: .bottom) { menuPopover(for: .lightbar) }
+                                    }
+                                    GridRow {
+                                        Text("Player lights").help(Self.playerLightsHelp)
+                                        DropDown(options: DualSensePlayerLights.dropdownOptions,
+                                                 label: "Player lights",
+                                                 value: $gameOptions.dualSensePlayerLights,
+                                                 showsLabel: false)
+                                            .pickerStyle(.menu)
+                                            .frame(width: Self.controllerControlWidth, alignment: .leading)
+                                            .help(Self.playerLightsHelp)
+                                            .optionFocus(.playerLights, current: focus.current, shown: gamepad.showsFocus)
+                                            .popover(isPresented: Binding(get: { menu?.control == .playerLights },
+                                                                          set: { if !$0 { menu = nil } }),
+                                                     arrowEdge: .bottom) { menuPopover(for: .playerLights) }
+                                    }
+                                    // A diagnostic, and it sits with the pad because
+                                    // that is what it traces. Off by default and never
+                                    // suggested: a trace is hundreds of megabytes and
+                                    // costs the game frames of its own, which is the
+                                    // one thing this section spent a day removing.
+                                    GridRow {
+                                        Text("Keep a HID trace").help(Self.hidTraceHelp)
+                                        Toggle("Keep a HID trace", isOn: $gameOptions.hidTraceEnabled)
+                                            .labelsHidden()
+                                            .help(Self.hidTraceHelp)
+                                            .optionFocus(.hidTrace, current: focus.current, shown: gamepad.showsFocus)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: .topLeading)
+
+                                Grid(alignment: .leading,
+                                     horizontalSpacing: Self.controllerLabelSpacing,
+                                     verticalSpacing: Self.controllerRowSpacing) {
+                                    // One control for one idea: which way the pad is
+                                    // asked to buzz. The strength below is the detail.
+                                    GridRow {
+                                        Text("Vibration").help(Self.vibrationHelp)
+                                        DropDown(options: DualSenseVibration.dropdownOptions,
+                                                 label: "Vibration",
+                                                 value: $gameOptions.dualSenseVibration,
+                                                 showsLabel: false)
+                                            .pickerStyle(.menu)
+                                            .frame(width: Self.controllerControlWidth, alignment: .leading)
+                                            .help(Self.vibrationHelp)
+                                            .optionFocus(.vibration, current: focus.current, shown: gamepad.showsFocus)
+                                            .popover(isPresented: Binding(get: { menu?.control == .vibration },
+                                                                          set: { if !$0 { menu = nil } }),
+                                                     arrowEdge: .bottom) { menuPopover(for: .vibration) }
+                                    }
+                                    // Held in place rather than removed: faded and dead
+                                    // while the choice does not use a strength, because
+                                    // taking the row away moved everything under it each
+                                    // time the picker changed. The controller's own list
+                                    // drops it while it is unusable, so a pad cannot land
+                                    // on it.
+                                    //
+                                    // NO NUMBER ON THE BAR, on purpose. A multiplier
+                                    // invites arithmetic that does not survive contact
+                                    // with the pad: the two paths saturate at different
+                                    // points, a title that already asks for 255 cannot be
+                                    // multiplied any higher, and x10 and x4 send the
+                                    // identical byte on more than half the packets of the
+                                    // session measured here. The one end worth naming is
+                                    // the bottom, because silence is a state and not just
+                                    // a small amount. Each path keeps its own strength, so
+                                    // this binds to whichever the chosen one uses.
+                                    GridRow {
+                                        Text(gameOptions[keyPath: vibrationChoice.gainKeyPath] == 0 ? "Rumble strength: off"
+                                             : "Rumble strength")
+                                        Slider(value: $gameOptions[dynamicMember: vibrationChoice.gainKeyPath],
+                                               in: DualSenseVibration.gainRange,
+                                               step: OptionAdjust.gainStep)
+                                            .frame(width: Self.controllerControlWidth)
+                                            .optionFocus(.vibrationGain, current: focus.current, shown: gamepad.showsFocus)
+                                    }
+                                    .opacity(vibrationChoice.usesGain ? 1 : 0.35)
+                                    .disabled(!vibrationChoice.usesGain)
+                                    .accessibilityHidden(!vibrationChoice.usesGain)
+                                    // Off unless a title asks, and the help says why
+                                    // rather than only what: this one changes what the
+                                    // game SEES rather than how the pad behaves.
+                                    GridRow {
+                                        Text("Rumble through XInput").help(Self.xinputRumbleHelp)
+                                        Toggle("Rumble through XInput", isOn: $gameOptions.xinputRumble)
+                                            .labelsHidden()
+                                            .help(Self.xinputRumbleHelp)
+                                            .optionFocus(.xinputRumble, current: focus.current, shown: gamepad.showsFocus)
+                                    }
+                                    // Felt, not imagined. The one control in the panel
+                                    // that does something to the hardware now: it writes
+                                    // the pad's own report through IOKit, with the choice
+                                    // and the strength on screen, and never touches the
+                                    // bottle. See DualSenseRumble for what goes out.
+                                    //
+                                    // The sentence is always there, four lines tall,
+                                    // whether it holds the invitation or the answer: one
+                                    // that appeared when the button was pressed would move
+                                    // the panel under the hand that pressed it.
+                                    GridRow {
+                                        VStack(alignment: .leading, spacing: 8) {
+                                            Button(rumbleRunning ? "Buzzing..." : "Test rumble now") { runRumbleTest() }
+                                                .disabled(rumbleRunning)
+                                                .optionFocus(.rumbleTest, current: focus.current, shown: gamepad.showsFocus)
+                                            Text(rumbleSaid ?? Self.rumbleInvitation)
+                                                .font(.footnote)
+                                                .foregroundStyle(rumbleFailed ? .orange : .secondary)
+                                                .lineLimit(4, reservesSpace: true)
+                                                .fixedSize(horizontal: false, vertical: true)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                        }
+                                        .gridCellColumns(2)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: .topLeading)
                             }
-                            .frame(width: Self.controllerControlWidth, alignment: .leading)
-                            .opacity(vibrationChoice.usesGain ? 1 : 0)
-                            .disabled(!vibrationChoice.usesGain)
-                            .accessibilityHidden(!vibrationChoice.usesGain)
-                            // Off unless a title asks, and the help says why
-                            // rather than only what. This one changes what the
-                            // game SEES rather than how the pad behaves, and it
-                            // can take the pad away from a game that was
-                            // perfectly happy -- so the caution belongs on the
-                            // control, not in a release note nobody reads.
-                            Toggle("Rumble through XInput", isOn: $gameOptions.xinputRumble)
-                                .help("For a game that has a controller but no vibration. Some titles drive the pad themselves and rumble it directly; others only know how to rumble through XInput, and a DualSense is not an XInput device, so they stay silent. This offers the pad's motors to XInput as a small device of its own, beside the pad -- the pad itself is not replaced, wrapped or hidden, so its adaptive triggers, touchpad and PlayStation glyphs are exactly as they were. It costs nothing in frames: the motors ride inside a packet the game is already sending, so nothing of ours is added to the Bluetooth link. Titles using Sony's own library used to refuse to start with this on, because the small device carried the pad's vendor and product ids and that library enumerates by them; it is offered to XInput alone now, and one such title was measured starting with it on. It was also measured alongside Steam Input -- which presents an XInput pad of its own -- on a title that reaches its controller only that way, and both worked together. Needs the engine controller set from Options, and takes effect when the pad next arrives: start with Steam closed, or reconnect the pad.")
-                                .optionFocus(.xinputRumble, current: focus.current, shown: gamepad.showsFocus)
-                            // Felt, not imagined. This is the one control in
-                            // the panel that does something to the hardware
-                            // now: it writes the pad's own report through
-                            // IOKit, with the choice and the percentage on
-                            // screen, and never touches the bottle -- so it
-                            // says nothing about whether the engine carries
-                            // the patch that would apply the same choice to a
-                            // game. See DualSenseRumble for what goes out.
-                            Button(rumbleRunning ? "Buzzing..." : "Test rumble now") { runRumbleTest() }
-                                .disabled(rumbleRunning)
-                                .optionFocus(.rumbleTest, current: focus.current, shown: gamepad.showsFocus)
-                            // A diagnostic, and it sits beside the pad because
-                            // that is what it traces. Off by default and never
-                            // suggested: a trace is hundreds of megabytes and
-                            // costs the game frames of its own, which is the
-                            // one thing this section spent a day removing.
-                            Toggle("Keep a HID trace", isOn: $gameOptions.hidTraceEnabled)
-                                .help("Keeps everything winebus says about the controller for this launch, in a dated file on the Desktop. For diagnosing a pad that does not rumble, is not seen, or costs frames -- read it with MacGameVideoFix's diagnostics/read-hid-trace.sh. It slows the game while it runs and the file grows to hundreds of megabytes, so turn it off again afterwards.")
-                                .optionFocus(.hidTrace, current: focus.current, shown: gamepad.showsFocus)
-                            // Always there, three lines tall, whether it is
-                            // holding the invitation or the answer: a sentence
-                            // that appears when the button is pressed would
-                            // move the panel under the hand that pressed it.
-                            Text(rumbleSaid ?? Self.rumbleInvitation)
-                                .font(.footnote)
-                                .foregroundStyle(rumbleFailed ? .orange : .secondary)
-                                .lineLimit(3, reservesSpace: true)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .frame(maxWidth: Self.controllerSentenceWidth, alignment: .leading)
                         }
                     }
                     if(gameOptions.cxGraphicsBackend == "dxmt") {
@@ -698,6 +759,18 @@ struct GameOptionsView: View {
                                                                 in: DualSenseVibration.allCases.map(\.rawValue),
                                                                 forward: forward)
             return .changed
+        case .lightbar:
+            // Over the list the menu shows, so a custom colour -- the one on
+            // screen or the one the panel opened on -- is a stop of its own.
+            gameOptions.dualSenseLightbar = DualSenseLightbar.cycle(gameOptions.dualSenseLightbar,
+                                                                    opened: session.opened?.dualSenseLightbar,
+                                                                    forward: forward)
+            return .changed
+        case .playerLights:
+            gameOptions.dualSensePlayerLights = OptionAdjust.cycle(gameOptions.dualSensePlayerLights,
+                                                                   in: DualSensePlayerLights.allCases.map(\.rawValue),
+                                                                   forward: forward)
+            return .changed
         case .vibrationGain:
             return step(vibrationChoice.gainKeyPath, by: OptionAdjust.gainStep, in: DualSenseVibration.gainRange)
         case .x87:          return flip(\.x87PatchEnabled)
@@ -756,6 +829,15 @@ struct GameOptionsView: View {
             menu = MenuFocus(control: control,
                              options: DualSenseVibration.dropdownOptions,
                              selected: gameOptions.dualSenseVibration)
+        case .lightbar:
+            menu = MenuFocus(control: control,
+                             options: DualSenseLightbar.dropdownOptions(current: gameOptions.dualSenseLightbar,
+                                                                       opened: session.opened?.dualSenseLightbar),
+                             selected: gameOptions.dualSenseLightbar)
+        case .playerLights:
+            menu = MenuFocus(control: control,
+                             options: DualSensePlayerLights.dropdownOptions,
+                             selected: gameOptions.dualSensePlayerLights)
         default:
             break
         }
@@ -767,6 +849,8 @@ struct GameOptionsView: View {
         case .hudAlignment: gameOptions.mtlHudAlignment = id
         case .padSeenAs:    gameOptions.dualSensePresentation = id
         case .vibration:    gameOptions.dualSenseVibration = id
+        case .lightbar:     gameOptions.dualSenseLightbar = id
+        case .playerLights: gameOptions.dualSensePlayerLights = id
         default: break
         }
     }

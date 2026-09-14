@@ -227,6 +227,10 @@ The same panel carries the rest per title: which of the pad's two vibration
 paths to ask for — **Modern**, the pad's own, finer; or **Legacy**, an imitation
 of rotating-mass motors, harder at the same command — a strength for each, and a
 HID trace for anyone reporting a controller problem.
+It also carries a **lightbar colour and player lights** per title, which the
+engine puts into the light changes the game or Steam Input sends; a game using
+XInput never tells the pad which player it is, so that number is the one you
+choose, and a title that sends no light change gets nothing from it yet.
 
 The engine patches, what each one is for and what was measured on it are in
 [MacGameVideoFix](https://github.com/MathiasKowoll/MacGameVideoFix), and the

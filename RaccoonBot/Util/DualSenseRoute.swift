@@ -351,6 +351,153 @@ nonisolated enum DualSenseVibration: String, CaseIterable {
     }
 }
 
+/// The colour of a DualSense's lightbar for one title, as MacGameVideoFix's
+/// mgvf-0031 winebus reads it.
+///
+/// A namespace and not an enum, because the stored value is a colour rather
+/// than a list: "as-asked", or exactly six lowercase hex digits. The menu
+/// offers presets, since a colour panel is a window a gamepad cannot reach,
+/// but a record holding any other valid colour -- written by hand, or by a
+/// later build with a picker -- is shown and kept rather than folded away.
+///
+/// WHAT THE ENGINE DOES WITH IT, and nothing more is claimed here. The driver
+/// replaces the colour inside a light change the game or Steam Input writes to
+/// the pad itself, only where that writer set the lightbar's enable bit. Its
+/// one packet of its own is on Bluetooth, with a colour set: a release-only
+/// report just before the first client lightbar packet after the pad arrives
+/// (LightbarRelease, whose default this application never changes). Nothing
+/// else of its own is sent while the game runs. A title and a Steam setup
+/// that never write a light change get nothing from this in this phase.
+/// Whether a paired pad needs that release is not measured yet.
+nonisolated enum DualSenseLightbar {
+
+    /// The pad's lights as the game or Steam asks. Written as 0, which the
+    /// driver reads as "change nothing".
+    static let asAsked = "as-asked"
+
+    /// What the menu offers, in the order it offers them. "Off" is a colour
+    /// like any other -- black -- and that is why the registry value carries a
+    /// marker byte: 000000 has to stay distinguishable from nothing asked.
+    static let presets: [(id: String, label: String)] = [
+        ("000000", "Off"),
+        ("ffffff", "White"),
+        ("ff0000", "Red"),
+        ("ff8000", "Orange"),
+        ("ffff00", "Yellow"),
+        ("00ff00", "Green"),
+        ("00ffff", "Cyan"),
+        ("0000ff", "Blue"),
+        ("8000ff", "Purple"),
+        ("ff40a0", "Pink"),
+    ]
+
+    /// Six hex digits, trimmed, lowercased, with an optional leading '#', or
+    /// the default. Anything else is a leftover, not a choice -- the rule every
+    /// other pad option here follows.
+    static func pickable(_ raw: String?) -> String {
+        guard let raw else { return asAsked }
+        var hex = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if hex.hasPrefix("#") { hex.removeFirst() }
+        guard hex.count == 6, hex.allSatisfy({ $0.isHexDigit && $0.isASCII }) else { return asAsked }
+        return hex
+    }
+
+    /// The list the menu shows: the default, the presets, and every colour no
+    /// preset names among the one the panel opened on and the one on screen,
+    /// each as one more entry at the end. The opened one stays listed after
+    /// the form moves off it, so a step or a pick away from a hand-written
+    /// colour is not a step it cannot come back from for the rest of the visit.
+    static func dropdownOptions(current: String, opened: String? = nil) -> DropdownOptions {
+        var options: DropdownOptions = [(id: asAsked, label: "As the game asks")] + presets
+        for raw in [opened, current].compactMap({ $0 }) {
+            let folded = pickable(raw)
+            if folded != asAsked, !options.contains(where: { $0.id == folded }) {
+                options.append((id: folded, label: "Custom #\(folded)"))
+            }
+        }
+        return options
+    }
+
+    /// What a pad press sideways does. Cycles over the list the menu shows,
+    /// so a custom colour is a stop of its own rather than something
+    /// `OptionAdjust.cycle` does not find and replaces with the first entry.
+    static func cycle(_ current: String, opened: String? = nil, forward: Bool) -> String {
+        OptionAdjust.cycle(pickable(current), in: dropdownOptions(current: current, opened: opened).map(\.id),
+                           forward: forward)
+    }
+
+    /// What goes into "LightbarColour": 0 for the default, 0x01RRGGBB for a
+    /// colour. The driver acts only on the 0x01 marker, so 0 and every other
+    /// shape leave the pad's lights as the client writes them.
+    static func registryValue(_ raw: String) -> UInt32 {
+        let folded = pickable(raw)
+        guard folded != asAsked, let rgb = UInt32(folded, radix: 16) else { return 0 }
+        return 0x0100_0000 | rgb
+    }
+
+    /// The colour as the console names it.
+    static func label(_ raw: String) -> String {
+        let folded = pickable(raw)
+        if folded == asAsked { return "as the game asks" }
+        if let preset = presets.first(where: { $0.id == folded }) { return "\(preset.label.lowercased()) (#\(folded))" }
+        return "#\(folded)"
+    }
+}
+
+/// The small white lights under a DualSense's touchpad, for one title.
+///
+/// A Windows game using XInput never tells the pad which player it is -- the
+/// slot stays inside xinput, below which nothing can see it -- so the number
+/// here is the person's choice and not the game's. The driver replaces the
+/// pattern only in a light change a client writes with the player-lights
+/// enable bit set, and keeps that client's own "instant" bit.
+nonisolated enum DualSensePlayerLights: String, CaseIterable {
+
+    case asAsked = "as-asked"
+    case off = "off"
+    case player1 = "player-1"
+    case player2 = "player-2"
+    case player3 = "player-3"
+    case player4 = "player-4"
+
+    static let byDefault = DualSensePlayerLights.asAsked
+
+    /// What goes into "PlayerLights": 0 for the default, 0x100 | pattern
+    /// otherwise. The patterns are the ones Sony's own layout uses: the centre
+    /// light alone for player 1, then two, three and four lights.
+    var registryValue: UInt32 {
+        switch self {
+        case .asAsked: return 0
+        case .off: return 0x100
+        case .player1: return 0x104
+        case .player2: return 0x10A
+        case .player3: return 0x115
+        case .player4: return 0x11B
+        }
+    }
+
+    /// Raw values never move when these do -- `DualSenseVibration.label`'s rule.
+    var label: String {
+        switch self {
+        case .asAsked: return "As the game asks"
+        case .off: return "Off"
+        case .player1: return "Player 1"
+        case .player2: return "Player 2"
+        case .player3: return "Player 3"
+        case .player4: return "Player 4"
+        }
+    }
+
+    static var dropdownOptions: DropdownOptions {
+        allCases.map { (id: $0.rawValue, label: $0.label) }
+    }
+
+    static func pickable(_ raw: String?) -> String {
+        guard let raw, let known = DualSensePlayerLights(rawValue: raw) else { return byDefault.rawValue }
+        return known.rawValue
+    }
+}
+
 /// A DualSense on Bluetooth has to go through winebus's SDL backend; on USB it
 /// must not.
 ///
@@ -405,7 +552,7 @@ nonisolated enum DualSenseRoute {
 
     static let devicesPath = "System\\\\CurrentControlSet\\\\Services\\\\winebus\\\\Devices"
 
-    /// The six value names winebus reads under a device's key, spelled once.
+    /// The eight value names winebus reads under a device's key, spelled once.
     /// Spelling one of them differently writes a value nothing ever reads, and
     /// the bottle looks configured.
     static let hidrawValue = "Hidraw"
@@ -414,6 +561,9 @@ nonisolated enum DualSenseRoute {
     static let vibrationModeValue = "VibrationMode"
     static let vibrationGainValue = "VibrationGain"
     static let xinputRumbleValue = "XInputRumble"
+    /// mgvf-0031's two, read under the pad's real product id.
+    static let lightbarColourValue = "LightbarColour"
+    static let playerLightsValue = "PlayerLights"
 
     struct Override: Equatable {
         /// The registry section, in the doubled-backslash form the .reg file uses.
@@ -446,12 +596,19 @@ nonisolated enum DualSenseRoute {
         /// leaves the pad exactly as it was, which is what every title gets
         /// unless it asks otherwise.
         let xinputRumble: UInt32
+        /// What goes into "LightbarColour": 0 leaves the lights to the client,
+        /// 0x01RRGGBB asks mgvf-0031 to put that colour in the client's own
+        /// light changes. Written as 0 rather than removed, like the six above.
+        let lightbarColour: UInt32
+        /// What goes into "PlayerLights": 0 leaves them to the client,
+        /// 0x100 | pattern asks for that pattern.
+        let playerLights: UInt32
 
         /// Defaulted so that a caller who only cares about the route -- which
         /// is what this type meant before mgvf-0005 -- still reads the same.
         init(path: String, hidraw: UInt32, usbEmulation: UInt32 = 0, askedProductID: UInt32 = 0,
              vibrationMode: UInt32 = 0, vibrationGain: UInt32 = DualSenseVibration.neutralGain,
-             xinputRumble: UInt32 = 0) {
+             xinputRumble: UInt32 = 0, lightbarColour: UInt32 = 0, playerLights: UInt32 = 0) {
             self.path = path
             self.xinputRumble = xinputRumble
             self.hidraw = hidraw
@@ -459,11 +616,51 @@ nonisolated enum DualSenseRoute {
             self.askedProductID = askedProductID
             self.vibrationMode = vibrationMode
             self.vibrationGain = vibrationGain
+            self.lightbarColour = lightbarColour
+            self.playerLights = playerLights
+        }
+
+        /// Every value this override writes, in the order it writes them.
+        var values: [(key: String, value: UInt32)] {
+            [(DualSenseRoute.hidrawValue, hidraw),
+             (DualSenseRoute.usbEmulationValue, usbEmulation),
+             (DualSenseRoute.productIDValue, askedProductID),
+             (DualSenseRoute.vibrationModeValue, vibrationMode),
+             (DualSenseRoute.vibrationGainValue, vibrationGain),
+             (DualSenseRoute.xinputRumbleValue, xinputRumble),
+             (DualSenseRoute.lightbarColourValue, lightbarColour),
+             (DualSenseRoute.playerLightsValue, playerLights)]
         }
     }
 
     static func sectionPath(productID: Int) -> String {
         devicesPath + "\\\\" + String(format: "%04x/%04x", SonyPads.vendorID, productID)
+    }
+
+    /// Puts one override into a loaded registry: finds or creates its section
+    /// and sets every value it carries. Returns the values that changed, in
+    /// order, so the caller logs them and saves only when the list is not
+    /// empty. No file is touched here -- the launch saves -- which is what
+    /// lets a test apply it to a fixture and list every value that results.
+    @discardableResult
+    static func write(_ override: Override, into registry: WineRegistryFile,
+                      timestamp: Int = Int(Date().timeIntervalSince1970)) -> [(key: String, value: UInt32)] {
+        let section: WineRegSection
+        if let existing = registry.section(forPath: override.path) {
+            section = existing
+        } else {
+            section = WineRegSection(header: "[\(override.path)] \(timestamp)")
+            registry.sections.append(section)
+        }
+        var changed: [(key: String, value: UInt32)] = []
+        for (key, value) in override.values {
+            // The call is the write; kept out of a `where` clause so that what
+            // changes the bottle is on a line of its own.
+            if section.addOrSetDword(forKey: key, value: value) {
+                changed.append((key, value))
+            }
+        }
+        return changed
     }
 
     /// One override per DualSense model, always: explicit state rather than a
@@ -528,7 +725,10 @@ nonisolated enum DualSenseRoute {
                           vibrationPercent: Double = Double(DualSenseVibration.neutralGain),
                           engineCanRewriteVibration: Bool = false,
                           xinputRumble: Bool = false,
-                          engineCanXInputRumble: Bool = false) -> [Override] {
+                          engineCanXInputRumble: Bool = false,
+                          lightbar: String = DualSenseLightbar.asAsked,
+                          playerLights: DualSensePlayerLights = .byDefault,
+                          engineCanSetLights: Bool = false) -> [Override] {
         SonyPads.models.map { model in
             let onBluetooth = pads.contains { $0.productID == model && $0.isBluetooth }
             let viaSDL = onBluetooth && sdlEnabled && !engineTellsTheBus
@@ -539,6 +739,10 @@ nonisolated enum DualSenseRoute {
             // through SDL -- where the pad's own descriptor is thrown away and
             // there is nothing for mgvf-0010 to add a collection to.
             let rumblingThroughXInput = xinputRumble && engineCanXInputRumble && !viaSDL
+            // The lights, under the motors' rule: the rewrite is of packets
+            // winebus itself sends to the pad, and a pad handed to SDL is one
+            // it never sends any to. Neutral is 0 for both.
+            let lighting = engineCanSetLights && !viaSDL
             return Override(path: sectionPath(productID: model),
                             hidraw: viaSDL ? 0 : 1,
                             usbEmulation: emulating ? 1 : 0,
@@ -546,8 +750,59 @@ nonisolated enum DualSenseRoute {
                             vibrationMode: rewriting ? vibration.modeValue : 0,
                             vibrationGain: rewriting ? vibration.gainValue(percent: vibrationPercent)
                                                      : DualSenseVibration.neutralGain,
-                            xinputRumble: rumblingThroughXInput ? 1 : 0)
+                            xinputRumble: rumblingThroughXInput ? 1 : 0,
+                            lightbarColour: lighting ? DualSenseLightbar.registryValue(lightbar) : 0,
+                            playerLights: lighting ? playerLights.registryValue : 0)
         }
+    }
+
+    /// What the engine's winebus answers to every question the launch asks of
+    /// it, read once per launch from the binary.
+    struct EngineAnswers: Equatable {
+        var tellsTheBus = false
+        var canEmulateUSB = false
+        var canRewriteVibration = false
+        var canXInputRumble = false
+        var canSetLights = false
+
+        static func of(cxAppPath: String?) -> EngineAnswers {
+            EngineAnswers(tellsTheBus: engineTellsTheBus(cxAppPath: cxAppPath),
+                          canEmulateUSB: engineCanEmulateUSB(cxAppPath: cxAppPath),
+                          canRewriteVibration: engineCanRewriteVibration(cxAppPath: cxAppPath),
+                          canXInputRumble: engineCanXInputRumble(cxAppPath: cxAppPath),
+                          canSetLights: engineCanSetLights(cxAppPath: cxAppPath))
+        }
+    }
+
+    /// What a launch says and writes for a title's saved options, the pads
+    /// attached and the engine's answers. One place builds both, from one
+    /// reading of the options, so the console can never describe a choice the
+    /// registry does not get or the other way round.
+    @MainActor
+    static func launchPlan(options: GameOptions, pads: [SonyPads.Pad],
+                           engine: EngineAnswers) -> (summary: String?, overrides: [Override]) {
+        let presentation = DualSensePresentation(rawValue: options.dualSensePresentation) ?? .byDefault
+        let vibration = DualSenseVibration(rawValue: options.dualSenseVibration) ?? .byDefault
+        // Each path keeps its own strength; the launch writes the one the
+        // chosen path uses.
+        let vibrationPercent = options[keyPath: vibration.gainKeyPath]
+        let lightbar = DualSenseLightbar.pickable(options.dualSenseLightbar)
+        let playerLights = DualSensePlayerLights(rawValue: options.dualSensePlayerLights) ?? .byDefault
+        let summary = summary(for: pads, sdlEnabled: options.enableSDL, engineTellsTheBus: engine.tellsTheBus,
+                              presentation: presentation, engineCanEmulateUSB: engine.canEmulateUSB,
+                              vibration: vibration, vibrationPercent: vibrationPercent,
+                              engineCanRewriteVibration: engine.canRewriteVibration,
+                              lightbar: lightbar, playerLights: playerLights,
+                              engineCanSetLights: engine.canSetLights)
+        let overrides = overrides(for: pads, sdlEnabled: options.enableSDL, engineTellsTheBus: engine.tellsTheBus,
+                                  presentation: presentation, engineCanEmulateUSB: engine.canEmulateUSB,
+                                  vibration: vibration, vibrationPercent: vibrationPercent,
+                                  engineCanRewriteVibration: engine.canRewriteVibration,
+                                  xinputRumble: options.xinputRumble,
+                                  engineCanXInputRumble: engine.canXInputRumble,
+                                  lightbar: lightbar, playerLights: playerLights,
+                                  engineCanSetLights: engine.canSetLights)
+        return (summary, overrides)
     }
 
     /// Whether the engine carries mgvf-0002: winebus that names the bus in its
@@ -624,6 +879,14 @@ nonisolated enum DualSenseRoute {
         contains(literal: xinputRumbleValue, inWinebusOf: cxAppPath)
     }
 
+    /// Whether the engine carries mgvf-0031: the winebus that can set the
+    /// lights a title asks for. Both names are required, as both vibration
+    /// names are: the option promises both rows.
+    static func engineCanSetLights(cxAppPath: String?) -> Bool {
+        contains(literal: lightbarColourValue, inWinebusOf: cxAppPath)
+            && contains(literal: playerLightsValue, inWinebusOf: cxAppPath)
+    }
+
     /// The engine's own winebus.sys, searched for a UTF-16 literal. A missing
     /// engine, or one that cannot be read, answers no -- never a guess.
     private static func contains(literal: String, inWinebusOf cxAppPath: String?) -> Bool {
@@ -657,7 +920,10 @@ nonisolated enum DualSenseRoute {
                         engineCanEmulateUSB: Bool = false,
                         vibration: DualSenseVibration = .byDefault,
                         vibrationPercent: Double = Double(DualSenseVibration.neutralGain),
-                        engineCanRewriteVibration: Bool = false) -> String? {
+                        engineCanRewriteVibration: Bool = false,
+                        lightbar: String = DualSenseLightbar.asAsked,
+                        playerLights: DualSensePlayerLights = .byDefault,
+                        engineCanSetLights: Bool = false) -> String? {
         let mine = pads.filter { SonyPads.models.contains($0.productID) }
         // Written the way overrides(for:) writes it: a pad that this same
         // list hands to SDL is one winebus never sends an output report to,
@@ -668,17 +934,22 @@ nonisolated enum DualSenseRoute {
         let motors = motorClause(vibration: vibration, percent: vibrationPercent,
                                  engineCanRewriteVibration: engineCanRewriteVibration,
                                  everyPadOnSDL: allOnSDL)
-        let rewriting = motors != nil && engineCanRewriteVibration && !allOnSDL
+        let lights = lightsClause(lightbar: lightbar, playerLights: playerLights,
+                                  engineCanSetLights: engineCanSetLights, everyPadOnSDL: allOnSDL)
+        // The lights are read at the same moment as everything else here, so
+        // a title that asks only for them earns the same warning.
+        let rewriting = (motors != nil && engineCanRewriteVibration && !allOnSDL)
+            || (lights != nil && engineCanSetLights && !allOnSDL)
         guard !mine.isEmpty else {
             // Nothing attached and nothing asked for is the case this stayed
             // quiet about before the option existed, and it stays quiet.
-            guard presentation.presentsAsWired || motors != nil else { return nil }
+            guard presentation.presentsAsWired || motors != nil || lights != nil else { return nil }
             let head = !presentation.presentsAsWired
                 ? "no DualSense attached: the choice is written for both models all the same, and winebus reads it as the pad arrives"
                 : engineCanEmulateUSB
                 ? "no DualSense attached: the choice is written for both models all the same, so a pad that arrives over Bluetooth afterwards is presented as wired -- winebus reads it as the pad arrives"
                 : "no DualSense attached, and this engine's winebus has no USB emulation: install the controller set in Options"
-            return [head, motors].compactMap { $0 }.joined(separator: "; ")
+            return [head, motors, lights].compactMap { $0 }.joined(separator: "; ")
         }
         var anythingPresented = false
         var anythingCleared = false
@@ -737,7 +1008,25 @@ nonisolated enum DualSenseRoute {
             : anythingCleared
             ? "; asking for the pad as it is clears what the last title asked for, and that is read when the pad next arrives as well: a game started into a running Steam keeps whatever the bottle booted with"
             : ""
-        return ([sentences.joined(separator: "; ")] + [motors].compactMap { $0 }).joined(separator: "; ") + when
+        return ([sentences.joined(separator: "; ")] + [motors, lights].compactMap { $0 }).joined(separator: "; ") + when
+    }
+
+    /// What the console says about the lights, or nil when the title asked for
+    /// nothing. Like `motorClause` it never claims a change happened: the
+    /// values are asked of winebus and read as the pad connects, and the
+    /// driver only rewrites light changes a client sends.
+    private static func lightsClause(lightbar: String, playerLights: DualSensePlayerLights,
+                                     engineCanSetLights: Bool, everyPadOnSDL: Bool) -> String? {
+        let bar = DualSenseLightbar.pickable(lightbar)
+        guard bar != DualSenseLightbar.asAsked || playerLights != .asAsked else { return nil }
+        guard engineCanSetLights else {
+            return "the lights are not set: this engine's winebus has no lights option, install the controller set in Options"
+        }
+        guard !everyPadOnSDL else {
+            return "the lights are not set: the pad goes through SDL, and winebus never sees the light changes it would rewrite"
+        }
+        let player = playerLights == .asAsked ? "as the game asks" : playerLights.label.lowercased()
+        return "the lights: lightbar \(DualSenseLightbar.label(bar)), player lights \(player) -- asked of winebus, read as the pad connects"
     }
 
     /// What the console says about the motors, or nil when the title asked for

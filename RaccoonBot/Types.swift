@@ -215,6 +215,12 @@ struct GameOptionsData: Codable, Equatable { // this is used for reading saved p
     /// a shared number would make switching between them a shock rather than a
     /// change of character.
     var dualSenseStrongGain: Double?
+    /// The lightbar colour for this title: "as-asked", or six lowercase hex
+    /// digits -- see `DualSenseLightbar`. A string, so a colour no preset names
+    /// survives the save.
+    var dualSenseLightbar: String?
+    /// The player lights for this title -- a `DualSensePlayerLights` raw value.
+    var dualSensePlayerLights: String?
     var ue4Hack: Bool?
     var mvkArgBuff: Bool?
     var vulkanLib: String?
@@ -278,6 +284,8 @@ struct GameOptionsData: Codable, Equatable { // this is used for reading saved p
         self.dualSenseVibration = data.dualSenseVibration
         self.dualSenseVibrationGain = data.dualSenseVibrationGain
         self.dualSenseStrongGain = data.dualSenseStrongGain
+        self.dualSenseLightbar = data.dualSenseLightbar
+        self.dualSensePlayerLights = data.dualSensePlayerLights
         self.ue4Hack = data.ue4Hack
         self.mvkArgBuff = data.mvkArgBuff
         self.vulkanLib = data.vulkanLib
@@ -342,6 +350,10 @@ class GameOptions: ObservableObject { // this is used as form state
     @Published var dualSenseVibrationGain: Double = Double(DualSenseVibration.neutralGain)
     /// The legacy path's own strength -- see GameOptionsData.
     @Published var dualSenseStrongGain: Double = Double(DualSenseVibration.neutralGain)
+    /// The pad's lights for this title. Out of the initialiser like the rest
+    /// of the pad's options, and the default changes nothing.
+    @Published var dualSenseLightbar: String = DualSenseLightbar.asAsked
+    @Published var dualSensePlayerLights: String = DualSensePlayerLights.byDefault.rawValue
     @Published var ue4Hack: Bool
     @Published var mvkArgBuff: Bool
     @Published var vulkanLib: String
@@ -408,6 +420,8 @@ class GameOptions: ObservableObject { // this is used as form state
         self.dualSenseVibration = DualSenseVibration.pickable(data.dualSenseVibration)
         self.dualSenseVibrationGain = DualSenseVibration.pickableGain(data.dualSenseVibrationGain)
         self.dualSenseStrongGain = DualSenseVibration.pickableGain(data.dualSenseStrongGain)
+        self.dualSenseLightbar = DualSenseLightbar.pickable(data.dualSenseLightbar)
+        self.dualSensePlayerLights = DualSensePlayerLights.pickable(data.dualSensePlayerLights)
         self.ue4Hack = data.ue4Hack ?? true
         self.mvkArgBuff = data.mvkArgBuff ?? true
         self.vulkanLib = data.vulkanLib ?? "standard"
@@ -451,6 +465,8 @@ class GameOptions: ObservableObject { // this is used as form state
         if let v = data.dualSenseVibration { self.dualSenseVibration = DualSenseVibration.pickable(v) }
         if let v = data.dualSenseVibrationGain { self.dualSenseVibrationGain = DualSenseVibration.pickableGain(v) }
         if let v = data.dualSenseStrongGain { self.dualSenseStrongGain = DualSenseVibration.pickableGain(v) }
+        if let v = data.dualSenseLightbar { self.dualSenseLightbar = DualSenseLightbar.pickable(v) }
+        if let v = data.dualSensePlayerLights { self.dualSensePlayerLights = DualSensePlayerLights.pickable(v) }
         if let v = data.ue4Hack { self.ue4Hack = v }
         if let v = data.mvkArgBuff { self.mvkArgBuff = v }
         if let v = data.vulkanLib { self.vulkanLib = v }

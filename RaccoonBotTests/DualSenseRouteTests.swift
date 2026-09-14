@@ -118,6 +118,8 @@ struct DualSenseRouteTests {
         #expect(DualSenseRoute.productIDValue == "ProductId")
         #expect(DualSenseRoute.vibrationModeValue == "VibrationMode")
         #expect(DualSenseRoute.vibrationGainValue == "VibrationGain")
+        #expect(DualSenseRoute.lightbarColourValue == "LightbarColour")
+        #expect(DualSenseRoute.playerLightsValue == "PlayerLights")
     }
 
     /// A title nobody has told otherwise gets the pad as it is, and the bottle
@@ -798,7 +800,8 @@ struct DualSenseRouteTests {
         #expect(at(.padSeenAs) < at(.vibration))
         #expect(at(.vibration) < at(.vibrationGain))
         #expect(at(.vibrationGain) < at(.rumbleTest))
-        #expect(at(.rumbleTest) < at(.hidTrace), "the trace is last: it is the one control here that is not about how the pad behaves")
+        #expect(at(.hidTrace) < at(.vibration), "the pad's column, trace included, is walked before the vibration column")
+        #expect(at(.xinputRumble) + 1 == at(.rumbleTest), "the test button closes the vibration column")
         #expect(at(.ue4Hack) < at(.vibration), "the controller section is its own, and it comes after")
         // A native title has no winebus at all, and none of this is offered.
         #expect(OptionFocus.visibleControls(for: OptionPanelState(isNative: true, vibrationGainShown: true))

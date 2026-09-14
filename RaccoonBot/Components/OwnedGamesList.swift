@@ -111,32 +111,40 @@ struct OwnedGameCard: View {
             .contentShape(Rectangle())
             .onTapGesture(perform: open)
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text(game.displayName).font(.headline).lineLimit(2)
-                    .contentShape(Rectangle())
-                    .onTapGesture(perform: open)
-
-                // What the disk actually knows about a title that is not
-                // installed. No description or genre: those come from the
-                // store, and asking for all of them would be a request each for
-                // titles nobody has opened yet.
-                Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-
+            // The same two lines as an installed card: the name on the left
+            // and the platforms on the right, then the actions, centred. The
+            // time played is the name's tooltip: it is what the disk knows about
+            // a title that is not installed, and a line of its own made these
+            // cards taller than the installed ones beside them. No description
+            // or genre: those come from the store, and asking for all of them
+            // would be a request each for titles nobody has opened yet.
+            VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 6) {
+                    Text(game.displayName)
+                        .font(.headline)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .layoutPriority(-1)
+                        .help(subtitle)
+                        .contentShape(Rectangle())
+                        .onTapGesture(perform: open)
+                    Spacer(minLength: 8)
                     PlatformBadges(platforms: game.platforms)
-                    Spacer()
-                    Button(action: hide) {
-                        Image(systemName: "eye.slash")
-                    }
-                    .controlSize(.small)
-                    .buttonStyle(.plain)
-                    .help("Hide this title. Steam lists titles the account has no licence for -- free weekends and trials -- and there is no way to tell from disk.")
-                    Button(action: install) {
-                        Label("Install", systemImage: "square.and.arrow.down")
-                    }
-                    .controlSize(.small)
-                    .cornerRadius(20)
-                    .help("Opens Steam's install dialog for this title")
+                        .fixedSize()
+                }
+                HStack {
+                    Spacer(minLength: 0)
+                    CardActionPill(actions: [
+                        CardAction(label: "Install", systemImage: "square.and.arrow.down",
+                                   help: "Opens the store's install dialog for this title",
+                                   action: install),
+                        CardAction(systemImage: "info.circle.fill", help: "Open this title's page",
+                                   action: open),
+                        CardAction(systemImage: "eye.slash",
+                                   help: "Hide this title. Steam lists titles the account has no licence for -- free weekends and trials -- and there is no way to tell from disk.",
+                                   action: hide),
+                    ])
+                    Spacer(minLength: 0)
                 }
             }
             .padding(.horizontal)

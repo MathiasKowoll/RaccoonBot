@@ -43,14 +43,17 @@ struct GameOptionsView: View {
     @State private var rumbleFailed = false
     @State private var rumbleRunning = false
 
-    /// The controller section is two grids side by side, each a column of
-    /// labels and a column of controls. One width for every picker and the
-    /// slider, so choosing a longer entry moves nothing beside it; wide enough
-    /// for "Wired standard DualSense", the longest entry any of them has.
-    private static let controllerControlWidth: CGFloat = 210
-    private static let controllerColumnSpacing: CGFloat = 36
-    private static let controllerLabelSpacing: CGFloat = 12
-    private static let controllerRowSpacing: CGFloat = 12
+    /// The controller section and the advanced graphics section are each two
+    /// grids side by side, a column of labels and a column of controls. One
+    /// width for every picker and slider, so choosing a longer entry moves
+    /// nothing beside it; wide enough for "Wired standard DualSense", the
+    /// longest entry any of them has. A slider's number sits in a fixed slot
+    /// beside it for the same reason.
+    private static let optionControlWidth: CGFloat = 210
+    private static let optionColumnSpacing: CGFloat = 36
+    private static let optionLabelSpacing: CGFloat = 12
+    private static let optionRowSpacing: CGFloat = 12
+    private static let optionValueWidth: CGFloat = 48
 
     /// What each controller row says on hover. Constants because a row says
     /// it twice: on its label in the first column and on its control.
@@ -77,13 +80,6 @@ struct GameOptionsView: View {
         return getMeta(libraryPageGlobals.gamesMeta, byID: id)?.gameURL?.path(percentEncoded: false)
     }
     
-    var preferredMaxFrameRate: String {
-        $gameOptions.dxmtPreferredMaxFrameRate.wrappedValue < 20.0 ? "Disabled" : "\($gameOptions.dxmtPreferredMaxFrameRate.wrappedValue)"
-    }
-    
-    var d3dMaxFPS: String {
-        $gameOptions.d3dMaxFPS.wrappedValue < 20.0 ? "Disabled" : "\($gameOptions.d3dMaxFPS.wrappedValue)"
-    }
 
     /// The stored vibration choice, folded through the enum. A raw value this
     /// build does not know reads as the default here as it does everywhere
@@ -92,6 +88,290 @@ struct GameOptionsView: View {
         DualSenseVibration(rawValue: gameOptions.dualSenseVibration) ?? .byDefault
     }
     
+    /// A row's label in a two-column section: as wide as its words, so the
+    /// controls start right after the longest label of their column rather
+    /// than at a fixed distance. It may take two lines rather than be cut --
+    /// a label that does not fit wraps at a space -- and it asks for its width
+    /// before the control beside it does. It is not given a width of its own:
+    /// a flexible frame here made every label as wide as the widest allowed,
+    /// which pushed each column's controls, and their numbers, to its edge.
+    private func optionLabel(_ text: String) -> some View {
+        Text(text)
+            .lineLimit(2)
+            .fixedSize(horizontal: false, vertical: true)
+            .layoutPriority(1)
+    }
+
+    /// A column heading inside a two-column section, spanning its grid. The
+    /// second group in a column gets a little room above its heading.
+    private func columnHeading(_ title: String, spaced: Bool = false) -> some View {
+        GridRow {
+            Text(title)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .padding(.top, spaced ? 10 : 0)
+                .gridCellColumns(2)
+        }
+    }
+
+    /// A slider and its number, in one control-width slot. The number has a
+    /// slot of its own so that 9 becoming 10 moves nothing, and it starts
+    /// right after the bar so it reads as the bar's.
+    private func valueSlider<Value: View>(_ slider: Value, value: String) -> some View {
+        HStack(spacing: 8) {
+            slider
+            Text(value)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .frame(width: Self.optionValueWidth, alignment: .leading)
+        }
+        .frame(width: Self.optionControlWidth)
+    }
+
+    /// The backend, then what only that backend reads, directly under it:
+    /// DXMT's settings for DXMT, and D3DMetal's for D3DMetal 4 -- the only
+    /// D3DMetal whose two variables the launch line writes (see Crossover.swift),
+    /// so 3 has nothing here to set.
+    @ViewBuilder private var backendRows: some View {
+        columnHeading("Backend")
+        GridRow {
+            optionLabel("Graphics backend")
+            DropDown(options: cxGraphicsBackend, label: "Graphics backend", value: $gameOptions.cxGraphicsBackend,
+                     showsLabel: false)
+                .pickerStyle(.menu)
+                .frame(width: Self.optionControlWidth, alignment: .leading)
+                .onChange(of: gameOptions.cxGraphicsBackend) { _, backend in
+                    // The variable follows the choice. Picking a backend called
+                    // Metal 4 and then running with Metal 4 off is not what
+                    // anybody meant, and loading a saved value is not enough --
+                    // the change has to reach it too, which is the bug this
+                    // fixes.
+                    //
+                    // Off below macOS 27, where the toggle is disabled: turning
+                    // it on there would write D3DM_MTL4=1 for a system that
+                    // cannot use it and nobody could turn it back off.
+                    gameOptions.d3dMtl4Enabled = backend == "d3dmetal4" && OSVersion >= 27
+                }
+                .optionFocus(.backend, current: focus.current, shown: gamepad.showsFocus)
+                .popover(isPresented: Binding(get: { menu?.control == .backend },
+                                              set: { if !$0 { menu = nil } }),
+                         arrowEdge: .bottom) { menuPopover(for: .backend) }
+        }
+        if gameOptions.cxGraphicsBackend == "dxmt" {
+            dxmtRows
+        } else if gameOptions.cxGraphicsBackend == "d3dmetal4" {
+            d3dMetalRows
+        }
+    }
+
+    @ViewBuilder private var dxmtRows: some View {
+        let capOn = gameOptions.dxmtPreferredMaxFrameRate > 20
+        let upscaleOn = gameOptions.dxmtMetalFXSpatial
+        // On or off, said outright. The launch line emits a cap only when the
+        // value is above 20, so "off" used to be a slider dragged to its
+        // bottom -- which nobody would guess. The toggle writes 0 for off and
+        // 60 for on; the slider then says how much, and it keeps its row while
+        // the limit is off so the rows under it do not move.
+        GridRow {
+            optionLabel("Limit frame rate")
+            Toggle("Limit frame rate", isOn: Binding(
+                get: { gameOptions.dxmtPreferredMaxFrameRate > 20 },
+                set: { gameOptions.dxmtPreferredMaxFrameRate = OptionAdjust.cap($0) }))
+                .labelsHidden()
+                .help("Writes DXMT's d3d11.preferredMaxFrameRate for this title while it is on.")
+                .optionFocus(.dxmtCap, current: focus.current, shown: gamepad.showsFocus)
+        }
+        GridRow {
+            optionLabel("Max frame rate")
+            // Whole frames by rounding what the slider hands back, not by
+            // `step:`: on macOS a stepped slider draws a tick per step, and 222
+            // of them run together into a second line under the bar.
+            valueSlider(Slider(value: Binding(get: { gameOptions.dxmtPreferredMaxFrameRate },
+                                              set: { gameOptions.dxmtPreferredMaxFrameRate = $0.rounded() }),
+                               in: 19...240)
+                            .optionFocus(.dxmtMaxFPS, current: focus.current, shown: gamepad.showsFocus),
+                        value: capOn ? "\(Int(gameOptions.dxmtPreferredMaxFrameRate))" : "Off")
+        }
+        .opacity(capOn ? 1 : 0.35)
+        .disabled(!capOn)
+        GridRow {
+            optionLabel("MetalFX upscaling")
+            Toggle("MetalFX upscaling", isOn: $gameOptions.dxmtMetalFXSpatial)
+                .labelsHidden()
+                .help("DXMT's MetalFX spatial upscaling of the swapchain, DXMT_METALFX_SPATIAL_SWAPCHAIN=1, with the factor below written as d3d11.metalSpatialUpscaleFactor. Turning it off puts the factor back to 1.")
+                .onChange(of: gameOptions.dxmtMetalFXSpatial) { _, newValue in
+                    if !newValue { gameOptions.dxmtMetalSpatialUpscaleFactor = 1.0 }
+                }
+                .optionFocus(.dxmtMetalFX, current: focus.current, shown: gamepad.showsFocus)
+        }
+        GridRow {
+            optionLabel("Upscale factor")
+            valueSlider(Slider(value: $gameOptions.dxmtMetalSpatialUpscaleFactor, in: 1.0...2.0, step: 0.125)
+                            .optionFocus(.dxmtUpscale, current: focus.current, shown: gamepad.showsFocus),
+                        value: String(format: "%g\u{00D7}", gameOptions.dxmtMetalSpatialUpscaleFactor))
+        }
+        .opacity(upscaleOn ? 1 : 0.35)
+        .disabled(!upscaleOn)
+    }
+
+    @ViewBuilder private var d3dMetalRows: some View {
+        let capOn = gameOptions.d3dMaxFPS > 20
+        GridRow {
+            optionLabel("Metal 4 backend")
+            Toggle("Metal 4 backend", isOn: $gameOptions.d3dMtl4Enabled)
+                .labelsHidden()
+                .help("Writes D3DM_MTL4 for this title, which D3DMetal 4 reads to draw through Metal 4. Needs macOS 27 or later.")
+                .optionFocus(.d3dMtl4, current: focus.current, shown: gamepad.showsFocus)
+        }
+        .disabled(OSVersion < 27)
+        .opacity(OSVersion < 27 ? 0.5 : 1.0)
+        // The same on-or-off as DXMT's, for the same reason.
+        GridRow {
+            optionLabel("Limit frame rate")
+            Toggle("Limit frame rate", isOn: Binding(
+                get: { gameOptions.d3dMaxFPS > 20 },
+                set: { gameOptions.d3dMaxFPS = OptionAdjust.cap($0) }))
+                .labelsHidden()
+                .help("Writes D3DM_MAX_FPS for this title while it is on.")
+                .optionFocus(.d3dCap, current: focus.current, shown: gamepad.showsFocus)
+        }
+        GridRow {
+            optionLabel("Max frame rate")
+            // Rounded rather than stepped, for the same reason as DXMT's.
+            valueSlider(Slider(value: Binding(get: { gameOptions.d3dMaxFPS },
+                                              set: { gameOptions.d3dMaxFPS = $0.rounded() }),
+                               in: 19...240)
+                            .optionFocus(.d3dMaxFPS, current: focus.current, shown: gamepad.showsFocus),
+                        value: capOn ? "\(Int(gameOptions.d3dMaxFPS))" : "Off")
+        }
+        .opacity(capOn ? 1 : 0.35)
+        .disabled(!capOn)
+    }
+
+    /// MoltenVK's two switches and the Vulkan library.
+    @ViewBuilder private var vulkanRows: some View {
+        columnHeading("Vulkan", spaced: true)
+        GridRow {
+            optionLabel("Enable UE4 Hack")
+            Toggle("Enable UE4 Hack", isOn: $gameOptions.ue4Hack)
+                .labelsHidden()
+                .optionFocus(.ue4Hack, current: focus.current, shown: gamepad.showsFocus)
+        }
+        GridRow {
+            optionLabel("MTL arg. buffers")
+            Toggle("MTL arg. buffers", isOn: $gameOptions.mvkArgBuff)
+                .labelsHidden()
+                .optionFocus(.mvkArgBuff, current: focus.current, shown: gamepad.showsFocus)
+        }
+        GridRow {
+            optionLabel("VK lib")
+            DropDown(options: cxVulkanBackend, label: "VK lib", value: $gameOptions.vulkanLib, showsLabel: false)
+                .pickerStyle(.menu)
+                .frame(width: Self.optionControlWidth, alignment: .leading)
+        }
+    }
+
+    /// The HUD's switch, then what it draws. The three rows under the switch
+    /// keep their place, faded, while the HUD is off -- the rows below them
+    /// do not move when it is turned on -- and a pad only walks onto them
+    /// while it is on.
+    @ViewBuilder private func hudRows(spaced: Bool) -> some View {
+        let on = gameOptions.mtlHudEnabled
+        columnHeading("Metal HUD", spaced: spaced)
+        GridRow {
+            optionLabel("Enabled")
+            Toggle("Metal HUD", isOn: $gameOptions.mtlHudEnabled)
+                .labelsHidden()
+                .optionFocus(.mtlHud, current: focus.current, shown: gamepad.showsFocus)
+        }
+        // Every choice on screen at once, and across both columns of the grid.
+        // In the control column alone it was wider than the column, and the
+        // grid took the difference out of every label beside it: "Adver...".
+        GridRow {
+            Picker("Detail", selection: $gameOptions.mtlHudDetail) {
+                ForEach(MetalHudDetail.allCases, id: \.rawValue) { detail in
+                    Text(detail.label).tag(detail.rawValue)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .optionFocus(.hudDetail, current: focus.current, shown: gamepad.showsFocus)
+            .gridCellColumns(2)
+        }
+        .opacity(on ? 1 : 0.35)
+        .disabled(!on)
+        // Two lines held whatever the choice says, so a longer sentence
+        // does not push the rows under it.
+        GridRow {
+            Text((MetalHudDetail(rawValue: gameOptions.mtlHudDetail) ?? .fpsOnly).explanation)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2, reservesSpace: true)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .gridCellColumns(2)
+        }
+        .opacity(on ? 1 : 0.35)
+        GridRow {
+            optionLabel("Position")
+            Picker("Position", selection: $gameOptions.mtlHudAlignment) {
+                ForEach(MetalHudAlignment.allCases, id: \.rawValue) { corner in
+                    Text(corner.label).tag(corner.rawValue)
+                }
+            }
+            .labelsHidden()
+            .frame(width: Self.optionControlWidth, alignment: .leading)
+            .optionFocus(.hudAlignment, current: focus.current, shown: gamepad.showsFocus)
+            .popover(isPresented: Binding(get: { menu?.control == .hudAlignment },
+                                          set: { if !$0 { menu = nil } }),
+                     arrowEdge: .bottom) { menuPopover(for: .hudAlignment) }
+        }
+        .opacity(on ? 1 : 0.35)
+        .disabled(!on)
+        GridRow {
+            optionLabel("Opacity")
+            valueSlider(Slider(value: $gameOptions.mtlHudOpacity, in: 0.1...1.0)
+                            .optionFocus(.hudOpacity, current: focus.current, shown: gamepad.showsFocus),
+                        value: "\(Int((gameOptions.mtlHudOpacity * 100).rounded()))%")
+        }
+        .opacity(on ? 1 : 0.35)
+        .disabled(!on)
+    }
+
+    /// What Rosetta and wine are told about the machine and the title's
+    /// threads. A native title has only the first.
+    @ViewBuilder private func compatibilityRows(native: Bool, spaced: Bool) -> some View {
+        columnHeading("Compatibility", spaced: spaced)
+        GridRow {
+            optionLabel("Advertise AVX")
+            Toggle("Advertise AVX", isOn: $gameOptions.advertiseAVX)
+                .labelsHidden()
+                .optionFocus(.advertiseAVX, current: focus.current, shown: gamepad.showsFocus)
+        }
+        if !native {
+            GridRow {
+                optionLabel("MSync")
+                Toggle("MSync", isOn: $gameOptions.wineMSync)
+                    .labelsHidden()
+                    .optionFocus(.msync, current: focus.current, shown: gamepad.showsFocus)
+            }
+            // "Use DX9" is gone: it promised one thing and did the opposite.
+            // Its only live effect was to set the backend to "wine" -- wined3d
+            // -- which is the opposite of what a Direct3D 9 title wants, since
+            // those are the ones that need d9vk. The stored field stays so
+            // saved records still decode, and a test holds that it stays
+            // uncoupled from the backend.
+            GridRow {
+                optionLabel("Reduced x87 precision")
+                Toggle("Reduced x87 precision", isOn: $gameOptions.x87PatchEnabled)
+                    .labelsHidden()
+                    .help("One of the 32-bit options, which is where it sat before this section existed.")
+                    .optionFocus(.x87, current: focus.current, shown: gamepad.showsFocus)
+            }
+        }
+    }
+
     var body: some View {
         // Guarded rather than forced. A body getter that traps takes the whole
         // application down with no message -- which is what opening this from
@@ -109,101 +389,56 @@ struct GameOptionsView: View {
             Form {
                 VStack(alignment: .leading, spacing: 20) {
                     Section("Generic options") {
-                        HStack(alignment: .top, spacing: 20) {
-                            VStack(alignment: .trailing){
-                                if !current.isNative {
-                                    DropDown(options: cxGraphicsBackend, label: "Graphics Backend", value: $gameOptions.cxGraphicsBackend)
-                                        .onChange(of: gameOptions.cxGraphicsBackend) { _, backend in
-                                            // The variable follows the choice. Picking a
-                                            // backend called Metal 4 and then running with
-                                            // Metal 4 off is not what anybody meant, and
-                                            // loading a saved value is not enough -- the
-                                            // change has to reach it too, which is the bug
-                                            // this fixes.
-                                            //
-                                            // Off below macOS 27, where the toggle is
-                                            // disabled: turning it on there would write
-                                            // D3DM_MTL4=1 for a system that cannot use it
-                                            // and nobody could turn it back off.
-                                            gameOptions.d3dMtl4Enabled =
-                                                backend == "d3dmetal4" && OSVersion >= 27
-                                        }
-                                        .optionFocus(.backend, current: focus.current, shown: gamepad.showsFocus)
-                                        .popover(isPresented: Binding(get: { menu?.control == .backend },
-                                                                         set: { if !$0 { menu = nil } }),
-                                                 arrowEdge: .bottom) { menuPopover(for: .backend) }
-                                }
-                                Divider()
-                                TextField("Game arguments", text: $gameOptions.gameArguments)
-                                TextField("Env variables", text: $gameOptions.envVariables)
-                                if !current.isNative {
-                                    Divider()
-                                    if showArmSupport {
-                                        Toggle("Run in the ARM bottle", isOn: $gameOptions.useArmBottle)
-                                            .onChange(of: gameOptions.useArmBottle) { _, newValue in
-                                                // An ARM bottle has no D3DMetal: Direct3D goes
-                                                // through DXMT, which reaches D3D11. Forcing the
-                                                // backend here is the same idiom the DX9 toggle
-                                                // already uses below.
-                                                if newValue { gameOptions.cxGraphicsBackend = "dxmt" }
-                                            }
-                                        if gameOptions.useArmBottle {
-                                            if appGlobals.selectedArmBottle.isEmpty {
-                                                Text("No ARM bottle chosen. Pick one in Options, or create one in CrossOver with the ARM architecture.")
-                                                    .font(.footnote).foregroundStyle(.orange)
-                                            }
-                                            Text("Draws through DXMT, so Direct3D 11 at most: a Direct3D 12 title will not run here.")
-                                                .font(.footnote).foregroundStyle(.secondary)
-                                        }
+                        VStack(alignment: .leading) {
+                            TextField("Game arguments", text: $gameOptions.gameArguments)
+                            TextField("Env variables", text: $gameOptions.envVariables)
+                            if !current.isNative && showArmSupport {
+                                Toggle("Run in the ARM bottle", isOn: $gameOptions.useArmBottle)
+                                    .onChange(of: gameOptions.useArmBottle) { _, newValue in
+                                        // An ARM bottle has no D3DMetal: Direct3D goes
+                                        // through DXMT, which reaches D3D11. Forcing the
+                                        // backend here is the same idiom the DX9 toggle
+                                        // once used.
+                                        if newValue { gameOptions.cxGraphicsBackend = "dxmt" }
                                     }
-                                    Divider()
-                                    Text("32Bits options")
-                                    Toggle("Reduced x87 precision", isOn: $gameOptions.x87PatchEnabled)
-                                        .optionFocus(.x87, current: focus.current, shown: gamepad.showsFocus)
-                                    // "Use DX9" is gone: it promised one thing and did the
-                                    // opposite.
-                                    //
-                                    // Its only live effect was to set the backend to
-                                    // "wine" -- wined3d -- which is the opposite of what a
-                                    // Direct3D 9 title wants, since those are the ones that
-                                    // need d9vk. The DLL copy it was named for has one call
-                                    // site and it is commented out, and the override it
-                                    // once wrote was removed long ago, as the comment that
-                                    // used to sit here said. A switch whose only working
-                                    // part chose a renderer nobody asked for.
-                                    //
-                                    // The stored field stays so saved records still decode.
-                                    // Four titles here carry it set and their backends are
-                                    // untouched by this; a test holds that the two stay
-                                    // uncoupled.
+                                if gameOptions.useArmBottle {
+                                    if appGlobals.selectedArmBottle.isEmpty {
+                                        Text("No ARM bottle chosen. Pick one in Options, or create one in CrossOver with the ARM architecture.")
+                                            .font(.footnote).foregroundStyle(.orange)
+                                    }
+                                    Text("Draws through DXMT, so Direct3D 11 at most: a Direct3D 12 title will not run here.")
+                                        .font(.footnote).foregroundStyle(.secondary)
                                 }
                             }
-                            Spacer()
-                            VStack(alignment: .trailing) {
-                                Toggle("Metal HUD", isOn: $gameOptions.mtlHudEnabled)
-                                    .optionFocus(.mtlHud, current: focus.current, shown: gamepad.showsFocus)
-                                Toggle("Advertise AVX", isOn: $gameOptions.advertiseAVX)
-                                    .optionFocus(.advertiseAVX, current: focus.current, shown: gamepad.showsFocus)
+                        }
+                    }
+                    // Every switch that was in the two columns above lives here now,
+                    // grouped by what it acts on rather than listed in one run: the
+                    // backend and what only it reads, Vulkan, the HUD, and what Rosetta
+                    // and wine are told. Two columns like the controller section, and
+                    // walked by a pad the way they are read. Right under the generic
+                    // options, because the backend is the first choice a title needs.
+                    Divider()
+                    Section("Advanced graphics options") {
+                        HStack(alignment: .top, spacing: Self.optionColumnSpacing) {
+                            Grid(alignment: .leading, horizontalSpacing: Self.optionLabelSpacing,
+                                 verticalSpacing: Self.optionRowSpacing) {
+                                if current.isNative {
+                                    hudRows(spaced: false)
+                                } else {
+                                    backendRows
+                                    vulkanRows
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                            Grid(alignment: .leading, horizontalSpacing: Self.optionLabelSpacing,
+                                 verticalSpacing: Self.optionRowSpacing) {
                                 if !current.isNative {
-                                    Toggle("MSync", isOn: $gameOptions.wineMSync)
-                                        .optionFocus(.msync, current: focus.current, shown: gamepad.showsFocus)
-                                    // Everything about the pad used to be here,
-                                    // under MSync. It has its own section now:
-                                    // five settings that describe a physical
-                                    // device rather than a rendering choice do
-                                    // not fit in a column of toggles, and the
-                                    // one that broke it was a picker whose
-                                    // label rendered as "Vibra...".
-                                    Divider()
-                                    Text("Vulkan options")
-                                    Toggle("Enable UE4 Hack", isOn: $gameOptions.ue4Hack)
-                                        .optionFocus(.ue4Hack, current: focus.current, shown: gamepad.showsFocus)
-                                    Toggle("MTL arg. buffers", isOn: $gameOptions.mvkArgBuff)
-                                        .optionFocus(.mvkArgBuff, current: focus.current, shown: gamepad.showsFocus)
-                                    DropDown(options: cxVulkanBackend, label: "VK lib", value: $gameOptions.vulkanLib)
-                                    .pickerStyle(.menu)
+                                    hudRows(spaced: false)
                                 }
+                                compatibilityRows(native: current.isNative, spaced: !current.isNative)
                             }
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
                         }
                     }
                     if !current.isNative {
@@ -228,30 +463,30 @@ struct GameOptionsView: View {
                         // strength row keeps its place whether or not the
                         // choice uses it, for the same reason.
                         Section("Controller") {
-                            HStack(alignment: .top, spacing: Self.controllerColumnSpacing) {
+                            HStack(alignment: .top, spacing: Self.optionColumnSpacing) {
                                 Grid(alignment: .leading,
-                                     horizontalSpacing: Self.controllerLabelSpacing,
-                                     verticalSpacing: Self.controllerRowSpacing) {
+                                     horizontalSpacing: Self.optionLabelSpacing,
+                                     verticalSpacing: Self.optionRowSpacing) {
                                     GridRow {
-                                        Text("Enable SDL")
+                                        optionLabel("Enable SDL")
                                         Toggle("Enable SDL", isOn: $gameOptions.enableSDL)
                                             .labelsHidden()
                                             .optionFocus(.sdl, current: focus.current, shown: gamepad.showsFocus)
                                     }
                                     GridRow {
-                                        Text("Disable Hidraw")
+                                        optionLabel("Disable Hidraw")
                                         Toggle("Disable Hidraw", isOn: $gameOptions.disableHidraw)
                                             .labelsHidden()
                                             .optionFocus(.hidraw, current: focus.current, shown: gamepad.showsFocus)
                                     }
                                     GridRow {
-                                        Text("Pad seen as").help(Self.padSeenAsHelp)
+                                        optionLabel("Pad seen as").help(Self.padSeenAsHelp)
                                         DropDown(options: DualSensePresentation.dropdownOptions,
                                                  label: "Pad seen as",
                                                  value: $gameOptions.dualSensePresentation,
                                                  showsLabel: false)
                                             .pickerStyle(.menu)
-                                            .frame(width: Self.controllerControlWidth, alignment: .leading)
+                                            .frame(width: Self.optionControlWidth, alignment: .leading)
                                             .help(Self.padSeenAsHelp)
                                             .optionFocus(.padSeenAs, current: focus.current, shown: gamepad.showsFocus)
                                             .popover(isPresented: Binding(get: { menu?.control == .padSeenAs },
@@ -263,14 +498,14 @@ struct GameOptionsView: View {
                                     // reach. A saved colour no preset names shows as
                                     // one more entry, so it is visible and kept.
                                     GridRow {
-                                        Text("Lightbar").help(Self.lightbarHelp)
+                                        optionLabel("Lightbar").help(Self.lightbarHelp)
                                         DropDown(options: DualSenseLightbar.dropdownOptions(current: gameOptions.dualSenseLightbar,
                                                                                    opened: session.opened?.dualSenseLightbar),
                                                  label: "Lightbar",
                                                  value: $gameOptions.dualSenseLightbar,
                                                  showsLabel: false)
                                             .pickerStyle(.menu)
-                                            .frame(width: Self.controllerControlWidth, alignment: .leading)
+                                            .frame(width: Self.optionControlWidth, alignment: .leading)
                                             .help(Self.lightbarHelp)
                                             .optionFocus(.lightbar, current: focus.current, shown: gamepad.showsFocus)
                                             .popover(isPresented: Binding(get: { menu?.control == .lightbar },
@@ -278,13 +513,13 @@ struct GameOptionsView: View {
                                                      arrowEdge: .bottom) { menuPopover(for: .lightbar) }
                                     }
                                     GridRow {
-                                        Text("Player lights").help(Self.playerLightsHelp)
+                                        optionLabel("Player lights").help(Self.playerLightsHelp)
                                         DropDown(options: DualSensePlayerLights.dropdownOptions,
                                                  label: "Player lights",
                                                  value: $gameOptions.dualSensePlayerLights,
                                                  showsLabel: false)
                                             .pickerStyle(.menu)
-                                            .frame(width: Self.controllerControlWidth, alignment: .leading)
+                                            .frame(width: Self.optionControlWidth, alignment: .leading)
                                             .help(Self.playerLightsHelp)
                                             .optionFocus(.playerLights, current: focus.current, shown: gamepad.showsFocus)
                                             .popover(isPresented: Binding(get: { menu?.control == .playerLights },
@@ -297,7 +532,7 @@ struct GameOptionsView: View {
                                     // costs the game frames of its own, which is the
                                     // one thing this section spent a day removing.
                                     GridRow {
-                                        Text("Keep a HID trace").help(Self.hidTraceHelp)
+                                        optionLabel("Keep a HID trace").help(Self.hidTraceHelp)
                                         Toggle("Keep a HID trace", isOn: $gameOptions.hidTraceEnabled)
                                             .labelsHidden()
                                             .help(Self.hidTraceHelp)
@@ -307,18 +542,18 @@ struct GameOptionsView: View {
                                 .frame(maxWidth: .infinity, alignment: .topLeading)
 
                                 Grid(alignment: .leading,
-                                     horizontalSpacing: Self.controllerLabelSpacing,
-                                     verticalSpacing: Self.controllerRowSpacing) {
+                                     horizontalSpacing: Self.optionLabelSpacing,
+                                     verticalSpacing: Self.optionRowSpacing) {
                                     // One control for one idea: which way the pad is
                                     // asked to buzz. The strength below is the detail.
                                     GridRow {
-                                        Text("Vibration").help(Self.vibrationHelp)
+                                        optionLabel("Vibration").help(Self.vibrationHelp)
                                         DropDown(options: DualSenseVibration.dropdownOptions,
                                                  label: "Vibration",
                                                  value: $gameOptions.dualSenseVibration,
                                                  showsLabel: false)
                                             .pickerStyle(.menu)
-                                            .frame(width: Self.controllerControlWidth, alignment: .leading)
+                                            .frame(width: Self.optionControlWidth, alignment: .leading)
                                             .help(Self.vibrationHelp)
                                             .optionFocus(.vibration, current: focus.current, shown: gamepad.showsFocus)
                                             .popover(isPresented: Binding(get: { menu?.control == .vibration },
@@ -343,12 +578,12 @@ struct GameOptionsView: View {
                                     // a small amount. Each path keeps its own strength, so
                                     // this binds to whichever the chosen one uses.
                                     GridRow {
-                                        Text(gameOptions[keyPath: vibrationChoice.gainKeyPath] == 0 ? "Rumble strength: off"
+                                        optionLabel(gameOptions[keyPath: vibrationChoice.gainKeyPath] == 0 ? "Rumble strength: off"
                                              : "Rumble strength")
                                         Slider(value: $gameOptions[dynamicMember: vibrationChoice.gainKeyPath],
                                                in: DualSenseVibration.gainRange,
                                                step: OptionAdjust.gainStep)
-                                            .frame(width: Self.controllerControlWidth)
+                                            .frame(width: Self.optionControlWidth)
                                             .optionFocus(.vibrationGain, current: focus.current, shown: gamepad.showsFocus)
                                     }
                                     .opacity(vibrationChoice.usesGain ? 1 : 0.35)
@@ -358,7 +593,7 @@ struct GameOptionsView: View {
                                     // rather than only what: this one changes what the
                                     // game SEES rather than how the pad behaves.
                                     GridRow {
-                                        Text("Rumble through XInput").help(Self.xinputRumbleHelp)
+                                        optionLabel("Rumble through XInput").help(Self.xinputRumbleHelp)
                                         Toggle("Rumble through XInput", isOn: $gameOptions.xinputRumble)
                                             .labelsHidden()
                                             .help(Self.xinputRumbleHelp)
@@ -390,117 +625,6 @@ struct GameOptionsView: View {
                                     }
                                 }
                                 .frame(maxWidth: .infinity, alignment: .topLeading)
-                            }
-                        }
-                    }
-                    if(gameOptions.cxGraphicsBackend == "dxmt") {
-                        Divider()
-                        Section("DXMT Options") {
-                            // On or off, said outright. The launch line emits a cap only when the
-                            // value is above 20, so "off" used to be a slider dragged to its
-                            // bottom -- which nobody would guess. The toggle writes 0 for off and
-                            // 60 for on; the slider then says how much.
-                            Toggle("Limit frame rate", isOn: Binding(
-                                get: { gameOptions.dxmtPreferredMaxFrameRate > 20 },
-                                set: { gameOptions.dxmtPreferredMaxFrameRate = OptionAdjust.cap($0) }))
-                                .optionFocus(.dxmtCap, current: focus.current, shown: gamepad.showsFocus)
-                            if gameOptions.dxmtPreferredMaxFrameRate > 20 {
-                                                            VStack{
-                                                                Text(localizedString(forKey: "preferredMaxFrameRate", value: preferredMaxFrameRate))
-                                                                Slider(
-                                                                    value: $gameOptions.dxmtPreferredMaxFrameRate,
-                                                                    in: 19...240,
-                                                                    step: 1.0
-                                                                )
-                                                                .help(localizedString(forKey: "preferredMaxFrameRateHelp"))
-                                                                    .optionFocus(.dxmtMaxFPS, current: focus.current, shown: gamepad.showsFocus)
-                            }
-                            }
-                            
-                            Toggle("metalFXSpatial", isOn: $gameOptions.dxmtMetalFXSpatial)
-                                .help(localizedString(forKey: "metalFXSpatialHelp"))
-                                .onChange(of: gameOptions.dxmtMetalFXSpatial) { oldValue, newValue in
-                                    if (!newValue) {
-                                        $gameOptions.dxmtMetalSpatialUpscaleFactor.wrappedValue = 1.0
-                                    }
-                                }
-                                .optionFocus(.dxmtMetalFX, current: focus.current, shown: gamepad.showsFocus)
-                            
-                            if (gameOptions.dxmtMetalFXSpatial) {
-                                VStack {
-                                    Text(localizedString(forKey:"metalSpatialUpscaleFactor", value: String($gameOptions.dxmtMetalSpatialUpscaleFactor.wrappedValue)))
-                                    Slider(
-                                        value: $gameOptions.dxmtMetalSpatialUpscaleFactor,
-                                        in: 1.0...2.0,
-                                        step: 0.125
-                                    )
-                                    .help(localizedString(forKey: "metalFXSpatialHelp"))
-                                        .optionFocus(.dxmtUpscale, current: focus.current, shown: gamepad.showsFocus)
-                                }
-                            }
-                        }
-                    }
-                    if(gameOptions.cxGraphicsBackend == "d3dmetal4") {
-                        Divider()
-                        // Its own section rather than three controls squeezed
-                        // into the column of toggles: a picker, a slider and a
-                        // second picker need the width, and they are only worth
-                        // any room at all while the HUD is on.
-                        if gameOptions.mtlHudEnabled {
-                            Section("Metal HUD") {
-                                Picker("Show", selection: $gameOptions.mtlHudDetail) {
-                                    ForEach(MetalHudDetail.allCases, id: \.rawValue) { detail in
-                                        Text(detail.label).tag(detail.rawValue)
-                                    }
-                                }
-                                .pickerStyle(.segmented)
-                                    .optionFocus(.hudDetail, current: focus.current, shown: gamepad.showsFocus)
-                                Text((MetalHudDetail(rawValue: gameOptions.mtlHudDetail) ?? .fpsOnly).explanation)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                Picker("Position", selection: $gameOptions.mtlHudAlignment) {
-                                    ForEach(MetalHudAlignment.allCases, id: \.rawValue) { corner in
-                                        Text(corner.label).tag(corner.rawValue)
-                                    }
-                                }
-                                    .optionFocus(.hudAlignment, current: focus.current, shown: gamepad.showsFocus)
-                                    .popover(isPresented: Binding(get: { menu?.control == .hudAlignment },
-                                                                     set: { if !$0 { menu = nil } }),
-                                             arrowEdge: .bottom) { menuPopover(for: .hudAlignment) }
-                                VStack {
-                                    Text("Opacity \(Int(gameOptions.mtlHudOpacity * 100))%")
-                                    Slider(value: $gameOptions.mtlHudOpacity, in: 0.1...1.0)
-                                        .optionFocus(.hudOpacity, current: focus.current, shown: gamepad.showsFocus)
-                                }
-                            }
-                        }
-
-                        Section("D3DMetal Options") {
-                            Toggle("Metal 4 Backend", isOn: $gameOptions.d3dMtl4Enabled)
-                                .help(localizedString(forKey: "metal4Backend"))
-                                .disabled(OSVersion < 27)
-                                .opacity(OSVersion < 27 ? 0.5 : 1.0)
-                                .optionFocus(.d3dMtl4, current: focus.current, shown: gamepad.showsFocus)
-                            // On or off, said outright. The launch line emits a cap only when the
-                            // value is above 20, so "off" used to be a slider dragged to its
-                            // bottom -- which nobody would guess. The toggle writes 0 for off and
-                            // 60 for on; the slider then says how much.
-                            Toggle("Limit frame rate", isOn: Binding(
-                                get: { gameOptions.d3dMaxFPS > 20 },
-                                set: { gameOptions.d3dMaxFPS = OptionAdjust.cap($0) }))
-                                .optionFocus(.d3dCap, current: focus.current, shown: gamepad.showsFocus)
-                            if gameOptions.d3dMaxFPS > 20 {
-                                                            VStack{
-                                                                Text(localizedString(forKey: "preferredMaxFrameRate", value: d3dMaxFPS))
-                                                                Slider(
-                                                                    value: $gameOptions.d3dMaxFPS,
-                                                                    in: 19...240,
-                                                                    step: 1.0
-                                                                )
-                                                                .help(localizedString(forKey: "preferredMaxFrameRateHelp"))
-                                                                    .optionFocus(.d3dMaxFPS, current: focus.current, shown: gamepad.showsFocus)
-                            }
                             }
                         }
                     }
@@ -980,33 +1104,7 @@ struct GameOptionsView: View {
     }
 
     private func runUninstall(for game: Game) {
-        guard let route = Uninstall.route(for: game) else { return }
-        switch route {
-        case .steam(let appID):
-            let steamX86AppPath = appGlobals.windowsSteamFolder?
-                .appendingPathComponent("Steam.exe").path(percentEncoded: false)
-                ?? "C:\\Program Files (x86)\\Steam\\Steam.exe"
-            console.log("uninstall: asking Steam for \(game.name) (\(appID))")
-            uninstallSteamGame(id: appID, cxAppPath: appGlobals.cxAppPath,
-                               selectedBottle: appGlobals.selectedBottle,
-                               SteamX86AppPath: steamX86AppPath)
-        case .steamOnMac(let appID):
-            // The Mac's own Steam, through the system handler -- not the one in
-            // the bottle, which never installed this and must not be asked to
-            // remove it.
-            guard let url = URL(string: "steam://uninstall/\(appID)") else { return }
-            console.log("uninstall: asking the Mac Steam for \(game.name) (\(appID))")
-            NSWorkspace.shared.open(url)
-        case .epic(let uri):
-            guard let epic = EpicLaunch.target(settings: StoreConfig.settings(for: .epic),
-                                               selectedBottle: appGlobals.selectedBottle) else {
-                console.error("uninstall: no bottle configured for the Epic launcher")
-                return
-            }
-            console.log("uninstall: opening the Epic library for \(game.name)")
-            openEpic(cxAppPath: appGlobals.cxAppPath, bottle: epic.bottle,
-                     clientPath: epic.clientPath, uri: uri)
-        }
+        Uninstall.run(for: game, appGlobals: appGlobals)
     }
 
     private func runAutoconfigure() async {

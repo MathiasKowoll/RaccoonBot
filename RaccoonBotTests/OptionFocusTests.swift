@@ -50,8 +50,9 @@ struct OptionFocusTests {
         let start = all.firstIndex(of: .sdl)
         #expect(start != nil)
         #expect(Array(all[start!..<(start! + section.count)]) == section)
-        #expect(all.firstIndex(of: .mvkArgBuff)! < start!, "the generic column comes first")
-        #expect(all.firstIndex(of: .dxmtCap)! > start!, "and the backend's section after")
+        #expect(all.firstIndex(of: .mvkArgBuff)! < start!, "the advanced graphics section comes first")
+        #expect(all.firstIndex(of: .dxmtCap)! < start!, "backend's own rows included")
+        #expect(all.firstIndex(of: .x87)! < start!, "and so does its compatibility column")
     }
 
     /// The strength slider keeps its place on screen whatever is chosen, so
@@ -90,6 +91,27 @@ struct OptionFocusTests {
         #expect(list.contains(.save))
     }
 
+    /// One section on screen, two columns, walked the way they are read: the
+    /// backend's column first, then the HUD's.
+    @Test func advancedGraphicsIsWalkedBackendFirstThenTheHUD() {
+        let d3d = OptionFocus.visibleControls(for: OptionPanelState(backend: "d3dmetal4", hudEnabled: true,
+                                                                    d3dCapOn: true, osVersion: 27))
+        #expect(d3d.firstIndex(of: .d3dMaxFPS)! < d3d.firstIndex(of: .hudDetail)!)
+        let dxmt = OptionFocus.visibleControls(for: OptionPanelState(backend: "dxmt", hudEnabled: true,
+                                                                     metalFXOn: true))
+        #expect(dxmt.firstIndex(of: .dxmtUpscale)! < dxmt.firstIndex(of: .hudDetail)!)
+        #expect(dxmt.firstIndex(of: .hudOpacity)! < dxmt.firstIndex(of: .save)!)
+    }
+
+    /// D3DMetal 3 reads neither D3DM_MTL4 nor D3DM_MAX_FPS, so nothing is drawn
+    /// for it -- and a pad must not walk onto controls that are not there.
+    @Test func d3dMetal3HasNoColumnToWalk() {
+        let list = OptionFocus.visibleControls(for: OptionPanelState(backend: "d3dmetal3", d3dCapOn: true, osVersion: 27))
+        #expect(!list.contains(.d3dMtl4))
+        #expect(!list.contains(.d3dCap))
+        #expect(!list.contains(.d3dMaxFPS))
+    }
+
     @Test func d3dMetalShowsItsSectionAndMetal4OnlyOn27() {
         var s = OptionPanelState(backend: "d3dmetal4", osVersion: 26)
         #expect(!OptionFocus.visibleControls(for: s).contains(.d3dMtl4))
@@ -105,7 +127,7 @@ struct OptionFocusTests {
         f.selectFirstIfNeeded()
         #expect(f.current == .backend)
         let d = f.move(.down); #expect(d)
-        #expect(f.current == .x87)
+        #expect(f.current == .dxmtCap, "what only the backend reads is drawn right under it")
         let u = f.move(.up); #expect(u)
         #expect(f.current == .backend)
         let top = f.move(.up); #expect(top == false)

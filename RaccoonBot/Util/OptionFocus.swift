@@ -22,7 +22,8 @@
 import Foundation
 
 nonisolated enum OptionControl: String, CaseIterable, Hashable {
-    // Generic
+    // Advanced graphics: the backend, Vulkan, the HUD's switch, and what
+    // Rosetta and wine are told
     case backend, x87, mtlHud, advertiseAVX, msync, ue4Hack, mvkArgBuff
     // The controller, in its own section on screen and its own run here.
     // Six settings and a button that describe a physical device rather than
@@ -156,36 +157,47 @@ nonisolated struct OptionFocus: Equatable {
     /// The controls on screen, in the order they are on screen.
     static func visibleControls(for state: OptionPanelState) -> [OptionControl] {
         var list: [OptionControl] = []
-        if !state.isNative { list.append(.backend) }
-        // Nothing for the two text fields.
-        if !state.isNative { list.append(.x87) }
-        list += [.mtlHud, .advertiseAVX]
-        if !state.isNative { list += [.msync, .ue4Hack, .mvkArgBuff] }
-        // The controller section, which follows the generic one on screen. A
-        // native title has no bottle to write any of it into, so it has no
-        // section either.
+        // Nothing for the two text fields of "Generic options".
+        //
+        // "Advanced graphics options", right under them: two columns, walked
+        // the way they are read. For a wine title the left column is the
+        // backend with what only it reads, then Vulkan; the right is the HUD,
+        // then what Rosetta and wine are told. A native title has no backend
+        // or bottle, so its HUD takes the left column and AVX the right.
+        // D3DMetal's rows are D3DMetal 4's alone, because only 4 reads the two
+        // variables they write; for 3 nothing is drawn, so nothing is here.
+        if state.isNative {
+            list.append(.mtlHud)
+            if state.hudEnabled { list += [.hudDetail, .hudAlignment, .hudOpacity] }
+            list.append(.advertiseAVX)
+        } else {
+            list.append(.backend)
+            if state.backend == "dxmt" {
+                list.append(.dxmtCap)
+                if state.dxmtCapOn { list.append(.dxmtMaxFPS) }
+                list.append(.dxmtMetalFX)
+                if state.metalFXOn { list.append(.dxmtUpscale) }
+            }
+            if state.backend == "d3dmetal4" {
+                if state.osVersion >= 27 { list.append(.d3dMtl4) }
+                list.append(.d3dCap)
+                if state.d3dCapOn { list.append(.d3dMaxFPS) }
+            }
+            list += [.ue4Hack, .mvkArgBuff]
+            list.append(.mtlHud)
+            if state.hudEnabled { list += [.hudDetail, .hudAlignment, .hudOpacity] }
+            list += [.advertiseAVX, .msync, .x87]
+        }
+        // The controller section, which follows on screen. A native title has
+        // no bottle to write any of it into, so it has no section either.
         //
         // Two columns on screen, walked the way they are read: down the pad's
-        // column, then down the vibration column. Rumble through XInput is in
-        // it now; it was on screen and out of this list, so a pad could not
-        // reach it.
+        // column, then down the vibration column.
         if !state.isNative {
             list += [.sdl, .hidraw, .padSeenAs, .lightbar, .playerLights, .hidTrace]
             list.append(.vibration)
             if state.vibrationGainShown { list.append(.vibrationGain) }
             list += [.xinputRumble, .rumbleTest]
-        }
-        if state.backend == "dxmt" {
-            list.append(.dxmtCap)
-            if state.dxmtCapOn { list.append(.dxmtMaxFPS) }
-            list.append(.dxmtMetalFX)
-            if state.metalFXOn { list.append(.dxmtUpscale) }
-        }
-        if state.hudEnabled { list += [.hudDetail, .hudAlignment, .hudOpacity] }
-        if state.backend.hasPrefix("d3dmetal") {
-            if state.osVersion >= 27 { list.append(.d3dMtl4) }
-            list.append(.d3dCap)
-            if state.d3dCapOn { list.append(.d3dMaxFPS) }
         }
         list += [.save, .undo, .reset, .autoconfigure]
         return list

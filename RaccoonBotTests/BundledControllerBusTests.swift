@@ -124,7 +124,7 @@ struct BundledControllerBusTests {
     @Test func theStampNamesTheEngineTheMediaSetNames() throws {
         let ours = try stamp
         #expect(ours.app == "CrossOver.app")
-        // Twenty-nine now, and the whole list is named rather than a count, so a
+        // Thirty now, and the whole list is named rather than a count, so a
         // build made from a shorter series fails here and not in a bottle.
         // That is not hypothetical: this application shipped a payload built
         // from mgvf-0009 for as long as it took somebody to read the stamp by
@@ -137,7 +137,7 @@ struct BundledControllerBusTests {
         #expect(ours.patches == "mgvf-0002 mgvf-0003 mgvf-0004 mgvf-0005 mgvf-0006 mgvf-0007 mgvf-0008"
                 + " mgvf-0009 mgvf-0010 mgvf-0011 mgvf-0012 mgvf-0014 mgvf-0016 mgvf-0017 mgvf-0018"
                 + " mgvf-0019 mgvf-0020 mgvf-0021 mgvf-0022 mgvf-0023 mgvf-0024 mgvf-0025 mgvf-0026 mgvf-0027 mgvf-0028 mgvf-0029 mgvf-0030"
-                + " mgvf-0031 mgvf-0032")
+                + " mgvf-0031 mgvf-0032 mgvf-0033")
         let media = try JSONDecoder().decode(BundledControllerBus.Stamp.self,
                                              from: Data(contentsOf: payload.appendingPathComponent("engine-built-for-stock.json")))
         #expect(ours.version == media.version)

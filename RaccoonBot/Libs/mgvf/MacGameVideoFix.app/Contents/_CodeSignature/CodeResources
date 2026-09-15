@@ -34,7 +34,7 @@
 		</data>
 		<key>Resources/bottles.sh</key>
 		<data>
-		uIhVYuLkAVZkTTorNj2IUwY1KPA=
+		Tyx7RLECLdMq1Q+3fAez4nTav9Y=
 		</data>
 		<key>Resources/dinput8-kh.dll</key>
 		<data>
@@ -58,7 +58,7 @@
 		</data>
 		<key>Resources/engine-controller-built-for.json</key>
 		<data>
-		+iNYbmSJSFQ6iOeLTVFdEfD21HY=
+		t809y0Q9w6NdSjiGUwBol9I6zYo=
 		</data>
 		<key>Resources/engine-controller-hidclass.sys</key>
 		<data>
@@ -74,11 +74,11 @@
 		</data>
 		<key>Resources/engine-controller-winebus.so</key>
 		<data>
-		8ZzKoufMoz37AMmVownEsw9kMS0=
+		mwu4SA625leT4SKE2/T1zABQ+YU=
 		</data>
 		<key>Resources/engine-controller-winebus.sys</key>
 		<data>
-		OEkv4tkrTgMMTCLLABdlGRi0dVY=
+		noSykB7r7Cs/vRDmaIof9hcB4uU=
 		</data>
 		<key>Resources/engine-controller-xinput1_1.dll</key>
 		<data>
@@ -134,11 +134,11 @@
 		</data>
 		<key>Resources/install-kh-bridge.sh</key>
 		<data>
-		MW8qnJY5gk8wRG/Bzt2TpgEp4K4=
+		fqp2BaEbyfk6QAZ/IYnOxH75Umo=
 		</data>
 		<key>Resources/install-ng3-fix.sh</key>
 		<data>
-		0wgX1ynlb1+x8kvMSrgXa5PwMRE=
+		OoY0yaD3ktgmAuMx2Go9XDtFFbg=
 		</data>
 		<key>Resources/install-ng4-fix.sh</key>
 		<data>
@@ -146,7 +146,7 @@
 		</data>
 		<key>Resources/install-nier-bridge.sh</key>
 		<data>
-		+uXjuecXcL00c482QF+BednLdk0=
+		a7W+udnqNXzywFLRyuGKh1kE3lc=
 		</data>
 		<key>Resources/install-nioh-bridge.sh</key>
 		<data>
@@ -238,7 +238,7 @@
 		</data>
 		<key>Resources/manifest.json</key>
 		<data>
-		ba6WAnNRaq5by2BU8BtOtZ+Vrbs=
+		Ef1iZU3oNkEOMNoY7IA6QQBQADs=
 		</data>
 		<key>Resources/ng3-THIRD-PARTY-LICENCES.md</key>
 		<data>
@@ -332,7 +332,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			O0OGGvqw81letSqJhEXHK/L0JwKsikj7loPC1ZM7kwk=
+			tahJgBPRwW0ez9M9ecfAUqYHe9wM7JwWLY8jW1BVP/w=
 			</data>
 		</dict>
 		<key>Resources/dinput8-kh.dll</key>
@@ -374,7 +374,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			T4PWYS2NBLohLz6YOOs5OUiZXTvz1YzEI0aO+zBDKbc=
+			YdkXt1H68BTuqpmRxhQYosLa5rO4UCFkm7IgHBKwpRY=
 			</data>
 		</dict>
 		<key>Resources/engine-controller-hidclass.sys</key>
@@ -402,14 +402,14 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			PBibOcSG849hJoB05znp09erW5brKIpw5176qebSDDs=
+			bh8iGY72iPmW2kGFHv6dRc5MO4U5UN3Li+0Ewg+UsVI=
 			</data>
 		</dict>
 		<key>Resources/engine-controller-winebus.sys</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			KnXBDdosNgqVNi6DyDZxEHjgH6Xb1z948DT4Ra9C6BI=
+			vjpdDzOtMRI/5w0BADGzX4FN3uwrp7CaKLKsJOdbUAg=
 			</data>
 		</dict>
 		<key>Resources/engine-controller-xinput1_1.dll</key>
@@ -507,14 +507,14 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			F6jHlxhG00gK0lowGZBRunJg7eTl7kx4cszJbaENiI4=
+			4WIo6MW/gSZxb/UfrKmFYlo7lgnfH53NGBXblBfspkk=
 			</data>
 		</dict>
 		<key>Resources/install-ng3-fix.sh</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			TB1YbA5BSvDVZ9o+15G2hEog5FrYJbUYPoDahyI6fhs=
+			eFkY1Yd+ZlUgYtiAOCqP3JflK/fYbd+yM507MexW+zQ=
 			</data>
 		</dict>
 		<key>Resources/install-ng4-fix.sh</key>
@@ -528,7 +528,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			jugjdxi07A7DUBdT9UBzHnZwjmJ52amktC3oxb7aCIo=
+			ymhLyPdk2ozhwc/RfTZ7KexZIhAY4LnFeF0Du45kvY4=
 			</data>
 		</dict>
 		<key>Resources/install-nioh-bridge.sh</key>
@@ -689,7 +689,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			1HFAYiA/SNOzc5CgcMIZoGSnAt0534wnoJJgRFeFyw0=
+			kLViERN0k9BKAFCie2fNgb0hlSQfn4E+erJYI6OQJwY=
 			</data>
 		</dict>
 		<key>Resources/ng3-THIRD-PARTY-LICENCES.md</key>

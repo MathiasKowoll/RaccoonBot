@@ -59,8 +59,9 @@ struct ContentView: View {
         // compositing), not read back from SwiftUI's rendering as the green
         // theme's were: the stops 1.34:1 apart; a surface 1.80:1 off the top
         // stop and at least 2.26:1 off the bottom one; white text 7.4:1 on a
-        // surface; the mint tags 5.5:1 and the ProcyonSecondary pills 3.04:1
-        // against it. Lighter surfaces would push the pills under 3:1.
+        // surface; the mint tags 5.5:1 against it. The pills keep Procyon's
+        // green (ProcyonSecondary, #96B952), which the user preferred to a
+        // cyan: black text on it 9.4:1, the pill 3.3:1 against a surface.
         .background(
             ZStack {
                 LinearGradient(

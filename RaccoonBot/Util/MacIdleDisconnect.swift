@@ -16,6 +16,9 @@
 //  through two titles on 2026-09-13, 6,429 s on 2026-09-12. The console line
 //  is there so a later cut can be matched to the launch that preceded it.
 //
+//  Since mgvf-0034 the engine shares the pad by default, macOS's driver sees
+//  the input, and an engine carrying it gets no line.
+//
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
 
@@ -44,10 +47,12 @@ nonisolated enum MacIdleDisconnect {
     /// what was measured. A pad whose serial IOKit did not give us is never at
     /// risk -- no guess about which driver entry is its.
     ///
-    /// The bottle's own SeizeDevice value is not read in this version, so a
-    /// bottle set to SeizeDevice=0 still gets the line: whether a shared open
-    /// lets macOS's clock reset has not been measured, and a line that may be
-    /// unneeded costs less than a cut the log cannot explain.
+    /// The bottle's own SeizeDevice value is not read in this version. With
+    /// an engine that seizes by default, a bottle set to 0 still gets the
+    /// line. With an engine carrying mgvf-0034, which shares by default, no
+    /// bottle gets it, one set to 1 included. A shared open does let macOS's
+    /// clock reset: measured on 2026-09-14, the plugin's idle clock followed
+    /// the input and no cut came during 25 minutes of play.
     static func padsAtRisk(pads: [SonyPads.Pad], driverSerials: Set<String>,
                            engineSeizes: Bool) -> [SonyPads.Pad] {
         guard engineSeizes else { return [] }

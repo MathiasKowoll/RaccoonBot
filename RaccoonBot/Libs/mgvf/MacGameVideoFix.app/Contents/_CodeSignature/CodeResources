@@ -58,47 +58,47 @@
 		</data>
 		<key>Resources/engine-controller-built-for.json</key>
 		<data>
-		t809y0Q9w6NdSjiGUwBol9I6zYo=
+		JurwXeVt8imi9PJjw6XBGK7EEYI=
 		</data>
 		<key>Resources/engine-controller-hidclass.sys</key>
 		<data>
-		xlqPsGMHbXp13II4AB7HqqNcUcY=
+		T4QQrrDpoz7Hhgwy9PNQ1R9I3To=
 		</data>
 		<key>Resources/engine-controller-ntoskrnl.exe</key>
 		<data>
-		HZfnp6wOYH2T1HpD9r9verw0jSQ=
+		611kNQ3CJZAo6ZFwXokBlLa38WE=
 		</data>
 		<key>Resources/engine-controller-setupapi.dll</key>
 		<data>
-		s9QUm/tEPFKMYkW6xrYQhyPHYyo=
+		kyo/mfbLeTfiP0twyB+5QVE6lCw=
 		</data>
 		<key>Resources/engine-controller-winebus.so</key>
 		<data>
-		mwu4SA625leT4SKE2/T1zABQ+YU=
+		27tLuC6Rj4lRqxiCnGR0/MKVx1M=
 		</data>
 		<key>Resources/engine-controller-winebus.sys</key>
 		<data>
-		noSykB7r7Cs/vRDmaIof9hcB4uU=
+		/P5l2IX/TYt3qjWk/uULNS98m/M=
 		</data>
 		<key>Resources/engine-controller-xinput1_1.dll</key>
 		<data>
-		dAoIBOw2/NDW7rqJWg+KwpQ9Jq8=
+		pTZvFBrEL+EGPoSh9Cggrv3v5S0=
 		</data>
 		<key>Resources/engine-controller-xinput1_2.dll</key>
 		<data>
-		x4bd2En0Q03L0yiND6tzylQolis=
+		hHdsztAoUeTYC75imSKvmAv3ywU=
 		</data>
 		<key>Resources/engine-controller-xinput1_3.dll</key>
 		<data>
-		TNrerE8zpQyxwgLSA1SZoQuHnLA=
+		yYloC7HvtrY90HGx98ItDViMy10=
 		</data>
 		<key>Resources/engine-controller-xinput1_4.dll</key>
 		<data>
-		zp+SdMqjGjMN7qz6OADogUL+TtY=
+		cCuGK8WPCHJpEEO4aaPnCUabav4=
 		</data>
 		<key>Resources/engine-controller-xinputuap.dll</key>
 		<data>
-		JU/0M0sNS2Ya5FcY4n9UxGwiESU=
+		aXUQKG23KMyt8b46T1/9bFYoNek=
 		</data>
 		<key>Resources/engine-winegstreamer-stock.dll</key>
 		<data>
@@ -126,7 +126,7 @@
 		</data>
 		<key>Resources/install-engine-controller.sh</key>
 		<data>
-		TqpE491ktOgcR4RDLBg2MOzIiX4=
+		bQApo78raAwXSmeQuvXULrMQpVs=
 		</data>
 		<key>Resources/install-engine-media.sh</key>
 		<data>
@@ -238,7 +238,7 @@
 		</data>
 		<key>Resources/manifest.json</key>
 		<data>
-		Ef1iZU3oNkEOMNoY7IA6QQBQADs=
+		s1i6WyhFq3VzyV7n6XZdwJXiuMY=
 		</data>
 		<key>Resources/ng3-THIRD-PARTY-LICENCES.md</key>
 		<data>
@@ -374,77 +374,77 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			YdkXt1H68BTuqpmRxhQYosLa5rO4UCFkm7IgHBKwpRY=
+			U/PIyk+iO+K4ShbBkx2IK2Uic/VrlrOaf9MzeFrF4PQ=
 			</data>
 		</dict>
 		<key>Resources/engine-controller-hidclass.sys</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			MYdqxhpdYnar0a96iYcUFwMvCYhA0Fs7ZluIa6YcGZg=
+			KKtwf/4WBHMW8vk0jvbFxN2DoSiz0zDg9eGCmc/267c=
 			</data>
 		</dict>
 		<key>Resources/engine-controller-ntoskrnl.exe</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			kjHLI71z4My6yjfxKT6y11rUK7NMe50Tn/dtHIEok6g=
+			/bmjtgYlnQ8tfiP+StSI2xcNfjJXFdxfZPnzhbf5A9U=
 			</data>
 		</dict>
 		<key>Resources/engine-controller-setupapi.dll</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			mAb64j4bDujv/CIhKZKxFeGJY4ETnA9OS+ROreI0eho=
+			W2uJPvNyEVDfq3Z1xfJrKgmqKdvNJi6QBYwAKxzK29Y=
 			</data>
 		</dict>
 		<key>Resources/engine-controller-winebus.so</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			bh8iGY72iPmW2kGFHv6dRc5MO4U5UN3Li+0Ewg+UsVI=
+			O51ePoto5RVR8eJ7m3poxPpxQk8ZUu7bsVWBO3wl8vY=
 			</data>
 		</dict>
 		<key>Resources/engine-controller-winebus.sys</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			vjpdDzOtMRI/5w0BADGzX4FN3uwrp7CaKLKsJOdbUAg=
+			McsqLiha8/YoNjIt+vOCiVzA0L+bf4m+1jKnb32ZxgM=
 			</data>
 		</dict>
 		<key>Resources/engine-controller-xinput1_1.dll</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			2YmVX0vl6iRRnj9/VdVohGN7V9LpbNbv44uM4jS8R40=
+			bLPW6ompeXpVXUdZMp7ftECXJhfLWl2VlbpmlWR9vVw=
 			</data>
 		</dict>
 		<key>Resources/engine-controller-xinput1_2.dll</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			LcBpD2rJpfqWdy5nhKyPacRo6KxG3/LcUOvhQd1A+9Q=
+			ZAZuO2GP5p2IvNvsmsO7nBrUAfBrEPKTq21XE6CeKEk=
 			</data>
 		</dict>
 		<key>Resources/engine-controller-xinput1_3.dll</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			KG+i6kgLpLuGiesJ1ymWa3pHXqNGa0LNYuUaif4CpKo=
+			TUx1CWCSYpbahWhbIbTBK3HGckxDTbz3UTct9FWix84=
 			</data>
 		</dict>
 		<key>Resources/engine-controller-xinput1_4.dll</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			6lk91ACCF6pXeZNgXsue0QycPFZidmTb6Nle9fojBMA=
+			Jrl5/NdVihySzFpkQRoABzstKuXvBbsK7ftBdLHAAFQ=
 			</data>
 		</dict>
 		<key>Resources/engine-controller-xinputuap.dll</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			AJ4PTa/DCnmPSLMRBZl503QpKlQtUp/abl894BZFwZk=
+			VQrOMmJFEyLoo0KBaxoH2w/kv60CYog244hdxJvxOt8=
 			</data>
 		</dict>
 		<key>Resources/engine-winegstreamer-stock.dll</key>
@@ -493,7 +493,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			IQqqqvpuli7Rhg+Vd/JqsS8Tm1ilvbUocztCwi5YX7Q=
+			aBmOkumTGGhavmQXQykerwUQMxRGO9dpKvIuI9lu35w=
 			</data>
 		</dict>
 		<key>Resources/install-engine-media.sh</key>
@@ -689,7 +689,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			kLViERN0k9BKAFCie2fNgb0hlSQfn4E+erJYI6OQJwY=
+			Z3tyni8v5yooKM2M+08/kyHwK09c9ptvizEbyuVJOAw=
 			</data>
 		</dict>
 		<key>Resources/ng3-THIRD-PARTY-LICENCES.md</key>

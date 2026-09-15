@@ -923,12 +923,29 @@ nonisolated enum DualSenseRoute {
         contains(literal: idlePowerOffMinutesValue, inWinebusOf: cxAppPath)
     }
 
-    /// Whether the engine carries mgvf-0006: the winebus that seizes a
-    /// DualSense on Bluetooth. Asked by the name of the registry value it
-    /// reads, like every question above. It reads the whole .sys, so the Play
-    /// gate asks it through GameLauncher's cache rather than on every press.
+    /// Whether the engine seizes a DualSense on Bluetooth by default: it
+    /// carries mgvf-0006, asked by the name of the registry value it reads,
+    /// and not mgvf-0034, which made the default a shared open. mgvf-0034
+    /// adds no registry value, so it is asked by the line its unix half
+    /// traces for a shared open. A bottle's own SeizeDevice is not read, so
+    /// an engine with mgvf-0034 answers no even where a bottle asks for the
+    /// seize. It reads the whole .sys and .so, so the Play gate asks it
+    /// through GameLauncher's cache rather than on every press.
     static func engineSeizesThePad(cxAppPath: String?) -> Bool {
         contains(literal: "SeizeDevice", inWinebusOf: cxAppPath)
+            && !contains(ascii: sharedOpenTrace, inUnixWinebusOf: cxAppPath)
+    }
+
+    /// mgvf-0034's trace for a pad opened shared, as it is in winebus.so.
+    static let sharedOpenTrace = "shared with macOS"
+
+    /// The engine's unix winebus.so, searched for an ASCII string. A missing
+    /// engine, or one that cannot be read, answers no -- never a guess.
+    private static func contains(ascii: String, inUnixWinebusOf cxAppPath: String?) -> Bool {
+        guard let cxAppPath, !cxAppPath.isEmpty else { return false }
+        let so = cxAppPath + "/Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/winebus.so"
+        guard let data = FileManager.default.contents(atPath: so) else { return false }
+        return data.range(of: Data(ascii.utf8)) != nil
     }
 
     /// The engine's own winebus.sys, searched for a UTF-16 literal. A missing

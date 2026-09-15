@@ -18,7 +18,7 @@ enum BottleProcesses {
 
     /// Where wine keeps the server for a bottle: `server-<dev>-<ino>` in hex,
     /// under `.wine-<uid>` in the temporary directory.
-    static func serverDirectory(ofBottleAt bottle: URL) -> URL? {
+    nonisolated static func serverDirectory(ofBottleAt bottle: URL) -> URL? {
         let path = bottle.path(percentEncoded: false)
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: path),
               let device = attrs[.systemNumber] as? Int,
@@ -27,7 +27,7 @@ enum BottleProcesses {
             "/private/tmp/.wine-\(getuid())/server-\(String(device, radix: 16))-\(String(inode, radix: 16))")
     }
 
-    struct Running {
+    nonisolated struct Running {
         let pid: pid_t
         let name: String
     }
@@ -51,7 +51,10 @@ enum BottleProcesses {
     }
 
     /// Everything holding this bottle's server open.
-    static func running(inBottleAt bottle: URL) -> [Running] {
+    ///
+    /// `nonisolated`, with the two below it: a scan runs lsof and waits for
+    /// it, and the wait before a launch asks from off the main actor.
+    nonisolated static func running(inBottleAt bottle: URL) -> [Running] {
         guard let server = serverDirectory(ofBottleAt: bottle),
               FileManager.default.fileExists(atPath: server.path(percentEncoded: false))
         else { return [] }
@@ -59,7 +62,7 @@ enum BottleProcesses {
     }
 
     /// Everything holding one wineserver directory open.
-    static func processes(holding server: URL) -> [Running] {
+    nonisolated static func processes(holding server: URL) -> [Running] {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
         task.arguments = ["-Fpc", "+D", server.path(percentEncoded: false)]
@@ -81,7 +84,7 @@ enum BottleProcesses {
     }
 
     /// What wine always runs. Short, and it does not change.
-    static let wineFurniture: Set<String> = [
+    nonisolated static let wineFurniture: Set<String> = [
         "wineserver", "winewrapper.exe", "services.exe", "winedevice.exe",
         "plugplay.exe", "rpcss.exe", "explorer.exe", "svchost.exe",
         "conhost.exe", "start.exe", "wineboot.exe", "rundll32.exe",
@@ -179,7 +182,7 @@ enum BottleProcesses {
     /// `EOSOverlayRenderer-Win64-Shipping.exe` is 37 -- and a name compared
     /// at full length against a truncated one never matches, so the overlay
     /// would have been counted as the game however wide the walk above went.
-    static let lsofNameLimit = 31
+    nonisolated static let lsofNameLimit = 31
 
     /// Anything running in this bottle that belongs to neither wine, nor
     /// Steam, nor the Epic launcher.
@@ -232,6 +235,148 @@ enum BottleProcesses {
     /// The rule itself, taking the measurement rather than making it, so both
     /// of its answers can be read and tested without a live bottle.
     static func registryIsOursToWrite(serverIsAlive alive: Bool) -> Bool { !alive }
+
+    /// What wine puts up in a bottle for its own sake: the furniture above,
+    /// and the short-lived tools a fix installer runs through wine, taken from
+    /// the list `MGVFCoordinator` already keeps for the same judgement rather
+    /// than written out a second time. Not one of them is the user's.
+    nonisolated static let wineOwn: Set<String> = wineFurniture.union(MGVFCoordinator.Running.furniture)
+
+    /// Whose a bottle is at this moment, as far as a launch into it cares.
+    nonisolated enum Occupancy: Equatable {
+        /// No wineserver is alive in it, so the next wine command starts one
+        /// of its own. Anything still holding the directory outlived its
+        /// server, and that is `clearOrphans`'s business, not a session.
+        case notRunning
+        /// Up, and everything in it is wine's own: a prefix nothing of the
+        /// user's is in.
+        case onlyWine
+        /// Up with something else in it -- Steam, the Epic launcher, a game,
+        /// or a name nobody has listed -- by the names lsof gave, each once.
+        case inUse(by: [String])
+    }
+
+    /// The classification itself, taking the scan rather than making it, so
+    /// every answer can be read and tested without a live bottle.
+    ///
+    /// The known names are a parameter only so a test can hand it one this
+    /// list does not have, such as a name longer than lsof reports. Steam's
+    /// and the Epic launcher's executables are deliberately not among them:
+    /// `gamesRunning` excuses them because they are not a game, but they are
+    /// the user's, and a bottle with Steam in it is not coming down because a
+    /// launch is waiting for it.
+    nonisolated static func occupancy(of processes: [Running],
+                                      wineOwn names: Set<String> = BottleProcesses.wineOwn) -> Occupancy {
+        guard processes.contains(where: { $0.name.contains("wineserver") }) else { return .notRunning }
+        // Compared lowercased and at the length lsof is willing to report, in
+        // both directions, for the reason `gamesRunning` gives.
+        let namesAtLimit = Set(names.map { String($0.lowercased().prefix(lsofNameLimit)) })
+        // The server is recognised by the guard's own test, not by the set: an
+        // engine can name it for its architecture, and CrossOver Preview on
+        // this machine ships wineserver-x86 and wineserver-arm64 with no plain
+        // wineserver beside them. Left to the set, wine's own server would be
+        // reported as something of the user's.
+        let others = processes.map(\.name).filter { name in
+            !name.contains("wineserver")
+                && !namesAtLimit.contains(String(name.lowercased().prefix(lsofNameLimit)))
+        }
+        return others.isEmpty ? .onlyWine : .inUse(by: Set(others).sorted())
+    }
+
+    /// What waiting for a bottle came to, in terms a launch can report.
+    nonisolated enum Settling: Equatable {
+        /// There was no server to wait for.
+        case notRunning
+        /// Only wine's own processes were up, and they went on their own.
+        case cameDown(afterSeconds: Int)
+        /// Only wine's own processes were up, and they were still there at the
+        /// bound. Named, so the console can say which.
+        case stillUp(afterSeconds: Int, names: [String])
+        /// Something that is not wine's own is in the bottle. Not waited for.
+        case inUse(by: [String])
+    }
+
+    /// Let a prefix that only wine's own processes are keeping up come down
+    /// before a launch, up to a point.
+    ///
+    /// A short wine command leaves its prefix up behind it -- `PatchAll`
+    /// waits out exactly that after an installer's `reg.exe` -- and a launch
+    /// that lands in that window joins the prefix instead of starting it. Two
+    /// things go with it. `registryIsOursToWrite` refuses while any wineserver
+    /// is alive, so this title's controller settings are skipped with nothing
+    /// of the user's in the bottle. And winebus runs inside winedevice.exe,
+    /// which takes its debug channels from the environment of whatever started
+    /// the prefix and its standard error from the same place: a HID trace
+    /// launched into a prefix another wine command had started five seconds
+    /// earlier came out without a single winebus line.
+    ///
+    /// Twenty seconds, the bound `PatchAll.waitForQuiet` already gives a
+    /// bottle to settle after an installer: it is the wait this application
+    /// accepts for this kind of prefix, not a measurement of how long one
+    /// lives. Past it the launch goes ahead into the bottle as it did before,
+    /// and the result says what was found.
+    ///
+    /// Anything that is not wine's own is not going to leave because a launch
+    /// is waiting, so a bottle with one in it is reported at once. And this
+    /// only watches: nothing here ends or signals a process, because a live
+    /// server is somebody's session -- the rule `clearOrphans` keeps.
+    ///
+    /// The bound, the interval between scans and the scan itself are
+    /// parameters only so a test can drive every branch of the loop without a
+    /// live bottle or a twenty-second wait. The launch passes none of them.
+    static func letShortLivedPrefixComeDown(inBottleAt bottle: URL,
+                                            upTo bound: Duration = .seconds(20),
+                                            every interval: Duration = .seconds(1),
+                                            scan: @escaping @Sendable (URL) -> [Running] = { BottleProcesses.running(inBottleAt: $0) }) async -> Settling {
+        let clock = ContinuousClock()
+        let start = clock.now
+        var waited: Int { Int(((clock.now - start) / .seconds(1)).rounded()) }
+        var first = true
+        while true {
+            // Off the main actor, as PatchAll asks: each scan runs lsof and
+            // waits for it, and a launch is started from the window.
+            let here = await Task.detached(priority: .utility) {
+                scan(bottle)
+            }.value
+            switch occupancy(of: here) {
+            case .notRunning:
+                return first ? .notRunning : .cameDown(afterSeconds: waited)
+            case .inUse(let names):
+                return .inUse(by: names)
+            case .onlyWine:
+                break
+            }
+            // A cancelled sleep returns at once, and ignoring that would turn
+            // the rest of the bound into lsof in a tight loop.
+            guard clock.now < start + bound,
+                  (try? await Task.sleep(for: interval)) != nil else {
+                return .stillUp(afterSeconds: waited, names: Set(here.map(\.name)).sorted())
+            }
+            first = false
+        }
+    }
+
+    /// What a HID trace of this launch will be missing, or nil when nothing.
+    ///
+    /// A bottle whose server is still alive when the launch goes ahead was
+    /// started by another command, and winedevice.exe -- where winebus runs --
+    /// takes its debug channels and its standard error from that command, not
+    /// from this one. So the file this launch opens will not have winebus's
+    /// lines, and the console says so before the absence is read as a pad
+    /// that did nothing. Kept apart from the wait so every answer can be
+    /// tested.
+    nonisolated static func hidTraceWarning(after settling: Settling) -> String? {
+        let why: String
+        switch settling {
+        case .notRunning, .cameDown:
+            return nil
+        case .inUse(let names):
+            why = "it is in use by " + names.joined(separator: ", ")
+        case .stillUp(let seconds, _):
+            why = "wine's own processes in it did not go within \(seconds) s"
+        }
+        return "HID trace: this bottle was already up (\(why)), so its controller driver was started before this launch and this trace file will not contain winebus's lines. Close what runs in this bottle and launch again to capture them."
+    }
 
     /// End what is left of a bottle, and nothing outside it.
     ///
@@ -355,7 +500,7 @@ enum BottleProcesses {
         let left = running(inBottleAt: bottle)
         guard !left.isEmpty else { return }
         guard !left.contains(where: { $0.name.contains("wineserver") }) else {
-            console.log("this bottle is already in use; leaving it alone")
+            console.log("a wineserver is alive in this bottle; leaving its processes alone")
             return
         }
         console.warn("clearing \(left.count) orphan(s) from a previous session: "

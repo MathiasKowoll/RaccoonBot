@@ -153,6 +153,25 @@ func stopEpicGame(appNames: [String], cxAppPath: String, bottle: String) async t
     }
 }
 
+/// The bottle a Stop pressed now acts on, marked stopped before anything is
+/// done about it.
+///
+/// Marked at the press, not when the stop's own task first runs: a launch
+/// still waiting for this bottle asks as soon as its wait is over, and must not
+/// start into a bottle the user has just stopped -- see
+/// LaunchGeneration.stopped. One function for every Stop button, so a button
+/// learns which bottle to close only by marking it, and the bottle it closes
+/// and the bottle it marks are the same one. An Epic title runs where its
+/// launcher is.
+@discardableResult
+func stopPressed(isEpic: Bool, selectedBottle: String) -> String {
+    let bottle = isEpic
+        ? (EpicLaunch.target(settings: StoreConfig.settings(for: .epic), selectedBottle: selectedBottle)?.bottle ?? selectedBottle)
+        : selectedBottle
+    LaunchGeneration.shared.stopped(bottle: bottle)
+    return bottle
+}
+
 func quitWine(cxAppPath: String, bottle: String) async throws -> Void {
     console.log("quitting wine...")
     guard let ref = BottleReference(bottle) else {
@@ -325,7 +344,97 @@ func hidTraceLogPath() -> String {
         .path(percentEncoded: false)
 }
 
-func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, steamExePath: String, options: GameOptions? = nil, appExeURL: URL? = nil, launcherURI: String? = nil) async throws -> Void {
+/// The part of a launch that comes before anything is done to the bottle: the
+/// launch is counted, the bottle is waited for and its orphans cleared, and
+/// after each of those waits the launch asks whether it is still wanted.
+///
+/// Returns the generation the launch goes ahead as, or nil when it is no
+/// longer wanted -- and then `launch` has been told why, so the tracker armed
+/// for it stands down.
+///
+/// Out of launchWindowsGame so its order can be tested. The count comes before
+/// the first wait, and it used to come after the registry. The wait can last
+/// BottleProcesses' whole bound, and two things can happen during it that must
+/// be judged against this launch. A grace teardown of the last session in this
+/// bottle can reach its check inside the wait: with no count yet it passes,
+/// and Steam is sent its shutdown under this launch. And a Stop pressed inside
+/// the wait closes the bottle with the generation it finds: a count after that
+/// stands its teardown down, and the title is started anyway. The two waits
+/// are parameters only so a test can press Stop or Play inside them; the
+/// launch passes neither.
+func readyBottleForLaunch(id: String, bottle: String, bottleURL: URL, hidTraceEnabled: Bool,
+                          launch: PendingLaunch?,
+                          settle: (URL) async -> BottleProcesses.Settling = { await BottleProcesses.letShortLivedPrefixComeDown(inBottleAt: $0) },
+                          clearOrphans: (URL) async -> Void = { await BottleProcesses.clearOrphans(inBottleAt: $0) }) async -> Int? {
+    // From here on, any teardown decided before this moment is about a session
+    // that no longer exists. So nothing between the top of this function and
+    // this line may await.
+    let generation = LaunchGeneration.shared.launched(bottle: bottle)
+
+    // Whether this launch is still wanted, asked once each wait below is over
+    // and before the next thing it does to the bottle. A Play pressed in the
+    // meantime has a launch of its own coming through the same wait. A Stop
+    // pressed in the meantime has closed the bottle or is closing it, and that
+    // teardown cannot end a launch that has not run anything yet, so the
+    // launch has to ask -- see LaunchGeneration.stopped.
+    func noLongerWanted() -> Bool {
+        if LaunchGeneration.shared.supersedes(generation, for: bottle) {
+            console.log("not launching game id \(id): another launch was started while this one waited for the bottle")
+            launch?.decide(.superseded)
+            return true
+        }
+        if LaunchGeneration.shared.wasStopped(generation, for: bottle) {
+            console.log("not launching game id \(id): Stop was pressed while this launch waited for the bottle")
+            launch?.decide(.abandoned)
+            return true
+        }
+        return false
+    }
+
+    // A launch that follows a short wine command -- such as the reg.exe runs
+    // PatchAll already waits out -- can find that command's prefix still up,
+    // and then joins it instead of starting the bottle: the registry rule
+    // in launchWindowsGame skips this title's controller settings with nothing
+    // of the user's in the bottle, and a HID trace misses winebus, which keeps
+    // the debug channels of whatever started it. So a bottle holding only
+    // wine's own processes gets up to BottleProcesses' bound to come down
+    // first. It only waits; nothing is ended, and a bottle in use is not
+    // waited for.
+    let settling = await settle(bottleURL)
+    // Before the lines about the wait and before clearOrphans: a launch
+    // nobody wants any more has nothing to say about a trace it will not
+    // write, and no business ending processes in a bottle that a Stop is
+    // closing or a newer launch will clear for itself.
+    if noLongerWanted() { return nil }
+    if case .cameDown(let seconds) = settling {
+        console.log("this bottle was up with only wine's own processes in it; it came down after \(seconds) s, before this launch")
+    }
+    if hidTraceEnabled, let warning = BottleProcesses.hidTraceWarning(after: settling) {
+        console.warn(warning)
+    } else if case .stillUp(let seconds, let names) = settling {
+        console.log("this bottle stayed up for \(seconds) s with only wine's own processes in it (\(names.joined(separator: ", "))); launching into it as it is")
+    }
+
+    // Wine services that outlived the server that owned them keep this bottle's
+    // devices and registry claimed, and the next launch fails because of them.
+    // They are cleared here rather than hoped away -- but only when no server
+    // is alive in this bottle, because a live server means somebody is playing.
+    //
+    // After the wait, not before it. Before it, a server still alive made this
+    // leave the bottle alone, and whatever outlived that server when it went
+    // during the wait reached the launch uncleared.
+    await clearOrphans(bottleURL)
+    // Asked again, because clearing orphans waits for them to end.
+    if noLongerWanted() { return nil }
+    return generation
+}
+
+func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, steamExePath: String, options: GameOptions? = nil, appExeURL: URL? = nil, launcherURI: String? = nil, launch: PendingLaunch? = nil) async throws -> Void {
+    // However this function ends before the title's command has run -- a
+    // guard, a refusal, a throw, a stand-down -- the tracker armed for it is
+    // told that nothing was started. Only the first answer counts, so this
+    // does not undo the start recorded after the command, nor a stand-down.
+    defer { launch?.decide(.abandoned) }
     console.log("options: \(options.debugDescription)")
     if let vulkanLibID = options?.vulkanLib {
         try copyMoltenVK(cxAppPath: cxAppPath, vulkanLibID: vulkanLibID)
@@ -339,15 +448,19 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
         return
     }
 
-    // Wine services that outlived the server that owned them keep this bottle's
-    // devices and registry claimed, and the next launch fails because of them.
-    // They are cleared here rather than hoped away -- but only when no server
-    // is alive in this bottle, because a live server means somebody is playing.
-    await BottleProcesses.clearOrphans(inBottleAt: bottleURL)
     if(options == nil) {
         console.error("Missing game options for game with id \(id) - cannot launch (options = nil)")
         return
     }
+
+    // Counted, waited for and cleared of orphans before anything below is done
+    // to the bottle -- see readyBottleForLaunch. It is the only wait in this
+    // function: from here the registry is written and the title started
+    // without another suspension, so a Stop or a Play that its last check
+    // did not see comes after the title's command.
+    guard let generation = await readyBottleForLaunch(id: id, bottle: selectedBottle, bottleURL: bottleURL,
+                                                      hidTraceEnabled: options!.hidTraceEnabled,
+                                                      launch: launch) else { return }
     let f = FileManager.default
 
     var command = ""
@@ -460,9 +573,6 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
     console.warn("applying config changes to the bottle \(selectedBottle)...")
     
     let bottleName = URL(string: selectedBottle)?.lastPathComponent ?? ""
-    // From here on, any teardown decided before this moment is about a session
-    // that no longer exists.
-    LaunchGeneration.shared.launched(bottle: selectedBottle)
     console.warn("attempting to run steam.exe on game id \(id)")
     let arguments = options != nil ? " " + options!.gameArguments : ""
     // A guard for an engine configured before the block existed, or chosen
@@ -582,6 +692,10 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
     console.log(command)
     #endif
     try safeShell(command)
+    // Recorded once the command has run and not before: a command that throws
+    // started nothing, and the tracker's watches should count from here rather
+    // than from the wait for the bottle.
+    launch?.decide(.started(generation: generation))
 
     // While a game runs under wine, macOS sees no input at all: the pad is
     // opened exclusively by the bottle, so not one of its reports reaches the

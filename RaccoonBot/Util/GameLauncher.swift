@@ -179,6 +179,12 @@ final class GameLauncher {
                 let launchBottle = epicPlan?.bottle
                     ?? (gameOptions.useArmBottle ? appGlobals.selectedArmBottle : appGlobals.selectedBottle)
 
+                // What becomes of the launch below, handed to the tracker so it
+                // watches only a title that was started, from when it was, as
+                // the generation it was -- see PendingLaunch. A native launch is
+                // not counted, so it has nothing to hand over.
+                let launch = item.isNative ? nil : PendingLaunch()
+
                 Task(priority: .background) {
                     let observer = try await getGameTracker(
                         appNames: updatedItem.appNames,
@@ -200,7 +206,8 @@ final class GameLauncher {
                         isNative: item.isNative,
                         steamID: (item.isCustom == true || item.isEpic) ? nil : item.steamAppID,
                         steamPath: appGlobals.windowsSteamFolder?.path(percentEncoded: false) ?? "",
-                        isEpic: item.isEpic)
+                        isEpic: item.isEpic,
+                        launch: launch)
                     await MainActor.run { self.observers[item.id] = observer }
                 }
 
@@ -221,7 +228,15 @@ final class GameLauncher {
                                                 steamExePath: steamExePath,
                                                 options: gameOptions,
                                                 appExeURL: epicPlan?.launcher ?? item.appExeURL,
-                                                launcherURI: epicPlan?.uri)
+                                                launcherURI: epicPlan?.uri,
+                                                launch: launch)
+                    // A launch that started nothing leaves no tracker to take
+                    // the loader down, so it is taken down here. A superseded
+                    // one leaves it up: the Play that took its place put up the
+                    // same loader, and its own tracker takes it down.
+                    if launch?.decided == .abandoned {
+                        libraryPageGlobals.setLoader(state: false)
+                    }
                 }
             } catch {
                 console.error(String(reflecting: error))

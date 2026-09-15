@@ -41,6 +41,9 @@ struct GameHeader: View {
                         if(game!.isNative) {
                             console.log("stop action not implemented for macOS")
                         } else {
+                            // Marked stopped now, before the task below first runs --
+                            // see stopPressed.
+                            let stopBottle = stopPressed(isEpic: game!.isEpic, selectedBottle: appGlobals.selectedBottle)
                             Task {
                                 // Stopping by hand deserves the same courtesy as stopping by
                                 // itself: ask Steam to go, let it finish, then close this
@@ -49,12 +52,11 @@ struct GameHeader: View {
                                     if game!.isEpic {
                                         // The game is asked to close; its tracker then waits
                                         // for the launcher's sync and closes the bottle.
-                                        let epic = EpicLaunch.target(settings: StoreConfig.settings(for: .epic), selectedBottle: appGlobals.selectedBottle)
-                                        try? await stopEpicGame(appNames: game!.appNames, cxAppPath: cx, bottle: epic?.bottle ?? appGlobals.selectedBottle)
+                                        try? await stopEpicGame(appNames: game!.appNames, cxAppPath: cx, bottle: stopBottle)
                                         return
                                     }
-                                    try? await quitSteam(cxAppPath: cx, bottle: appGlobals.selectedBottle, isNative: false)
-                                    try? await closeBottle(cxAppPath: cx, bottle: appGlobals.selectedBottle)
+                                    try? await quitSteam(cxAppPath: cx, bottle: stopBottle, isNative: false)
+                                    try? await closeBottle(cxAppPath: cx, bottle: stopBottle)
                                 }
                                 libraryPageGlobals.playingID = nil
                             }
@@ -193,6 +195,12 @@ struct GameHeader: View {
                 let launchBottle = epicPlan?.bottle
                     ?? (launchOptions.useArmBottle ? appGlobals.selectedArmBottle : appGlobals.selectedBottle)
 
+                // What becomes of the launch below, handed to the tracker so it
+                // watches only a title that was started, from when it was, as
+                // the generation it was -- see PendingLaunch. A native launch is
+                // not counted, so it has nothing to hand over.
+                let launch = game!.isNative ? nil : PendingLaunch()
+
                 Task(priority: .background) {
                     tObserver = try await getGameTracker(appNames: game!.appNames, cxAppPath: appGlobals.cxAppPath!, bottle: launchBottle, onLoad: { appName in
                         Task { @MainActor in padLines.write() }
@@ -211,7 +219,8 @@ struct GameHeader: View {
                      isNative: game!.isNative,
                      steamID: (game!.isCustom == true || game!.isEpic) ? nil : game!.steamAppID,
                      steamPath: appGlobals.windowsSteamFolder?.path(percentEncoded: false) ?? "",
-                     isEpic: game!.isEpic)
+                     isEpic: game!.isEpic,
+                     launch: launch)
                 }
                 if(game!.isNative) {
                     try await launchNativeGame(id: String(game!.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: appGlobals.selectedBottle, options: launchOptions, appExeURL: game!.appExeURL)
@@ -219,10 +228,20 @@ struct GameHeader: View {
                     if(game!.isCustom == true && game!.appExeURL == nil) {
                         console.error("custom game doesn't have an executable associated")
                         libraryPageGlobals.setLoader(state: false)
+                        // The tracker above waits for a launch that is not
+                        // coming; it is told so and stands down.
+                        launch?.decide(.abandoned)
                         return
                     }
                     let steamExePath = appGlobals.windowsSteamFolder?.appendingPathComponent("Steam.exe").path(percentEncoded: false) ?? "C:\\Program Files (x86)\\Steam\\Steam.exe"
-                    try await launchWindowsGame(id: String(game!.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: launchBottle, steamExePath: steamExePath, options: launchOptions, appExeURL: epicPlan?.launcher ?? game!.appExeURL, launcherURI: epicPlan?.uri)
+                    try await launchWindowsGame(id: String(game!.steamAppID), cxAppPath: appGlobals.cxAppPath ?? "", selectedBottle: launchBottle, steamExePath: steamExePath, options: launchOptions, appExeURL: epicPlan?.launcher ?? game!.appExeURL, launcherURI: epicPlan?.uri, launch: launch)
+                    // A launch that started nothing leaves no tracker to take
+                    // the loader down, so it is taken down here. A superseded
+                    // one leaves it up: the Play that took its place put up the
+                    // same loader, and its own tracker takes it down.
+                    if launch?.decided == .abandoned {
+                        libraryPageGlobals.setLoader(state: false)
+                    }
                 }
             } catch {
                 libraryPageGlobals.setLoader(state: false)

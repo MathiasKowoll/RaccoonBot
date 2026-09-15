@@ -265,17 +265,19 @@ struct GameThumbnail: View {
             console.log("stop action not implemented for macOS")
             return
         }
+        // Marked stopped now, before the task below first runs -- see
+        // stopPressed.
+        let stopBottle = stopPressed(isEpic: item.isEpic, selectedBottle: appGlobals.selectedBottle)
         Task {
             if let cx = appGlobals.cxAppPath {
                 if item.isEpic {
                     // The game is asked to close; its tracker then waits for
                     // the launcher's sync and closes the bottle.
-                    let epic = EpicLaunch.target(settings: StoreConfig.settings(for: .epic), selectedBottle: appGlobals.selectedBottle)
-                    try? await stopEpicGame(appNames: item.appNames, cxAppPath: cx, bottle: epic?.bottle ?? appGlobals.selectedBottle)
+                    try? await stopEpicGame(appNames: item.appNames, cxAppPath: cx, bottle: stopBottle)
                     return
                 }
-                try? await quitSteam(cxAppPath: cx, bottle: appGlobals.selectedBottle, isNative: false)
-                try? await closeBottle(cxAppPath: cx, bottle: appGlobals.selectedBottle)
+                try? await quitSteam(cxAppPath: cx, bottle: stopBottle, isNative: false)
+                try? await closeBottle(cxAppPath: cx, bottle: stopBottle)
             }
             libraryPageGlobals.playingID = nil
         }

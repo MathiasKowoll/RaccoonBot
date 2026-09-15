@@ -36,6 +36,9 @@ final class LaunchGeneration: @unchecked Sendable {
     /// against a teardown whose own bottle could not be identified -- see
     /// `key(for:)`.
     private var anywhere = 0
+    /// The generation each bottle was on when Stop was last pressed for it --
+    /// see `stopped(bottle:)`.
+    private var stops: [String: Int] = [:]
 
     /// What a bottle is counted under.
     ///
@@ -80,4 +83,113 @@ final class LaunchGeneration: @unchecked Sendable {
     func supersedes(_ generation: Int, for bottle: String) -> Bool {
         current(for: bottle) != generation
     }
+
+    /// Records that the user asked to stop what runs in this bottle, against
+    /// the generation the bottle is on at that moment.
+    ///
+    /// A launch takes its generation before it waits for its bottle, and that
+    /// wait can last as long as BottleProcesses' bound. A Stop pressed inside
+    /// it closes the bottle with the launch's own generation -- nothing has
+    /// been launched since, so nothing stands that teardown down -- but the
+    /// launch has not run anything yet for the teardown to end, and once its
+    /// wait is over it would start the title into the bottle the user had just
+    /// stopped. So the launch asks `wasStopped` before it does anything to the
+    /// bottle.
+    ///
+    /// Marked, never bumped. A bump would tell the running session's tracker
+    /// that a game had been launched since, and it would stand down -- and
+    /// the Epic stop leaves the whole teardown to that tracker.
+    ///
+    /// Keyed like the counter, so a stop and a launch that spell the same
+    /// bottle differently still meet, and a bottle that cannot be identified
+    /// is answered from the counter every launch bumps.
+    func stopped(bottle: String) {
+        lock.lock(); defer { lock.unlock() }
+        // Not through `current(for:)`: it takes this same lock, and NSLock is
+        // not recursive.
+        let key = Self.key(for: bottle)
+        stops[key] = key.isEmpty ? anywhere : (values[key] ?? 0)
+    }
+
+    /// Was Stop pressed for this bottle while it was on `generation`?
+    ///
+    /// Only the generation the bottle was on when Stop was pressed answers
+    /// yes. A launch started after that has a newer one, and the Stop was not
+    /// about it.
+    func wasStopped(_ generation: Int, for bottle: String) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        return stops[Self.key(for: bottle)] == generation
+    }
 }
+
+/// What became of one press of Play, told by the launch to the tracker armed
+/// for it.
+///
+/// The tracker is armed before the launch is called, and it needs three things
+/// the counter cannot give it. Which generation its launch took: reading the
+/// counter instead was right only while nothing in the launch awaited before
+/// the bump, and a wait moved above it once made every teardown of the session
+/// stand down. Whether the launch ran anything at all: a launch that stands
+/// down because Stop was pressed, or because a newer Play took the bottle, used
+/// to leave its tracker to time out after a minute and a half or more and then
+/// call onTerminate, which cleared the playing title and the loader of whatever
+/// session was live by then. And when the title's command ran: the tracker's
+/// ninety seconds to find the game in Steam's log began when it was armed, so
+/// the wait for the bottle came out of them.
+///
+/// So the tracker waits for this before it watches anything, and a tracker
+/// cannot read a generation its launch has not decided.
+nonisolated final class PendingLaunch: @unchecked Sendable {
+    enum Outcome: Equatable, Sendable {
+        /// The title's command has run, as this generation of its bottle.
+        case started(generation: Int)
+        /// A newer launch into the same bottle took over while this one
+        /// waited. That launch has a tracker and a loader of its own.
+        case superseded
+        /// Nothing was started and nothing takes its place: Stop was pressed
+        /// during the wait, a guard or the engine refused, or the launch threw.
+        case abandoned
+    }
+
+    private let lock = NSLock()
+    private var result: Outcome?
+    private var waiting: [CheckedContinuation<Outcome, Never>] = []
+
+    /// Records what became of the launch. Only the first answer counts, so a
+    /// launch can say "abandoned" on its way out whatever happened before it,
+    /// without undoing a start or a stand-down it has already reported.
+    func decide(_ outcome: Outcome) {
+        lock.lock()
+        guard result == nil else { lock.unlock(); return }
+        result = outcome
+        let resumed = waiting
+        waiting = []
+        lock.unlock()
+        resumed.forEach { $0.resume(returning: outcome) }
+    }
+
+    /// The answer, if the launch has given one yet.
+    var decided: Outcome? {
+        lock.lock(); defer { lock.unlock() }
+        return result
+    }
+
+    /// Waits until the launch has decided.
+    func outcome() async -> Outcome {
+        await withCheckedContinuation { continuation in
+            lock.lock()
+            if let result {
+                lock.unlock()
+                continuation.resume(returning: result)
+                return
+            }
+            waiting.append(continuation)
+            lock.unlock()
+        }
+    }
+}
+
+/// Thrown by a tracker whose launch started nothing. Both callers arm the
+/// tracker in a task nobody reads the error of, and the launch has already
+/// written why it stood down.
+nonisolated struct LaunchStoodDown: Error {}

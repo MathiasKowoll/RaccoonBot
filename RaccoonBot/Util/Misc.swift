@@ -829,7 +829,77 @@ func watchSteamSession(_ state: SteamAppState,
     }
 }
 
-func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoad: @escaping (_ appName: String) -> Void, onTerminate: @escaping () -> Void, isNative: Bool, steamID: Int?, steamPath: String, isEpic: Bool = false) async throws -> TerminationObserver {
+/// The destructive half of a session's teardown, once it has been claimed:
+/// the store client's wait, its request to leave, and the bottle.
+///
+/// Out of getGameTracker so the rule it keeps can be tested: whether a game
+/// has been launched into the bottle is asked again before every request that
+/// follows a wait, not once at the top -- the rule closeBottle keeps for its
+/// own steps. The waits, for Steam's cloud sync or for the Epic launcher to
+/// settle, leave room for a game to be launched into this bottle, and a check
+/// made only before them sends that launch's Steam its shutdown. closeBottle
+/// is not guarded here: the tracker hands it the generation and it asks for
+/// itself before each of its steps.
+///
+/// The steps are parameters only so a test can launch inside a wait and see
+/// what is still asked; the tracker passes the real ones.
+enum SessionTeardown {
+    /// Returns false when a game was launched into the bottle during one of
+    /// the waits. Nothing more is asked of anything then, and the window is
+    /// the newer session's, not this teardown's to release.
+    static func run(isEpic: Bool, generation: Int, bottle: String, reason: String,
+                    waitForEpicLauncher: () async throws -> Void,
+                    waitForCloudSync: () async throws -> Void,
+                    steamIsInBottle: () -> Bool,
+                    quitEpic: () async throws -> Void,
+                    quitSteam: () async throws -> Void,
+                    closeBottle: (_ clients: [String]) async throws -> Void) async throws -> Bool {
+        func launchedSinceThisBegan() -> Bool {
+            guard LaunchGeneration.shared.supersedes(generation, for: bottle) else { return false }
+            console.log("not closing down: a game has been launched since this teardown began (\(reason))")
+            return true
+        }
+        if isEpic {
+            // The Epic launcher uploads save data when a game exits, as
+            // Steam does, and is killed mid-upload just as easily. It is
+            // given its time, asked to leave, and only then is the
+            // prefix ended. Steam's own shutdown is NOT sent here: with
+            // no Steam running, "Steam.exe -shutdown" would start one.
+            try await waitForEpicLauncher()
+            if launchedSinceThisBegan() { return false }
+            try await quitEpic()
+            // Steam may be in this very prefix, and usually is: the Epic
+            // launcher is installed into whichever bottle the user
+            // pointed at, which on this machine is the Steam one. The
+            // rule stays "never start a Steam that is not running", so it
+            // is asked to leave only when the bottle says it is there --
+            // otherwise `wineserver -k` a moment later would take a
+            // running Steam down without a word to it, mid-download or
+            // mid-cloud-sync of its own.
+            var clients = ["epic"]
+            if steamIsInBottle() {
+                console.log("steam is in this bottle too; asking it to leave before the prefix goes")
+                if launchedSinceThisBegan() { return false }
+                try await quitSteam()
+                clients.append("steam")
+            }
+            try await closeBottle(clients)
+        } else {
+            // Steam uploads save data when a game exits. Killing it mid-upload
+            // leaves the cloud copy behind whatever was actually played, and it
+            // has already happened here.
+            try await waitForCloudSync()
+            if launchedSinceThisBegan() { return false }
+            try await quitSteam()
+            // Steam has been asked, not told. Give it time to finish writing
+            // its own state before ending anything.
+            try await closeBottle(["steam"])
+        }
+        return true
+    }
+}
+
+func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoad: @escaping (_ appName: String) -> Void, onTerminate: @escaping () -> Void, isNative: Bool, steamID: Int?, steamPath: String, isEpic: Bool = false, launch: PendingLaunch? = nil) async throws -> TerminationObserver {
     // `appNames` lists every executable a game is known by, and for a game with
     // a launcher that is two: the launcher, and the game the launcher starts.
     // The launcher exits as soon as it has handed off -- that is its whole job.
@@ -876,7 +946,22 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
 
     // The generation this tracker belongs to. A teardown decided here must not
     // arrive in the middle of a session started afterwards.
-    let generation = LaunchGeneration.shared.current(for: bottle)
+    //
+    // Taken from the launch once it has decided, not read from the counter
+    // when this first runs -- see PendingLaunch. Nothing below starts until
+    // then: the watches' deadlines count from the title's command, and a
+    // launch that started nothing leaves nothing here to call onLoad or
+    // onTerminate over whichever session is live by the time it would have.
+    // The logs above are opened before that command runs, which is what they
+    // need. A native title has no counted launch to wait for and is read from
+    // the counter, as it always was.
+    let generation: Int
+    if let launch {
+        guard case .started(let launched) = await launch.outcome() else { throw LaunchStoodDown() }
+        generation = launched
+    } else {
+        generation = LaunchGeneration.shared.current(for: bottle)
+    }
 
     func shutDown(because reason: String) async {
         if LaunchGeneration.shared.supersedes(generation, for: bottle) {
@@ -905,45 +990,25 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
         guard loaded.claimShutdown() else { return }
         console.log(reason)
         do {
-            if isEpic {
-                // The Epic launcher uploads save data when a game exits, as
-                // Steam does, and is killed mid-upload just as easily. It is
-                // given its time, asked to leave, and only then is the
-                // prefix ended. Steam's own shutdown is NOT sent here: with
-                // no Steam running, "Steam.exe -shutdown" would start one.
-                try await epicLog?.waitForLauncherToSettle()
-                try await quitEpic(cxAppPath: cxAppPath, bottle: bottle)
-                // Steam may be in this very prefix, and usually is: the Epic
-                // launcher is installed into whichever bottle the user
-                // pointed at, which on this machine is the Steam one. The
-                // rule stays "never start a Steam that is not running", so it
-                // is asked to leave only when the bottle says it is there --
-                // otherwise `wineserver -k` a moment later would take a
-                // running Steam down without a word to it, mid-download or
-                // mid-cloud-sync of its own.
-                var clients = ["epic"]
-                if let dir = BottleReference(bottle)?.directory,
-                   BottleProcesses.running(inBottleAt: dir)
-                       .contains(where: { $0.name.lowercased().hasPrefix("steam") }) {
-                    console.log("steam is in this bottle too; asking it to leave before the prefix goes")
-                    try await quitSteam(cxAppPath: cxAppPath, bottle: bottle, isNative: false)
-                    clients.append("steam")
-                }
-                try await closeBottle(cxAppPath: cxAppPath, bottle: bottle,
-                                      clients: clients, decidedAt: generation)
-            } else {
-                // Steam uploads save data when a game exits. Killing it mid-upload
-                // leaves the cloud copy behind whatever was actually played, and it
-                // has already happened here.
-                if let cloudSync { // not for native steam games
-                    try await cloudSync.waitForSteamCloudSync()
-                }
-                try await quitSteam(cxAppPath: cxAppPath, bottle: bottle, isNative: isNative)
-                // Steam has been asked, not told. Give it time to finish writing
-                // its own state before ending anything.
-                try await closeBottle(cxAppPath: cxAppPath, bottle: bottle,
-                                      decidedAt: generation)
-            }
+            let wentThrough = try await SessionTeardown.run(
+                isEpic: isEpic, generation: generation, bottle: bottle, reason: reason,
+                waitForEpicLauncher: { try await epicLog?.waitForLauncherToSettle() },
+                // No watcher for a native Steam game, and so no wait.
+                waitForCloudSync: { try await cloudSync?.waitForSteamCloudSync() },
+                steamIsInBottle: {
+                    guard let dir = BottleReference(bottle)?.directory else { return false }
+                    return BottleProcesses.running(inBottleAt: dir)
+                        .contains(where: { $0.name.lowercased().hasPrefix("steam") })
+                },
+                quitEpic: { try await quitEpic(cxAppPath: cxAppPath, bottle: bottle) },
+                // The Steam an Epic session asks to leave is the one in its
+                // bottle, never a native one.
+                quitSteam: { try await quitSteam(cxAppPath: cxAppPath, bottle: bottle, isNative: isEpic ? false : isNative) },
+                closeBottle: { clients in
+                    try await closeBottle(cxAppPath: cxAppPath, bottle: bottle,
+                                          clients: clients, decidedAt: generation)
+                })
+            guard wentThrough else { return }
         } catch {
             // Whatever failed on the way out, the game is over as far as the
             // window is concerned. Leaving the loader spinning helps nobody.

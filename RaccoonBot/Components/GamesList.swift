@@ -516,13 +516,16 @@ struct GamesList: View {
                     .help("Rescan the library")
 
                     Button {
+                        // Marked stopped now, before the task below first runs --
+                        // see stopPressed.
+                        let stopBottle = stopPressed(isEpic: false, selectedBottle: appGlobals.selectedBottle)
                         Task {
                             // Stopping by hand deserves the same courtesy as stopping by
                             // itself: ask Steam to go, let it finish, then close this
                             // bottle -- not every bottle on the machine.
                             if let cx = appGlobals.cxAppPath {
-                                try? await quitSteam(cxAppPath: cx, bottle: appGlobals.selectedBottle, isNative: false)
-                                try? await closeBottle(cxAppPath: cx, bottle: appGlobals.selectedBottle)
+                                try? await quitSteam(cxAppPath: cx, bottle: stopBottle, isNative: false)
+                                try? await closeBottle(cxAppPath: cx, bottle: stopBottle)
                             }
                             libraryPageGlobals.isLaunchingGame = false
                         }

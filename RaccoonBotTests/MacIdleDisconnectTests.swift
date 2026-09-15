@@ -9,9 +9,10 @@ import Testing
 import Foundation
 @testable import RaccoonBot
 
-/// Which DualSense Play warns about, and when it stops to do so.
+/// Which DualSense a launch writes a console line about, and that a pad never
+/// changes what a launch does.
 ///
-/// The IOKit read is not here; the decision it feeds is. Every expectation is
+/// The IOKit read is not here; the filter it feeds is. Every expectation is
 /// on the whole returned array, so a pad the code should not have returned is
 /// a failure rather than something a `contains` walks past.
 struct MacIdleDisconnectTests {
@@ -78,7 +79,7 @@ struct MacIdleDisconnectTests {
                                              engineSeizes: true) == [])
     }
 
-    /// An engine without mgvf-0006 opens the pad shared: no notice.
+    /// An engine without mgvf-0006 opens the pad shared: no line.
     @Test func anEngineThatDoesNotSeizeAsksNothing() {
         #expect(MacIdleDisconnect.padsAtRisk(pads: [pad()], driverSerials: [measured], engineSeizes: false) == [])
     }
@@ -95,104 +96,72 @@ struct MacIdleDisconnectTests {
         #expect(MacIdleDisconnect.padsAtRisk(pads: [pad(0x09CC)], driverSerials: [measured], engineSeizes: true) == [])
     }
 
-    @Test func shouldAskOnlyWhenNothingSaysOtherwise() {
-        let atRisk = [pad()]
-        #expect(MacIdleDisconnect.shouldAsk(atRisk: atRisk, isNative: false, suppressed: false, acknowledged: false))
-        #expect(!MacIdleDisconnect.shouldAsk(atRisk: atRisk, isNative: true, suppressed: false, acknowledged: false))
-        #expect(!MacIdleDisconnect.shouldAsk(atRisk: atRisk, isNative: false, suppressed: true, acknowledged: false))
-        #expect(!MacIdleDisconnect.shouldAsk(atRisk: atRisk, isNative: false, suppressed: false, acknowledged: true))
-        #expect(!MacIdleDisconnect.shouldAsk(atRisk: [], isNative: false, suppressed: false, acknowledged: false))
+    @Test func theConsoleLineCarriesModelAndSerialAndNoAdvice() {
+        let edge = MacIdleDisconnect.consoleLine(for: pad())
+        #expect(edge == "controller: macOS's gamepad driver is attached to the DualSense Edge on Bluetooth "
+                + "(50:EE:32:C4:8E:F2); macOS disconnects such a pad about 900 s after the last input it sees, "
+                + "and while this bottle holds the pad it sees none")
+        #expect(MacIdleDisconnect.consoleLine(for: pad(SonyPads.dualSense)).contains("the DualSense on Bluetooth"))
+        #expect(!edge.lowercased().contains("off and on"))
+        #expect(!edge.lowercased().contains("turn"))
     }
 
-    @Test func theMessageNamesTheModel() {
-        #expect(MacIdleDisconnect.message(for: [pad()]).title == "Turn your DualSense Edge off and on once the game is up")
-        #expect(MacIdleDisconnect.message(for: [pad(SonyPads.dualSense)]).title
-                == "Turn your DualSense off and on once the game is up")
-        #expect(MacIdleDisconnect.message(for: [pad(), pad(SonyPads.dualSense)]).title
-                == "Turn your controllers off and on once the game is up")
-    }
-
-    /// Word for word: every clause of it is measured, and a clause that is not
-    /// must not slip in unnoticed.
-    @Test func theBodyIsTheMeasuredWording() {
-        let body = "macOS disconnects a DualSense on Bluetooth about 15 minutes into play when it was connected "
-            + "before the game started. Turning it off and on after the game's window appears has stopped "
-            + "that every time so far: macOS then leaves that connection alone."
-        #expect([[pad()], [pad(SonyPads.dualSense)], [pad(), pad(SonyPads.dualSense)], []]
-                    .map { MacIdleDisconnect.message(for: $0).body } == [body, body, body, body])
-    }
-
-    /// The step between the pads at risk and what Play does with them.
-    @Test func theLaunchDecisionAsksOrLogsNeverBoth() {
+    /// A pad at risk never stops a launch: the outcome is decided without it,
+    /// and the launch that goes ahead still writes the line.
+    @Test func anAtRiskPadNeverChangesTheOutcomeAndIsStillLogged() {
         let p = pad()
-        let quiet = MacIdleDisconnect.consoleLine(for: p, suppressed: false)
-        let off = MacIdleDisconnect.consoleLine(for: p, suppressed: true)
-        let cases: [(native: Bool, suppressed: Bool, acknowledged: Bool)] =
-            [(false, false, false), (false, false, true), (false, true, false), (true, false, false)]
-        let decisions = cases.map {
-            MacIdleDisconnect.launchDecision(atRisk: [p], isNative: $0.native, suppressed: $0.suppressed,
-                                             acknowledged: $0.acknowledged)
-        }
-        #expect(decisions.map(\.ask) == [[p], [], [], []])
-        #expect(decisions.map(\.log) == [[], [quiet], [off], [quiet]])
-        let none = MacIdleDisconnect.launchDecision(atRisk: [], isNative: false, suppressed: false, acknowledged: false)
-        #expect(none.ask == [] && none.log == [])
+        let atRisk = MacIdleDisconnect.padsAtRisk(pads: [p], driverSerials: [measured], engineSeizes: true)
+        #expect(atRisk == [p])
+        let outcome = GameLauncher.outcome(for: game(), isPlaying: false, needsFix: false)
+        #expect(outcome == .started)
+        #expect(GameLauncher.padLines(for: game(), outcome: outcome, padsAtRisk: { atRisk })
+                == [MacIdleDisconnect.consoleLine(for: p)])
+        // A native title is not held by a bottle: nothing to say.
+        #expect(GameLauncher.padLines(for: game(native: true), outcome: .started, padsAtRisk: { atRisk }) == [])
     }
 
-    @Test func theConsoleLineCarriesModelAndSerial() {
-        let line = MacIdleDisconnect.consoleLine(for: pad(), suppressed: true)
-        #expect(line.contains("DualSense Edge"))
-        #expect(line.contains(measured))
-        #expect(line.contains("turned off"))
-        #expect(!MacIdleDisconnect.consoleLine(for: pad(), suppressed: false).contains("turned off"))
+    /// The lines are held until the title is seen running, and written once:
+    /// a tracker's second onLoad, for a title that came back after a gap, is
+    /// the same session.
+    @MainActor @Test func theLinesAreWrittenOnceOnLoadOnly() {
+        let line = MacIdleDisconnect.consoleLine(for: pad())
+        let pending = PendingPadLines([line])
+        #expect(pending.take() == [line])
+        #expect(pending.take() == [])
+        #expect(PendingPadLines([]).take() == [])
     }
 
-    /// alreadyPlaying > native > noExecutable > needsFix > padWillDisconnect > started.
-    @Test func theNoticeComesAfterEveryOtherGate() {
-        let pads = [pad()]
-        #expect(GameLauncher.outcome(for: game(), isPlaying: true, needsFix: true,
-                                     padsToAskAbout: { pads }) == .alreadyPlaying)
-        #expect(GameLauncher.outcome(for: game(native: true), isPlaying: false, needsFix: false,
-                                     padsToAskAbout: { pads }) == .started)
-        #expect(GameLauncher.outcome(for: game(custom: true, exe: nil), isPlaying: false, needsFix: true,
-                                     padsToAskAbout: { pads }) == .noExecutable)
-        #expect(GameLauncher.outcome(for: game(), isPlaying: false, needsFix: true,
-                                     padsToAskAbout: { pads }) == .needsFix)
-        #expect(GameLauncher.outcome(for: game(), isPlaying: false, needsFix: false,
-                                     padsToAskAbout: { pads }) == .padWillDisconnect(pads))
-        #expect(GameLauncher.outcome(for: game(), isPlaying: false, needsFix: false,
-                                     padsToAskAbout: { [] }) == .started)
-    }
-
-    /// The pads are asked about only for a launch that would otherwise start:
-    /// IOKit and the engine binary are not read on any other press.
-    @Test func thePadsAreNotLookedAtUnlessTheTitleWouldStart() {
+    /// The pads are looked at only for a Windows title whose launch goes
+    /// ahead: IOKit and the engine binary are not read on any other press.
+    @Test func thePadsAreNotLookedAtUnlessTheTitleStarts() {
         let epic = Game.epic(EpicInstalled(id: "epic:ns1:item1:app1", appName: "app1", catalogNamespace: "ns1",
                                            catalogItemId: "item1", title: "A Game",
                                            folder: URL(fileURLWithPath: "/tmp/x"),
                                            executable: URL(fileURLWithPath: "/tmp/x/AGame.exe"),
                                            version: "1", presence: .installed))
         #expect(epic.isEpic)
+        let p = pad()
         // Counted per press, so a call is pinned to the press that made it.
-        func asks(_ press: (() -> [SonyPads.Pad]) -> LaunchOutcome) -> (LaunchOutcome, Int) {
+        func press(_ g: Game, isPlaying: Bool = false, needsFix: Bool = false,
+                   hasEpicLauncher: Bool = true) -> (LaunchOutcome, Int, Int) {
             var asked = 0
-            let outcome = press { asked += 1; return [] }
-            return (outcome, asked)
+            let outcome = GameLauncher.outcome(for: g, isPlaying: isPlaying, needsFix: needsFix,
+                                               hasEpicLauncher: hasEpicLauncher)
+            let lines = GameLauncher.padLines(for: g, outcome: outcome) { asked += 1; return [p] }
+            return (outcome, asked, lines.count)
         }
         let presses = [
-            asks { GameLauncher.outcome(for: game(), isPlaying: true, needsFix: false, padsToAskAbout: $0) },
-            asks { GameLauncher.outcome(for: game(native: true), isPlaying: false, needsFix: false, padsToAskAbout: $0) },
-            asks { GameLauncher.outcome(for: game(custom: true, exe: nil), isPlaying: false, needsFix: false,
-                                        padsToAskAbout: $0) },
-            asks { GameLauncher.outcome(for: epic, isPlaying: false, needsFix: false, hasEpicLauncher: false,
-                                        padsToAskAbout: $0) },
-            asks { GameLauncher.outcome(for: game(), isPlaying: false, needsFix: true, padsToAskAbout: $0) },
-            asks { GameLauncher.outcome(for: epic, isPlaying: false, needsFix: false, hasEpicLauncher: true,
-                                        padsToAskAbout: $0) },
-            asks { GameLauncher.outcome(for: game(), isPlaying: false, needsFix: false, padsToAskAbout: $0) },
+            press(game(), isPlaying: true),
+            press(game(native: true)),
+            press(game(custom: true, exe: nil)),
+            press(epic, hasEpicLauncher: false),
+            press(game(), needsFix: true),
+            press(epic, hasEpicLauncher: true),
+            press(game()),
         ]
         #expect(presses.map(\.0) == [.alreadyPlaying, .started, .noExecutable, .noExecutable, .needsFix,
                                      .started, .started])
         #expect(presses.map(\.1) == [0, 0, 0, 0, 0, 1, 1])
+        #expect(presses.map(\.2) == [0, 0, 0, 0, 0, 1, 1])
     }
 }

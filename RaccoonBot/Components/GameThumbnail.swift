@@ -24,17 +24,11 @@ struct GameThumbnail: View {
     /// a card somewhere that has no options sheet of its own -- the gear opens
     /// the title's page, which has.
     var showOptions: (() -> Void)? = nil
-    /// Hands the pad notice to the view that listens to the pad, with the
-    /// title as this card would launch it. The grid needs it there: a notice
-    /// kept on the card is one the pad does not know is up, so it went on
-    /// moving and pressing behind it. Without one, the card shows it itself.
-    var showPadNotice: (([SonyPads.Pad], Game) -> Void)? = nil
     @EnvironmentObject var appGlobals: AppGlobals
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
     @State private var tObserver: TerminationObserver?
     @StateObject private var fixes = MGVFLibrary.shared
     @State private var warnAboutFix = false
-    @State private var padNotice: [SonyPads.Pad]? = nil
     @State private var confirmingUninstall = false
 
     /// Where this title is installed, from its metadata.
@@ -175,7 +169,6 @@ struct GameThumbnail: View {
         } message: {
             Text(fixes.entry(for: gameFolder)?.why ?? "Its video will not play without it.")
         }
-        .padDisconnectNotice($padNotice) { PlayGame(acknowledgedPadNotice: true) }
         // The same question the title's options ask, in the same words: Steam
         // does the removal, and asks again in its own window.
         .confirmationDialog("Uninstall \(item.name)?",
@@ -246,7 +239,7 @@ struct GameThumbnail: View {
     }
 
     @MainActor
-    func PlayGame (acknowledgedPadNotice: Bool = false) {
+    func PlayGame () {
         // One launch path, shared with the list view. The fix gate lives inside
         // it, so neither view can start an unpatched title by forgetting to
         // check -- which is exactly what a second copy of this would risk.
@@ -256,12 +249,9 @@ struct GameThumbnail: View {
                                         gameFolder: gameFolder,
                                         appGlobals: appGlobals,
                                         libraryPageGlobals: libraryPageGlobals,
-                                        fixes: fixes,
-                                        acknowledgedPadNotice: acknowledgedPadNotice) {
+                                        fixes: fixes) {
         case .needsFix:
             warnAboutFix = true
-        case .padWillDisconnect(let pads):
-            if let showPadNotice { showPadNotice(pads, updatedItem) } else { padNotice = pads }
         case .started, .noExecutable, .alreadyPlaying:
             break
         }

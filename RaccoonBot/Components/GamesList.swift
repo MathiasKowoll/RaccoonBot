@@ -71,12 +71,6 @@ struct GamesList: View {
     @State private var showProfile: Bool = false
     @State private var warnAboutFix = false
     @State private var fixWarningGame: Game?
-    /// The pads the notice is about, and the title "Start" starts -- with the
-    /// card's updated copy when a card's own Play button raised it, so Start
-    /// launches exactly what that button would have.
-    @State private var padNotice: [SonyPads.Pad]?
-    @State private var padNoticeGame: Game?
-    @State private var padNoticeUpdatedGame: Game?
     @State private var optionsGame: Game?
 
     /// The pad, the selection, and the width the selection is arranged in.
@@ -116,12 +110,7 @@ struct GamesList: View {
                 switch card {
                 case .installed(let item):
                     GameThumbnail(item: item, isResizable: appWindowResizable, isSelected: selected,
-                                  showOptions: { optionsGame = item },
-                                  showPadNotice: { pads, updated in
-                                      padNoticeGame = item
-                                      padNoticeUpdatedGame = updated
-                                      padNotice = pads
-                                  })
+                                  showOptions: { optionsGame = item })
                         .id(card.id)
                 case .owned(let game):
                     OwnedGameCard(game: game,
@@ -272,20 +261,13 @@ struct GamesList: View {
             // While the options sheet is up, the pad is the sheet's: it takes
             // the handlers over when it appears and hands them back when it
             // goes. The fix warning has nothing to navigate, so B closes it.
-            // The pad notice is answered the same way: B cancels, and only the
-            // mouse starts the game from it, so the press that opened it
-            // cannot also be the one that dismisses it into a launch.
-            guard optionsGame == nil, !warnAboutFix, padNotice == nil else { return }
+            guard optionsGame == nil, !warnAboutFix else { return }
             syncFocusShape()
             focus.selectFirstIfNeeded()
             focus.move(direction)
         }, onPress: { press in
             if warnAboutFix {
                 if press == .back { warnAboutFix = false }
-                return
-            }
-            if padNotice != nil {
-                if press == .back { padNotice = nil }
                 return
             }
             guard optionsGame == nil else { return }
@@ -379,24 +361,19 @@ struct GamesList: View {
     }
 
     /// The one launch this view knows, used by the list, and by the pad.
-    private func play(_ game: Game, updatedItem: Game? = nil, acknowledgedPadNotice: Bool = false) {
+    private func play(_ game: Game) {
         let folder = getMeta(libraryPageGlobals.gamesMeta, byID: game.id)?
             .gameURL?.path(percentEncoded: false)
         switch GameLauncher.shared.play(game,
-                                        updatedItem: updatedItem ?? game,
+                                        updatedItem: game,
                                         isPlaying: libraryPageGlobals.playingID == game.id,
                                         gameFolder: folder,
                                         appGlobals: appGlobals,
                                         libraryPageGlobals: libraryPageGlobals,
-                                        fixes: fixes,
-                                        acknowledgedPadNotice: acknowledgedPadNotice) {
+                                        fixes: fixes) {
         case .needsFix:
             fixWarningGame = game
             warnAboutFix = true
-        case .padWillDisconnect(let pads):
-            padNoticeGame = game
-            padNoticeUpdatedGame = updatedItem
-            padNotice = pads
         case .started, .noExecutable, .alreadyPlaying:
             break
         }
@@ -463,11 +440,6 @@ struct GamesList: View {
                 .gameURL?.path(percentEncoded: false)
             Text(folder.flatMap { fixes.entry(for: $0)?.why }
                  ?? "Its video will not play without it.")
-        }
-        .padDisconnectNotice($padNotice) {
-            if let padNoticeGame {
-                play(padNoticeGame, updatedItem: padNoticeUpdatedGame, acknowledgedPadNotice: true)
-            }
         }
         // Only asked for a title that genuinely ships for both.
         .confirmationDialog("Which version?",

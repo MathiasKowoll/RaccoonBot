@@ -14,7 +14,6 @@ struct GameHeader: View {
     @EnvironmentObject var libraryPageGlobals: LibraryPageGlobals
     @EnvironmentObject var gameOptions: GameOptions
     @State private var showGameOptions: Bool = false
-    @State private var padNotice: [SonyPads.Pad]? = nil
     var isPlaying: Bool {
         libraryPageGlobals.playingID == game!.id
     }
@@ -125,31 +124,29 @@ struct GameHeader: View {
         .sheet(isPresented: $showGameOptions) {
             GameOptionsSheet(game: $game, isPresented: $showGameOptions)
         }
-        .padDisconnectNotice($padNotice) { playGame(acknowledgedPadNotice: true) }
     }
 
     @MainActor
-    func playGame(acknowledgedPadNotice: Bool = false) {
-        // The pad notice, asked the way GameLauncher asks it and before
-        // anything is started. This page does not go through GameLauncher --
-        // and so has no fix gate of its own -- but a player who starts from
-        // here is as much at risk of the cut as one who starts from the card.
-        // needsFix is false because this path never asked; the pads are only
-        // looked at when nothing else would stop the launch.
+    func playGame() {
+        // The console's pad lines, written the way GameLauncher writes them.
+        // This page does not go through GameLauncher -- and so has no fix gate
+        // of its own -- but a launch from here is as much a measurement as one
+        // from the card. needsFix is false because this path never asked; the
+        // outcome only decides whether the pads are looked at, never whether
+        // the title starts. Measured now, written once the title is seen
+        // running -- see GameLauncher.padLinesAtLaunch.
         let epicPlan = game!.isEpic
             ? EpicLaunch.plan(for: game!, settings: StoreConfig.settings(for: .epic), selectedBottle: appGlobals.selectedBottle)
             : nil
-        if case .padWillDisconnect(let pads) = GameLauncher.outcome(
-            for: game!, isPlaying: isPlaying, needsFix: false,
-            hasEpicLauncher: !game!.isEpic || epicPlan != nil,
-            padsToAskAbout: {
-                GameLauncher.shared.padsToAskAbout(cxAppPath: appGlobals.cxAppPath, isNative: game!.isNative,
-                                                   acknowledged: acknowledgedPadNotice)
-            }) {
-            padNotice = pads
-            return
-        }
+        let padLines = GameLauncher.shared.padLinesAtLaunch(
+            for: game!,
+            outcome: GameLauncher.outcome(for: game!, isPlaying: isPlaying, needsFix: false,
+                                          hasEpicLauncher: !game!.isEpic || epicPlan != nil),
+            cxAppPath: appGlobals.cxAppPath)
         libraryPageGlobals.setLoader(state: true)
+        // Until the game is seen running, a pad left still is not idle -- the
+        // same as Play from a card or the list, which go through GameLauncher.
+        IdlePadWatcher.shared.launchStarted()
         Task {
             do {
                 // The saved settings, read here rather than trusted from the
@@ -198,6 +195,7 @@ struct GameHeader: View {
 
                 Task(priority: .background) {
                     tObserver = try await getGameTracker(appNames: game!.appNames, cxAppPath: appGlobals.cxAppPath!, bottle: launchBottle, onLoad: { appName in
+                        Task { @MainActor in padLines.write() }
                         DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
                             libraryPageGlobals.setLoader(state: false)
                             Task {

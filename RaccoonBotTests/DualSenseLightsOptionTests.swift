@@ -215,11 +215,12 @@ struct DualSenseLightsOptionTests {
                 line("Hidraw", hidraw.0), line("LightbarColour", bar.0), "\"SomethingElse\"=dword:00000007",
                 line("UsbEmulation", 0), line("ProductId", 0), line("VibrationMode", 0),
                 line("VibrationGain", 100), line("XInputRumble", 0), line("PlayerLights", player.0),
+                line("IdlePowerOffMinutes", 0),
             ],
             DualSenseRoute.sectionPath(productID: SonyPads.dualSenseEdge): [
                 line("Hidraw", hidraw.1), line("UsbEmulation", 0), line("ProductId", 0), line("VibrationMode", 0),
                 line("VibrationGain", 100), line("XInputRumble", 0), line("LightbarColour", bar.1),
-                line("PlayerLights", player.1),
+                line("PlayerLights", player.1), line("IdlePowerOffMinutes", 0),
             ],
         ]
     }
@@ -526,8 +527,9 @@ struct DualSenseLightsOptionTests {
             #expect(override.values.map(\.key) == [DualSenseRoute.hidrawValue, DualSenseRoute.usbEmulationValue,
                                                    DualSenseRoute.productIDValue, DualSenseRoute.vibrationModeValue,
                                                    DualSenseRoute.vibrationGainValue, DualSenseRoute.xinputRumbleValue,
-                                                   DualSenseRoute.lightbarColourValue, DualSenseRoute.playerLightsValue])
-            #expect(override.values.map(\.value) == [1, 0, 0, 0, UInt32(DualSenseVibration.neutralGain), 0, 0, 0])
+                                                   DualSenseRoute.lightbarColourValue, DualSenseRoute.playerLightsValue,
+                                                   DualSenseRoute.idlePowerOffMinutesValue])
+            #expect(override.values.map(\.value) == [1, 0, 0, 0, UInt32(DualSenseVibration.neutralGain), 0, 0, 0, 0])
         }
         #expect(plan.summary == nil)
     }

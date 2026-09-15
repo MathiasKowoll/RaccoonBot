@@ -175,6 +175,23 @@ struct OptionsView: View {
                         persistUsrDefOptionBool(key: AppGlobals.controllerBusKey, value: on)
                         Task { await controllerBus.apply(on ? .install : .remove, engine: appGlobals.cxAppPath) }
                     }
+                // A DualSense that connected while a game held it is never
+                // turned off by macOS, even after the game quits: measured
+                // running flat overnight. One setting for every title, watched
+                // by IdlePadWatcher and written for the engine at launch.
+                Picker("Turn off an idle DualSense after", selection: $appGlobals.idlePadPowerOffMinutes) {
+                    ForEach(IdlePadPowerOff.dropdownOptions, id: \.id) { option in
+                        Text(option.label).tag(option.id)
+                    }
+                }
+                .pickerStyle(.menu)
+                .font(.footnote)
+                .fixedSize(horizontal: true, vertical: false)
+                .help("A DualSense on Bluetooth with no stick, trigger or button input for this long is asked to turn itself off; the PS button turns it back on. The touchpad and motion do not count as input. RaccoonBot does this while it is open and no game is running. During a game the engine does it, on a pad it holds, with the time the bottle read when it started: a change here reaches a bottle the next time RaccoonBot starts it. The request was measured to turn off a DualSense Edge and a plain DualSense, and RaccoonBot's watcher was seen doing it once; the engine inside a game is not measured yet.")
+                .onChange(of: appGlobals.idlePadPowerOffMinutes) { _, minutes in
+                    persistUsrDefOptionInt(key: IdlePadPowerOff.settingKey, value: minutes)
+                    IdlePadWatcher.shared.apply(minutes: minutes)
+                }
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .top, spacing: 6) {
                         if let bus = controllerBus.status {

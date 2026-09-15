@@ -1434,6 +1434,11 @@ final class AppGlobals: ObservableObject {
     @Published var controllerBusEnabled: Bool
     static let controllerBusKey = "controllerBus"
 
+    /// Minutes without input after which a DualSense on Bluetooth is asked to
+    /// turn off, 0 for Off. One setting for the application; see
+    /// `IdlePadPowerOff` and `IdlePadWatcher`.
+    @Published var idlePadPowerOffMinutes: Int
+
     /// The bottles this application is configured with -- the one set anything
     /// that writes into a bottle is allowed to touch. One question, one place
     /// that answers it; see `ConfiguredBottles`.
@@ -1451,6 +1456,7 @@ final class AppGlobals: ObservableObject {
         // Unset means on: the set is the better answer for a pad, and an
         // install that predates the switch should get it, not lose it.
         self.controllerBusEnabled = readUsrDefOptionBool(key: Self.controllerBusKey, unset: true)
+        self.idlePadPowerOffMinutes = IdlePadPowerOff.storedMinutes()
     }
 }
 

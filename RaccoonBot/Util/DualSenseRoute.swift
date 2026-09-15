@@ -569,6 +569,9 @@ nonisolated enum DualSenseRoute {
     /// mgvf-0031's two, read under the pad's real product id.
     static let lightbarColourValue = "LightbarColour"
     static let playerLightsValue = "PlayerLights"
+    /// The idle power-off's minutes, read by the engine for a pad it holds.
+    /// One global setting, written under both keys; see `IdlePadPowerOff`.
+    static let idlePowerOffMinutesValue = "IdlePowerOffMinutes"
 
     struct Override: Equatable {
         /// The registry section, in the doubled-backslash form the .reg file uses.
@@ -608,13 +611,19 @@ nonisolated enum DualSenseRoute {
         /// What goes into "PlayerLights": 0 leaves them to the client,
         /// 0x100 | pattern asks for that pattern.
         let playerLights: UInt32
+        /// What goes into "IdlePowerOffMinutes": the minutes without input
+        /// after which the engine asks a pad it holds to turn off, 0 for Off
+        /// and for an engine that does not read the value.
+        let idlePowerOffMinutes: UInt32
 
         /// Defaulted so that a caller who only cares about the route -- which
         /// is what this type meant before mgvf-0005 -- still reads the same.
         init(path: String, hidraw: UInt32, usbEmulation: UInt32 = 0, askedProductID: UInt32 = 0,
              vibrationMode: UInt32 = 0, vibrationGain: UInt32 = DualSenseVibration.neutralGain,
-             xinputRumble: UInt32 = 0, lightbarColour: UInt32 = 0, playerLights: UInt32 = 0) {
+             xinputRumble: UInt32 = 0, lightbarColour: UInt32 = 0, playerLights: UInt32 = 0,
+             idlePowerOffMinutes: UInt32 = 0) {
             self.path = path
+            self.idlePowerOffMinutes = idlePowerOffMinutes
             self.xinputRumble = xinputRumble
             self.hidraw = hidraw
             self.usbEmulation = usbEmulation
@@ -634,7 +643,8 @@ nonisolated enum DualSenseRoute {
              (DualSenseRoute.vibrationGainValue, vibrationGain),
              (DualSenseRoute.xinputRumbleValue, xinputRumble),
              (DualSenseRoute.lightbarColourValue, lightbarColour),
-             (DualSenseRoute.playerLightsValue, playerLights)]
+             (DualSenseRoute.playerLightsValue, playerLights),
+             (DualSenseRoute.idlePowerOffMinutesValue, idlePowerOffMinutes)]
         }
     }
 
@@ -733,8 +743,15 @@ nonisolated enum DualSenseRoute {
                           engineCanXInputRumble: Bool = false,
                           lightbar: String = DualSenseLightbar.asAsked,
                           playerLights: DualSensePlayerLights = .byDefault,
-                          engineCanSetLights: Bool = false) -> [Override] {
-        SonyPads.models.map { model in
+                          engineCanSetLights: Bool = false,
+                          idlePowerOffMinutes: Int = 0,
+                          engineCanPowerOffIdle: Bool = false) -> [Override] {
+        // One setting for the whole application, not per title, and not gated
+        // on the route: it is about the pad being left on, and the engine
+        // decides which pads it can act on.
+        let idleMinutes = IdlePadPowerOff.registryValue(minutes: idlePowerOffMinutes,
+                                                        engineCanPowerOffIdle: engineCanPowerOffIdle)
+        return SonyPads.models.map { model in
             let onBluetooth = pads.contains { $0.productID == model && $0.isBluetooth }
             let viaSDL = onBluetooth && sdlEnabled && !engineTellsTheBus
             let emulating = presentation.presentsAsWired && engineCanEmulateUSB && !viaSDL
@@ -757,7 +774,8 @@ nonisolated enum DualSenseRoute {
                                                      : DualSenseVibration.neutralGain,
                             xinputRumble: rumblingThroughXInput ? 1 : 0,
                             lightbarColour: lighting ? DualSenseLightbar.registryValue(lightbar) : 0,
-                            playerLights: lighting ? playerLights.registryValue : 0)
+                            playerLights: lighting ? playerLights.registryValue : 0,
+                            idlePowerOffMinutes: idleMinutes)
         }
     }
 
@@ -769,13 +787,15 @@ nonisolated enum DualSenseRoute {
         var canRewriteVibration = false
         var canXInputRumble = false
         var canSetLights = false
+        var canPowerOffIdle = false
 
         static func of(cxAppPath: String?) -> EngineAnswers {
             EngineAnswers(tellsTheBus: engineTellsTheBus(cxAppPath: cxAppPath),
                           canEmulateUSB: engineCanEmulateUSB(cxAppPath: cxAppPath),
                           canRewriteVibration: engineCanRewriteVibration(cxAppPath: cxAppPath),
                           canXInputRumble: engineCanXInputRumble(cxAppPath: cxAppPath),
-                          canSetLights: engineCanSetLights(cxAppPath: cxAppPath))
+                          canSetLights: engineCanSetLights(cxAppPath: cxAppPath),
+                          canPowerOffIdle: engineCanPowerOffIdle(cxAppPath: cxAppPath))
         }
     }
 
@@ -785,7 +805,8 @@ nonisolated enum DualSenseRoute {
     /// registry does not get or the other way round.
     @MainActor
     static func launchPlan(options: GameOptions, pads: [SonyPads.Pad],
-                           engine: EngineAnswers) -> (summary: String?, overrides: [Override]) {
+                           engine: EngineAnswers,
+                           idlePowerOffMinutes: Int = 0) -> (summary: String?, overrides: [Override]) {
         let presentation = DualSensePresentation(rawValue: options.dualSensePresentation) ?? .byDefault
         let vibration = DualSenseVibration(rawValue: options.dualSenseVibration) ?? .byDefault
         // Each path keeps its own strength; the launch writes the one the
@@ -806,7 +827,9 @@ nonisolated enum DualSenseRoute {
                                   xinputRumble: options.xinputRumble,
                                   engineCanXInputRumble: engine.canXInputRumble,
                                   lightbar: lightbar, playerLights: playerLights,
-                                  engineCanSetLights: engine.canSetLights)
+                                  engineCanSetLights: engine.canSetLights,
+                                  idlePowerOffMinutes: idlePowerOffMinutes,
+                                  engineCanPowerOffIdle: engine.canPowerOffIdle)
         return (summary, overrides)
     }
 
@@ -890,6 +913,14 @@ nonisolated enum DualSenseRoute {
     static func engineCanSetLights(cxAppPath: String?) -> Bool {
         contains(literal: lightbarColourValue, inWinebusOf: cxAppPath)
             && contains(literal: playerLightsValue, inWinebusOf: cxAppPath)
+    }
+
+    /// Whether the engine's winebus reads the idle power-off's minutes.
+    /// Asked of winebus.sys like every question above, because the per-device
+    /// values are read there (main.c, beside SeizeDevice) and handed to the
+    /// unix side in the device options, so the UTF-16 name lives in the PE.
+    static func engineCanPowerOffIdle(cxAppPath: String?) -> Bool {
+        contains(literal: idlePowerOffMinutesValue, inWinebusOf: cxAppPath)
     }
 
     /// Whether the engine carries mgvf-0006: the winebus that seizes a

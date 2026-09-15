@@ -26,6 +26,16 @@ enum ScreenAwake {
     private static var held: IOPMAssertionID?
     private static var watching: Set<String> = []
 
+    /// The watched bottles whose last look found a game in them. Per bottle:
+    /// one watch ending must not say "no game" while another bottle still has
+    /// one.
+    private static var playingIn: Set<String> = []
+
+    /// Whether any watched bottle has a game in it. Kept apart from `held`,
+    /// which also depends on macOS granting the assertion. IdlePadWatcher asks
+    /// it, and never touches a pad while it is true.
+    static var gameRunning: Bool { !playingIn.isEmpty }
+
     /// Whether the assertion should be held, given what is running.
     ///
     /// Separated from the holding so the decision can be tested without a power
@@ -34,9 +44,19 @@ enum ScreenAwake {
     /// a launcher's, so this adds no second opinion.
     nonisolated static func shouldHold(playing: [String]) -> Bool { !playing.isEmpty }
 
-    /// Take or release the assertion to match what is running. Safe to call as
-    /// often as a poll likes: it acts only on a change.
-    static func match(playing: [String]) { set(shouldHold(playing: playing)) }
+    /// The bottles playing after one bottle's look found `playing` in it.
+    nonisolated static func bottlesPlaying(_ current: Set<String>, bottle key: String,
+                                           playing: [String]) -> Set<String> {
+        shouldHold(playing: playing) ? current.union([key]) : current.subtracting([key])
+    }
+
+    /// Take or release the assertion to match what is running in every
+    /// watched bottle. Safe to call as often as a poll likes: it acts only on a
+    /// change.
+    static func match(playing: [String], inBottle key: String) {
+        playingIn = bottlesPlaying(playingIn, bottle: key, playing: playing)
+        set(gameRunning)
+    }
 
     static func set(_ wanted: Bool) {
         if wanted, held == nil {
@@ -84,7 +104,7 @@ enum ScreenAwake {
             var idleSince: Date?
             while !Task.isCancelled {
                 let playing = BottleProcesses.gamesRunning(inBottleAt: directory)
-                match(playing: playing)
+                match(playing: playing, inBottle: key)
                 if playing.isEmpty {
                     if idleSince == nil { idleSince = Date() }
                     if let since = idleSince, Date().timeIntervalSince(since) >= quiet { break }
@@ -93,7 +113,7 @@ enum ScreenAwake {
                 }
                 try? await Task.sleep(for: .seconds(poll))
             }
-            set(false)
+            match(playing: [], inBottle: key)
             watching.remove(key)
         }
     }

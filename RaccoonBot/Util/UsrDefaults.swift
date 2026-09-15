@@ -144,6 +144,17 @@ func readUsrDefOptionBool(key: String, unset: Bool) -> Bool {
     return defaults.object(forKey: key) == nil ? unset : defaults.bool(forKey: key)
 }
 
+/// A number, kept the same way. Absent is nil, not 0: for a setting where 0
+/// means Off, reading an unset key as 0 would turn it off on every install
+/// that predates the setting.
+func persistUsrDefOptionInt(key: String, value: Int) {
+    UserDefaults(suiteName: suiteName)!.set(value, forKey: key)
+}
+
+nonisolated func readUsrDefOptionInt(key: String) -> Int? {
+    (UserDefaults(suiteName: suiteName)?.object(forKey: key) as? NSNumber)?.intValue
+}
+
 func deleteUsrDefOption(key: String) {
     UserDefaults(suiteName: suiteName)?.removeObject(forKey: key)
 }

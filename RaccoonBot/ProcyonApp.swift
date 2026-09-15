@@ -67,6 +67,10 @@ struct RaccoonBotApp: App {
         // UserDefaults.standard follows the identifier.
         Migration.run()
 
+        // Turning off a DualSense nobody is using, while this is open. Off
+        // starts nothing at all.
+        IdlePadWatcher.shared.apply(minutes: IdlePadPowerOff.storedMinutes())
+
         // Anything wine left running belongs to a session that is over: this
         // application closed before a bottle came down, or a game was force
         // quit. Those services keep the bottle's devices and registry claimed

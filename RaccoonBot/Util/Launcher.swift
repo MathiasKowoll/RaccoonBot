@@ -371,7 +371,7 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
     // running bottle read these values when it booted and cannot be told
     // otherwise from here anyway.
     if !BottleProcesses.registryIsOursToWrite(inBottleAt: bottleURL) {
-        console.warn("this bottle is already running, so its registry was left alone: the controller settings for this title -- Enable SDL, Disable Hidraw, what a DualSense is seen as, what its motors do and its lights -- were not written. A bottle reads them when it boots, so close what is running in it (the launcher and its games) and start this title again.")
+        console.warn("this bottle is already running, so its registry was left alone: the controller settings for this title -- Enable SDL, Disable Hidraw, what a DualSense is seen as, what its motors do, its lights and when an idle one is turned off -- were not written. A running bottle whose engine turns off an idle pad uses the time it booted with, or 20 minutes where it was never given one, even with the setting Off. A bottle reads them when it boots, so close what is running in it (the launcher and its games) and start this title again.")
     } else {
         try registry.load()
         if let controllersSection = registry.section(forPath: "System\\\\CurrentControlSet\\\\Services\\\\winebus") {
@@ -395,10 +395,13 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
             // for. Written the same way as the two keys above, into the same
             // file, on the same condition: only when something would change.
             //
-            // All eight values -- the six for route, presentation, motors and
-            // XInput, and the two for the lights -- are written for both
-            // models on every launch, the neutral ones included, and whatever
-            // is attached at this moment.
+            // All nine values -- the six for route, presentation, motors and
+            // XInput, the two for the lights, and IdlePowerOffMinutes -- are
+            // written for both models on every launch, the neutral ones
+            // included, and whatever is attached at this moment. The first
+            // eight follow this title's options; IdlePowerOffMinutes is the
+            // one application-wide setting, the same under both keys for
+            // every title.
             // That is what makes these per game -- the title that wants the pad
             // as it is clears what the last title set rather than inheriting it
             // -- and it is what lets the console's own advice work: winebus reads
@@ -414,7 +417,8 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
             // one reading of the saved options. A pad on SDL or an engine
             // without a patch gets the neutral values, and the summary says why.
             let plan = DualSenseRoute.launchPlan(options: options!, pads: SonyPads.attached(),
-                                                 engine: .of(cxAppPath: cxAppPath))
+                                                 engine: .of(cxAppPath: cxAppPath),
+                                                 idlePowerOffMinutes: IdlePadPowerOff.storedMinutes())
             if let summary = plan.summary {
                 console.log("controller: \(summary)")
             }

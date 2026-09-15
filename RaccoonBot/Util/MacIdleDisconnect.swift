@@ -2,8 +2,9 @@
 //  MacIdleDisconnect.swift
 //  RaccoonBot
 //
-//  Which DualSense macOS will cut about fifteen minutes into play, asked
-//  before Play and not after.
+//  Which DualSense macOS's own gamepad driver holds while a bottle seizes
+//  it, written to the console when a Windows title starts. Measurement only:
+//  nothing here changes a launch or speaks to the player.
 //
 //  macOS's own gamepad driver (AppleGCHIDUserEventDriver, with Sony's
 //  DualSense plugin) disconnects a Bluetooth DualSense when it has seen no
@@ -12,10 +13,8 @@
 //  clock runs out in the middle of a game: measured four times, reason 10722
 //  each time. A connection that came up while the bottle already held the pad
 //  gets no driver at all, and that connection was never cut -- 6,751 s
-//  through two titles on 2026-09-13, 6,429 s on 2026-09-12. So the one thing a
-//  player can do is turn the pad off and on once the game is up, and the one
-//  moment this application can say so is before the launch: afterwards the
-//  game is in front and an alert would sit behind it.
+//  through two titles on 2026-09-13, 6,429 s on 2026-09-12. The console line
+//  is there so a later cut can be matched to the launch that preceded it.
 //
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
@@ -25,15 +24,12 @@ import IOKit
 
 nonisolated enum MacIdleDisconnect {
 
-    /// Set by "Start, and don't show this again"; removed from Tools.
-    static let suppressionKey = "raccoonbot.notice.dualSenseIdleDisconnect"
-
     /// One spelling for a serial, whichever side it was read from.
     ///
     /// Measured on 2026-09-14 both the driver's entry and the pad's
     /// IOHIDUserDevice carried "50:EE:32:C4:8E:F2" -- uppercase hex with
     /// colons -- but only one machine and one pad have been read, and a format
-    /// mismatch here is a notice that silently never shows. So both sides go
+    /// mismatch here is a console line that silently never appears. So both sides go
     /// through this, and only the hex digits are compared: case, colons,
     /// dashes, spaces or no separators at all are the same serial.
     static func normalized(_ serial: String) -> String {
@@ -49,9 +45,9 @@ nonisolated enum MacIdleDisconnect {
     /// risk -- no guess about which driver entry is its.
     ///
     /// The bottle's own SeizeDevice value is not read in this version, so a
-    /// bottle set to SeizeDevice=0 still gets the notice: whether a shared open
-    /// lets macOS's clock reset has not been measured, and a warning that may
-    /// be unneeded costs less than a cut that was not warned about.
+    /// bottle set to SeizeDevice=0 still gets the line: whether a shared open
+    /// lets macOS's clock reset has not been measured, and a line that may be
+    /// unneeded costs less than a cut the log cannot explain.
     static func padsAtRisk(pads: [SonyPads.Pad], driverSerials: Set<String>,
                            engineSeizes: Bool) -> [SonyPads.Pad] {
         guard engineSeizes else { return [] }
@@ -63,54 +59,21 @@ nonisolated enum MacIdleDisconnect {
         }
     }
 
-    /// Whether Play stops to say so.
-    static func shouldAsk(atRisk: [SonyPads.Pad], isNative: Bool,
-                          suppressed: Bool, acknowledged: Bool) -> Bool {
-        !atRisk.isEmpty && !isNative && !suppressed && !acknowledged
-    }
-
-    /// What one Play press does with the pads at risk: the ones to ask about,
-    /// or, when the launch goes ahead, the console's lines for each. Never
-    /// both, so one launch leaves one set of lines -- and a launch after
-    /// "Start" asks nothing, or the notice would come back on every Start.
-    static func launchDecision(atRisk: [SonyPads.Pad], isNative: Bool, suppressed: Bool,
-                               acknowledged: Bool) -> (ask: [SonyPads.Pad], log: [String]) {
-        if shouldAsk(atRisk: atRisk, isNative: isNative, suppressed: suppressed, acknowledged: acknowledged) {
-            return (atRisk, [])
-        }
-        return ([], atRisk.map { consoleLine(for: $0, suppressed: suppressed) })
-    }
-
     static func model(of pad: SonyPads.Pad) -> String {
         pad.productID == SonyPads.dualSenseEdge ? "DualSense Edge" : "DualSense"
     }
 
-    /// The alert. Every clause in the body is measured: the cut about fifteen
-    /// minutes in, on a pad connected before the game, and that a connection
-    /// made after the window appeared was left alone every time it happened.
-    /// It does not promise that it will keep happening, and it says nothing
-    /// about this application's own pad navigation on such a connection, which
-    /// has not been tried.
-    static func message(for pads: [SonyPads.Pad]) -> (title: String, body: String) {
-        let subject = pads.count == 1 ? "your \(model(of: pads[0]))" : "your controllers"
-        return ("Turn \(subject) off and on once the game is up",
-                "macOS disconnects a DualSense on Bluetooth about 15 minutes into play when it was connected "
-                + "before the game started. Turning it off and on after the game's window appears has stopped "
-                + "that every time so far: macOS then leaves that connection alone.")
-    }
-
     /// The console's line for one pad at risk, for the log and not for the
-    /// player: a later cut can be explained from it, including when the notice
-    /// was turned off.
-    static func consoleLine(for pad: SonyPads.Pad, suppressed: Bool) -> String {
+    /// player. It states what was detected and what macOS was measured to do
+    /// with it, and nothing about what anyone should do.
+    static func consoleLine(for pad: SonyPads.Pad) -> String {
         "controller: macOS's gamepad driver is attached to the \(model(of: pad)) on Bluetooth "
-        + "(\(pad.serialNumber ?? "no serial")); while this bottle holds the pad macOS sees none of its input, "
-        + "and it disconnects the pad about 15 minutes after the last input it saw"
-        + (suppressed ? "; the notice about this is turned off (Tools brings it back)" : "")
+        + "(\(pad.serialNumber ?? "no serial")); macOS disconnects such a pad about 900 s after the last input "
+        + "it sees, and while this bottle holds the pad it sees none"
     }
 
     /// The serials of every Sony pad macOS's gamepad driver sits on over
-    /// Bluetooth. Not tested: it is IOKit, and the decision above is.
+    /// Bluetooth. Not tested: it is IOKit, and the filter above is.
     ///
     /// Filtered strictly on all four properties. IOKitDiagnostics listed
     /// sixteen AppleGCHIDUserEventDriver instances on this machine while the

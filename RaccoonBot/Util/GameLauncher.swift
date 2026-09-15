@@ -29,10 +29,6 @@ enum LaunchOutcome: Equatable {
     /// A custom entry with nothing to run.
     case noExecutable
     case alreadyPlaying
-    /// A DualSense macOS will disconnect about fifteen minutes into play, and
-    /// the title was NOT started: the player is told first, then chooses. See
-    /// MacIdleDisconnect.
-    case padWillDisconnect([SonyPads.Pad])
 }
 
 /// Not observable: it publishes nothing. What the interface watches --
@@ -47,27 +43,22 @@ final class GameLauncher {
 
     /// The engine's SeizeDevice answer, per engine file as it is on disk.
     ///
-    /// The question reads all of winebus.sys, and it is asked on every Play
-    /// press that would start something. Keyed on the file's modification
-    /// date as well as its path -- a stat, not a read -- because an engine can
-    /// be rebuilt in place while this application runs, and a stale "no" is a
-    /// notice that stays away until the next restart.
+    /// The question reads all of winebus.sys, and it is asked on every launch
+    /// that starts a Windows title. Keyed on the file's modification date as
+    /// well as its path -- a stat, not a read -- because an engine can be
+    /// rebuilt in place while this application runs, and a stale "no" is a
+    /// console line that stays away until the next restart.
     private var seizeAnswers: [String: Bool] = [:]
 
     /// Decides whether a title may start, without starting it.
     ///
     /// Separate so the gate can be tested without launching anything, and so
-    /// every caller asks the same question.
-    ///
-    /// The pads are a closure, called last and only when everything else
-    /// would start the title: asking IOKit, and possibly the engine binary, is
-    /// not free, and a title that is running, native, has nothing to run or
-    /// needs its fix has no business paying for it.
+    /// every caller asks the same question. Nothing about a controller is in
+    /// it: a pad is never a reason not to start.
     nonisolated static func outcome(for game: Game,
                                     isPlaying: Bool,
                                     needsFix: Bool,
-                                    hasEpicLauncher: Bool = true,
-                                    padsToAskAbout: () -> [SonyPads.Pad] = { [] }) -> LaunchOutcome {
+                                    hasEpicLauncher: Bool = true) -> LaunchOutcome {
         if isPlaying { return .alreadyPlaying }
         if game.isNative { return .started }
         if game.isCustom == true && game.appExeURL == nil { return .noExecutable }
@@ -75,32 +66,42 @@ final class GameLauncher {
         // scheme; with no launcher in the bottle there is nothing to start it.
         if game.isEpic && !hasEpicLauncher { return .noExecutable }
         if needsFix { return .needsFix }
-        let pads = padsToAskAbout()
-        if !pads.isEmpty { return .padWillDisconnect(pads) }
         return .started
     }
 
-    /// The pads to warn about for a launch that is about to happen, and the
-    /// console's line for each one at risk when it is not warned about.
+    /// The console's lines about macOS's idle cut for one launch: measurement
+    /// only, never an outcome.
     ///
-    /// The lines are written only when the launch goes ahead -- after "Start",
-    /// or with the notice turned off -- so one launch leaves one set of them.
-    /// Asked of the detail page's own launch too, which does not come through
-    /// `play`.
-    func padsToAskAbout(cxAppPath: String?, isNative: Bool, acknowledged: Bool) -> [SonyPads.Pad] {
-        let started = Date()
-        let atRisk = MacIdleDisconnect.padsAtRisk(pads: SonyPads.attached(),
-                                                  driverSerials: MacIdleDisconnect.driverSerials(),
-                                                  engineSeizes: engineSeizesThePad(cxAppPath: cxAppPath))
-        let decision = MacIdleDisconnect.launchDecision(
-            atRisk: atRisk, isNative: isNative,
-            suppressed: UserDefaults.standard.bool(forKey: MacIdleDisconnect.suppressionKey),
-            acknowledged: acknowledged)
-        if !decision.ask.isEmpty { return decision.ask }
-        // Its main-actor cost has not been measured; this line is how.
-        console.log("controller: gamepad driver check took \(Int(Date().timeIntervalSince(started) * 1000)) ms")
-        decision.log.forEach { console.warn($0) }
-        return []
+    /// The pads are a closure, called only for a Windows title whose launch
+    /// goes ahead: asking IOKit, and possibly the engine binary, is not free,
+    /// and a title that is running, native, has nothing to run or needs its
+    /// fix has no business paying for it. See MacIdleDisconnect.
+    nonisolated static func padLines(for game: Game, outcome: LaunchOutcome,
+                                     padsAtRisk: () -> [SonyPads.Pad]) -> [String] {
+        guard outcome == .started, !game.isNative else { return [] }
+        return padsAtRisk().map(MacIdleDisconnect.consoleLine(for:))
+    }
+
+    /// Measures those lines for a launch that is going ahead, and holds them
+    /// until the title is seen running. Called by the detail page's own
+    /// launch too, which does not come through `play`.
+    ///
+    /// Measured here, before the launch, because that is the moment the
+    /// detector was written for; whether the driver's attachment reads the
+    /// same once the bottle holds the pad has not been looked at. Written
+    /// only from the tracker's onLoad, because a launch can still stop short
+    /// after this -- no bottle, a refused engine, a throw -- and a line about
+    /// a bottle holding the pad is not true of a title that never started.
+    func padLinesAtLaunch(for game: Game, outcome: LaunchOutcome, cxAppPath: String?) -> PendingPadLines {
+        PendingPadLines(Self.padLines(for: game, outcome: outcome) {
+            let started = Date()
+            let atRisk = MacIdleDisconnect.padsAtRisk(pads: SonyPads.attached(),
+                                                      driverSerials: MacIdleDisconnect.driverSerials(),
+                                                      engineSeizes: engineSeizesThePad(cxAppPath: cxAppPath))
+            // Its main-actor cost has not been measured; this line is how.
+            console.log("controller: gamepad driver check took \(Int(Date().timeIntervalSince(started) * 1000)) ms")
+            return atRisk
+        })
     }
 
     private func engineSeizesThePad(cxAppPath: String?) -> Bool {
@@ -122,19 +123,14 @@ final class GameLauncher {
               gameFolder: String?,
               appGlobals: AppGlobals,
               libraryPageGlobals: LibraryPageGlobals,
-              fixes: MGVFLibrary,
-              acknowledgedPadNotice: Bool = false) -> LaunchOutcome {
+              fixes: MGVFLibrary) -> LaunchOutcome {
 
         let needsFix = gameFolder.map { fixes.needsPatch(folder: $0) } ?? false
         let epicPlan = item.isEpic
             ? EpicLaunch.plan(for: item, settings: StoreConfig.settings(for: .epic), selectedBottle: appGlobals.selectedBottle)
             : nil
         let outcome = Self.outcome(for: item, isPlaying: isPlaying, needsFix: needsFix,
-                                   hasEpicLauncher: !item.isEpic || epicPlan != nil,
-                                   padsToAskAbout: {
-                                       padsToAskAbout(cxAppPath: appGlobals.cxAppPath, isNative: item.isNative,
-                                                      acknowledged: acknowledgedPadNotice)
-                                   })
+                                   hasEpicLauncher: !item.isEpic || epicPlan != nil)
         guard outcome == .started else {
             if outcome == .noExecutable {
                 console.error(item.isEpic ? "epic: no Epic Games Launcher in the bottle to start \(item.name); set one up from the Epic panel"
@@ -142,9 +138,12 @@ final class GameLauncher {
             }
             return outcome
         }
+        let padLines = padLinesAtLaunch(for: item, outcome: outcome, cxAppPath: appGlobals.cxAppPath)
 
         libraryPageGlobals.selectedGame = updatedItem
         libraryPageGlobals.setLoader(state: true)
+        // Until the game is seen running, a pad left still is not idle.
+        IdlePadWatcher.shared.launchStarted()
 
         Task {
             do {
@@ -187,6 +186,7 @@ final class GameLauncher {
                         bottle: launchBottle,
                         onLoad: { appName in
                             libraryPageGlobals.playingID = item.id
+                            Task { @MainActor in padLines.write() }
                             DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
                                 libraryPageGlobals.setLoader(state: false)
                                 Task { activateApp(appName) }
@@ -230,4 +230,24 @@ final class GameLauncher {
         }
         return .started
     }
+}
+
+/// One launch's console lines about macOS's idle cut, measured before the
+/// launch and written the first time the title is seen running.
+///
+/// Once: the trackers call onLoad again when a title comes back after a gap,
+/// and that is the same session, not a second measurement.
+@MainActor
+final class PendingPadLines {
+    private var lines: [String]
+
+    init(_ lines: [String]) { self.lines = lines }
+
+    /// The lines not yet written, and none from then on.
+    func take() -> [String] {
+        defer { lines = [] }
+        return lines
+    }
+
+    func write() { take().forEach { console.warn($0) } }
 }

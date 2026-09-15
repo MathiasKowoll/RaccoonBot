@@ -21,4 +21,16 @@ struct ScreenAwakeTests {
     @Test func severalAreNoDifferentFromOne() {
         #expect(ScreenAwake.shouldHold(playing: ["Beast.exe", "AnotherGame.exe"]))
     }
+
+    /// Per bottle: one bottle's watch ending, or finding nothing, does not
+    /// clear another bottle that still has a game in it.
+    @Test func oneBottleEndingDoesNotClearAnother() {
+        var playing = ScreenAwake.bottlesPlaying([], bottle: "/a", playing: ["Beast.exe"])
+        playing = ScreenAwake.bottlesPlaying(playing, bottle: "/b", playing: ["Other.exe"])
+        #expect(playing == ["/a", "/b"])
+        playing = ScreenAwake.bottlesPlaying(playing, bottle: "/b", playing: [])
+        #expect(playing == ["/a"], "the other bottle still has its game")
+        playing = ScreenAwake.bottlesPlaying(playing, bottle: "/a", playing: [])
+        #expect(playing.isEmpty)
+    }
 }

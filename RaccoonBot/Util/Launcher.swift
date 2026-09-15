@@ -99,6 +99,20 @@ func closeBottle(cxAppPath: String, bottle: String,
     } else {
         console.error("would not end: " + survivors.map(\.name).joined(separator: ", "))
     }
+    // No later look at this bottle for what outlived its server. Everything
+    // `end` found was asked to leave, and what stayed through its grace was
+    // sent SIGKILL; a survivor it reports already has one pending, and a
+    // second changes nothing. What arrived during that grace was not
+    // condemned, and a wine command started in a prefix whose server is gone
+    // starts a server of its own (ntdll's server_connect), so it is a session
+    // and not debris. A teardown that stopped above has a newer launch, which
+    // clears orphans itself, or found the bottle empty. `quitWine` throws only
+    // when zsh cannot be started -- safeShell does not wait for the command --
+    // and then no server was asked to go. What remains is a teardown that
+    // never reaches these lines because the application quit inside its
+    // waits, and that is swept at quit: BottleProcesses.sweepWhenQuitting,
+    // which first waits, bounded, for the server `quitWine` asked to go --
+    // while that server is still exiting, its directory reads as a session.
 }
 
 func quitSteam(cxAppPath: String, bottle: String, isNative: Bool) async throws -> Void {
@@ -179,6 +193,15 @@ func quitWine(cxAppPath: String, bottle: String) async throws -> Void {
         return
     }
     try safeShell("\(ref.environmentPrefix)\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \"\(ref.name)\" wineserver -k")
+    // Written down for the sweep at quit. Until this server exits it holds
+    // its lock in its directory, so a quit that looks in the meantime finds a
+    // server there and takes the bottle for a session; knowing this
+    // application asked that server to go, the sweep waits for it, bounded,
+    // before it looks. Recorded after the command has started, because a
+    // throw above asked nothing.
+    if let server = ref.directory.flatMap({ BottleProcesses.serverDirectory(ofBottleAt: $0) }) {
+        BottleProcesses.serversAskedToQuit.record(server)
+    }
 }
 
 func openSteam(cxAppPath: String?, selectedBottle: String?, SteamX86AppPath: String) {

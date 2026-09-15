@@ -44,7 +44,10 @@ enum BottleProcesses {
     ///
     /// Matched on pid AND name, so a pid the system has reused since the first
     /// scan is not condemned for the sins of whoever held it before.
-    static func stillThere(_ current: [Running], of condemned: [Running]) -> [Running] {
+    ///
+    /// `nonisolated` because the sweep at quit asks it from off the main
+    /// thread, which is blocked waiting for that sweep.
+    nonisolated static func stillThere(_ current: [Running], of condemned: [Running]) -> [Running] {
         let sentenced = Dictionary(condemned.map { ($0.pid, $0.name) },
                                    uniquingKeysWith: { first, _ in first })
         return current.filter { sentenced[$0.pid] == $0.name }
@@ -447,19 +450,11 @@ enum BottleProcesses {
     /// and inode, and every process of the prefix holds files open inside it.
     /// A directory with processes but no `wineserver` is a prefix nobody is
     /// running any more: what is left there outlived whatever owned it.
+    ///
+    /// The rule itself is `serverless`, shared with the sweep at quit so the two
+    /// cannot come to disagree about what is a leftover.
     static func residualEverywhere() -> [Running] {
-        let root = URL(fileURLWithPath: "/private/tmp/.wine-\(getuid())")
-        guard let servers = try? FileManager.default.contentsOfDirectory(
-            at: root, includingPropertiesForKeys: nil) else { return [] }
-
-        var found: [Running] = []
-        for server in servers where server.lastPathComponent.hasPrefix("server-") {
-            let here = processes(holding: server)
-            guard !here.isEmpty else { continue }
-            guard !here.contains(where: { $0.name.contains("wineserver") }) else { continue }
-            found.append(contentsOf: here)
-        }
-        return found
+        serverless(scanEveryServer()).flatMap(\.processes)
     }
 
     /// What somebody left behind, cleared at startup.

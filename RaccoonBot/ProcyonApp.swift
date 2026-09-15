@@ -84,6 +84,14 @@ struct RaccoonBotApp: App {
             await BottleProcesses.clearResidualAtStartup()
         }
 
+        // The same sweep when this application quits. A quit that lands inside
+        // a bottle's teardown -- after wineserver -k, before what outlived the
+        // server is ended -- otherwise leaves those processes, the controller
+        // driver among them, running until the next start. Same rules as the
+        // startup sweep, after a bounded wait for any server this application
+        // has just asked to quit; see ResidualAtQuit.swift.
+        BottleProcesses.sweepWhenQuitting()
+
         // A fixes bundle published while this was open used to go unseen until
         // the next launch, and the catalogue was only ever fetched once. The
         // check has existed, with its tests and its six-hour throttle, since

@@ -79,7 +79,8 @@ struct RaccoonBotToolbar: View {
         .buttonStyle(.plain)
         .padding(.horizontal, 15)
         .frame(height: 35)
-        .background(.procyonAccent.mix(with: .black, by: 0.6).opacity(0.9))
+        // Lighter than the background, not darker -- see ContentView.
+        .background(.raccoonBackgroundTop.mix(with: .white, by: 0.23).opacity(0.9))
         .clipShape(.capsule)
     }
 }

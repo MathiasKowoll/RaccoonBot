@@ -262,7 +262,8 @@ struct GameDetailView: View {
                 .padding(.top, game!.movies == nil ? 30: -5)
                 .padding(.bottom, 30)
             }
-            .background(.procyonAccent.mix(with: .black, by: 0.6).opacity(0.9))
+            // Lighter than the background, not darker -- see ContentView.
+            .background(.raccoonBackgroundTop.mix(with: .white, by: 0.23).opacity(0.9))
             .frame(width: Self.contentWidth)
             .environmentObject(gameOptions)
         }

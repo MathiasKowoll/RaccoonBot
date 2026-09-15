@@ -65,8 +65,8 @@ struct Modal<Content: View>: View {
             ZStack {
                 LinearGradient(
                     colors: [
-                        .procyonAccent.mix(with: .black, by: 0.2),
-                        .procyonAccent.mix(with: .black, by: 0.4)
+                        .raccoonBackgroundTop,
+                        .raccoonBackgroundBottom
                     ],
                     startPoint: .top,
                     endPoint: .bottom

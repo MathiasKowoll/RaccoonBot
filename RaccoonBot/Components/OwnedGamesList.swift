@@ -150,7 +150,9 @@ struct OwnedGameCard: View {
             .padding(.horizontal)
             .padding(.bottom, 8)
         }
-        .background(.procyonAccent.mix(with: .black, by: 0.6).opacity(0.8))
+        // 0.26 at this opacity renders the colour 0.23 does at 0.9 -- see
+        // ContentView.
+        .background(.raccoonBackgroundTop.mix(with: .white, by: 0.26).opacity(0.8))
         .cornerRadius(30)
         .foregroundStyle(.white)
     }

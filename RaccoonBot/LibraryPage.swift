@@ -127,7 +127,7 @@ struct LibraryPage: View {
                 .background {
                     Rectangle()
                         .fill(.ultraThinMaterial.opacity(0.5))
-                        .overlay(.procyonAccent.mix(with: .black, by: 0.4).opacity(0.5))
+                        .overlay(.raccoonBackgroundBottom.opacity(0.5))
                         .mask {
                             LinearGradient(
                                 gradient: Gradient(stops: [

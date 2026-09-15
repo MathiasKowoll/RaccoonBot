@@ -11,7 +11,7 @@ struct LoadingProgress: View {
     @Binding var progress: Double
     var body: some View {
         HStack(alignment: .center) {
-            Image(.procyon).resizable()
+            Image(.raccoonBot).resizable()
                 .scaledToFit()
                 .frame(height: 50)
             VStack (alignment: .leading){

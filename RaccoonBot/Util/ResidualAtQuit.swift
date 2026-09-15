@@ -22,8 +22,10 @@ import AppKit
 ///
 /// What the code allows. `closeBottle` is the only thing that ends a bottle's
 /// processes during a session, and it runs from a game's tracker or a Stop
-/// button, never at quit; nothing else here watches this application's own
-/// termination. Its `wineserver -k` is where the server goes: wine's server,
+/// button -- and, since 2026-09-15, from a quit that finds a configured bottle
+/// still up, which answers the quit only once that bottle is closed or its
+/// bound has passed (QuitTeardown.swift). A quit that lands inside a teardown
+/// already under way, or passes that bound, still reaches this sweep. Its `wineserver -k` is where the server goes: wine's server,
 /// asked that way, marks every thread of every client terminated (a wakeup for
 /// a thread in a wait, SIGQUIT for any other) and exits two seconds later --
 /// sooner only once every process has gone -- without checking that they went

@@ -29,6 +29,9 @@ struct ContentView: View {
         cxAppPath: readUsrDefOptionString(key: "cxAppPath"),
     )
     
+    /// A quit closing a bottle first; see QuitTeardown.swift.
+    @ObservedObject private var quitting = QuitProgress.shared
+
     var body: some View {
         Group {
             switch(router.route){
@@ -38,6 +41,14 @@ struct ContentView: View {
                 Text("Profile Page")
             }
         }
+        .overlay {
+            if let message = quitting.message {
+                QuittingOverlay(message: message)
+                    .transition(.opacity)
+                    .zIndex(20)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: quitting.message)
         .animation(.easeInOut, value: router.route)
         .preferredColorScheme(.dark)
         .environmentObject(router)

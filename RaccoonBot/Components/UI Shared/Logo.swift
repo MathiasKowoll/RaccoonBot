@@ -11,7 +11,7 @@ struct Logo: View {
     var size: CGFloat = 50
     
     var body: some View {
-        Image(.procyon).resizable()
+        Image(.raccoonBot).resizable()
             .scaledToFit()
             .frame(height: size)
             .padding(.bottom)

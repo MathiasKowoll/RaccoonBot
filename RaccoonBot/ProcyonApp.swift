@@ -61,6 +61,10 @@ var api = SteamAPI()
 
 @main
 struct RaccoonBotApp: App {
+    /// A quit with a bottle still up closes that bottle first; see
+    /// QuitTeardown.swift.
+    @NSApplicationDelegateAdaptor(RaccoonBotAppDelegate.self) private var appDelegate
+
     init() {
         // Before anything reads a setting: the bundle identifier changed when
         // this stopped sharing one with the application it came from, and

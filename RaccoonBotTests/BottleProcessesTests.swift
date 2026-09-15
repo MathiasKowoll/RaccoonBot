@@ -220,16 +220,33 @@ struct BottleProcessesTests {
         #expect(BottleProcesses.occupancy(of: Self.scan(["wineserver", overlay])) == .inUse(by: [overlay]))
     }
 
+    /// Counts the looks a wait takes, around the real scan.
+    private final class LookCount: @unchecked Sendable {
+        private let lock = NSLock()
+        private var looks = 0
+        var count: Int { lock.lock(); defer { lock.unlock() }; return looks }
+        func add() { lock.lock(); looks += 1; lock.unlock() }
+    }
+
     /// A bottle with no server is not waited for at all. No wine: the bottle
-    /// is an empty temporary directory, so there is no server directory to scan.
+    /// is an empty temporary directory, so the real scan finds no server
+    /// directory, and the wait returns after that one look.
+    ///
+    /// Counted rather than timed. This test used to bound the wall clock at a
+    /// second, and it failed once at 1.214 s inside the full suite while
+    /// passing in 0.002 to 0.304 s on its own: the time was the detached scan
+    /// waiting for a thread, not the wait sleeping. A second look is what a
+    /// wait would be, and the half-minute interval would make one obvious.
     @Test func aBottleWithNoServerIsNotWaitedFor() async throws {
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("bottle-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let clock = ContinuousClock()
-        let start = clock.now
-        #expect(await BottleProcesses.letShortLivedPrefixComeDown(inBottleAt: dir) == .notRunning)
-        #expect(clock.now - start < .seconds(1))
+        let looks = LookCount()
+        let result = await BottleProcesses.letShortLivedPrefixComeDown(
+            inBottleAt: dir, every: .seconds(30),
+            scan: { looks.add(); return BottleProcesses.running(inBottleAt: $0) })
+        #expect(result == .notRunning)
+        #expect(looks.count == 1)
     }
 
     // MARK: - The wait's own loop, on a scripted scan

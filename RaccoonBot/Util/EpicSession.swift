@@ -67,6 +67,29 @@ nonisolated struct EpicSettle {
         line.contains("Exiting Cloud Sync")
     }
 
+    /// Whether the launcher's log ends in a save sync that has begun and not
+    /// ended: "Cloud Sync: Sync Started for" with no "Exiting Cloud Sync"
+    /// after it, the pair measured on 2026-09-10 in the Steam bottle's log.
+    ///
+    /// For a caller that arrives after the sync began and so had no tail open
+    /// for its first line. No clock is needed, unlike Steam's cumulative
+    /// log: the launcher opens a fresh log every time it starts -- see
+    /// EpicReadiness.header -- and this is asked only while it is running, so
+    /// the log is this launcher's own. A sync that never ends is bounded by
+    /// the wait that follows, not by this.
+    static func syncUnderWay(inLog content: String) -> Bool {
+        var open = false
+        for piece in content.split(whereSeparator: \.isNewline) {
+            let line = String(piece)
+            if line.contains("Cloud Sync: Sync Started for") {
+                open = true
+            } else if isTerminal(line) {
+                open = false
+            }
+        }
+        return open
+    }
+
     enum Verdict: Equatable { case waiting, settled(String) }
 
     func verdict(at now: Date) -> Verdict {

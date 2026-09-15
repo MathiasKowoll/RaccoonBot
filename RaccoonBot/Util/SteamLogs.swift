@@ -110,6 +110,20 @@ final class SteamGameProcessLog {
     private(set) var startedAt: Date?
     /// How the last process of this application ended.
     private(set) var lastExitCode: Int?
+    /// Every executable Steam has started for this application since it last
+    /// started, in order, named the way the termination observer's name is
+    /// read, so that the two can be compared.
+    private(set) var startedExecutables: [String] = []
+
+    /// What this log says about the application, for recognising it.
+    ///
+    /// This log is opened before the launch command runs and reads forward
+    /// from there, so unlike the name read from the whole file, an earlier
+    /// session cannot answer it.
+    var identificationRecord: SteamLaunchIdentification.SteamRecord {
+        guard let startedAt else { return .startedNothing }
+        return .started(at: startedAt, executables: startedExecutables)
+    }
 
     init(steamPath: String, steamID: String) {
         self.appID = steamID
@@ -126,6 +140,7 @@ final class SteamGameProcessLog {
                 everStarted = false
                 emptySince = nil
                 startedAt = nil
+                startedExecutables.removeAll()
                 continue
             }
             if line.contains("Remove \(appID) from running list") {
@@ -156,6 +171,9 @@ final class SteamGameProcessLog {
                     everStarted = true
                     emptySince = nil
                     lastExitCode = nil
+                    if let named = SteamLaunchIdentification.trackedExecutable(in: line, appID: appID) {
+                        startedExecutables.append(named)
+                    }
                     events.append(.started(pid: pid, path: Self.quotedPath(in: line) ?? "unknown"))
                 }
             } else if let pid = Self.integer(after: "no longer tracking PID ", in: line) {
@@ -242,5 +260,208 @@ func describeExit(code: Int) -> String {
     case -1073741819: return "with an access violation (0xC0000005)"
     case -1073741510: return "interrupted (0xC000013A)"
     default: return "with exit code \(code)"
+    }
+}
+
+/// Steam Cloud's exit sync as `cloud_log.txt` records it: when one has
+/// begun, when it has ended, and when a wait for it is over.
+///
+/// The rules SteamCloudSyncWatcher has always waited by, kept apart from the
+/// clock and the file so a Stop and a launch can wait by the same ones -- for
+/// one title, or for every title whose exit sync is running -- and so every
+/// answer can be tested without a Steam.
+///
+/// One rule is new. Steam writes a sync for a title's launch as well as for
+/// its exit, and the wait used to end on the first line that ends a sync.
+/// Lines read from a tail opened before an earlier session of the same title
+/// had finished its exit sync ended the wait for the next exit sync at once,
+/// with that earlier sync's last line. A launch sync -- "Starting sync (AC
+/// Launch,down,)", in the Steam bottle's log on 2026-09-15 -- begins a new
+/// session, so everything seen about that title's exit before it is
+/// forgotten, and a batch of lines is read whole before anything is decided.
+nonisolated struct SteamExitSync {
+    enum Scope: Equatable, Sendable {
+        /// One title's exit sync, the one its own teardown waits for.
+        case app(String)
+        /// Every title's, for a caller that does not know which title's to
+        /// wait for. Steam runs more than one at a time: in the Steam
+        /// bottle's log on 2026-09-15, 1369760 and 241100 each started an
+        /// exit sync in the same second, twice.
+        case anyApp
+
+        func covers(_ app: String) -> Bool {
+            switch self {
+            case .app(let id): return id == app
+            case .anyApp: return true
+            }
+        }
+    }
+
+    /// How long a wait gives Steam to begin an exit sync at all. Past it,
+    /// cloud saves are off for the title or Steam is not signed in, and the
+    /// rest of the deadline would only delay what follows.
+    static let patience: TimeInterval = 15
+    /// Steam writes an exit sync in one burst; once the titles waited for
+    /// have been quiet this long, it is done, whatever words it finished with.
+    static let quiet: TimeInterval = 6
+    /// The most any exit sync is waited for.
+    static let deadline: TimeInterval = 60
+
+    let scope: Scope
+    let started: Date
+    /// Titles whose exit sync has begun and not ended.
+    private(set) var underWay: Set<String>
+    /// Titles whose exit sync has ended since the wait began.
+    private(set) var ended: Set<String> = []
+    /// "Need to upload file" lines per title, for the console.
+    private(set) var uploads: [String: Int] = [:]
+    /// When a title waited for last wrote anything.
+    private(set) var lastHeard: Date
+
+    /// `alreadyUnderWay` names the exit syncs a caller found running in the
+    /// whole log before its tail was read -- see `underWay(inLog:...)`.
+    init(scope: Scope, started: Date, alreadyUnderWay: Set<String> = []) {
+        self.scope = scope
+        self.started = started
+        self.underWay = alreadyUnderWay
+        self.lastHeard = started
+    }
+
+    var sawExitSync: Bool { !underWay.isEmpty || !ended.isEmpty }
+
+    enum Event: Equatable {
+        case began(app: String)
+        case uploaded(app: String, files: Int)
+        case upToDate(app: String)
+        case failed(app: String, line: String)
+    }
+
+    mutating func observe(_ line: String, at now: Date) -> Event? {
+        guard let app = Self.appID(in: line), scope.covers(app) else { return nil }
+        lastHeard = now
+        if Self.isLaunchSync(line) {
+            underWay.remove(app)
+            ended.remove(app)
+            uploads[app] = nil
+            return nil
+        }
+        if Self.isExitSyncStart(line) {
+            underWay.insert(app)
+            ended.remove(app)
+            return .began(app: app)
+        }
+        if line.contains("Need to upload file") {
+            uploads[app, default: 0] += 1
+            return nil
+        }
+        guard underWay.contains(app), Self.isTerminal(line) else { return nil }
+        underWay.remove(app)
+        ended.insert(app)
+        if line.contains("Failed sync") { return .failed(app: app, line: line) }
+        let files = uploads[app] ?? 0
+        return files > 0 ? .uploaded(app: app, files: files) : .upToDate(app: app)
+    }
+
+    enum Verdict: Equatable {
+        case waiting
+        /// Every exit sync seen has ended.
+        case finished
+        /// None began within the patience.
+        case noExitSync
+        /// One began, and the titles waited for have gone quiet.
+        case wentQuiet
+        /// The deadline came first.
+        case outOfTime
+    }
+
+    func verdict(at now: Date) -> Verdict {
+        if !ended.isEmpty && underWay.isEmpty { return .finished }
+        if now.timeIntervalSince(started) >= Self.deadline { return .outOfTime }
+        guard sawExitSync else {
+            return now.timeIntervalSince(started) >= Self.patience ? .noExitSync : .waiting
+        }
+        return now.timeIntervalSince(lastHeard) > Self.quiet ? .wentQuiet : .waiting
+    }
+
+    /// The title a "[AppID N] ..." line is about.
+    static func appID(in line: String) -> String? {
+        guard let range = line.range(of: "[AppID ") else { return nil }
+        let rest = line[range.upperBound...]
+        let digits = rest.prefix { $0.isNumber }
+        guard !digits.isEmpty, rest.dropFirst(digits.count).first == "]" else { return nil }
+        return String(digits)
+    }
+
+    static func isExitSyncStart(_ line: String) -> Bool {
+        line.contains("Starting sync (") && line.contains("AC Exit")
+    }
+
+    /// A sync for a title's launch, begun or refused.
+    static func isLaunchSync(_ line: String) -> Bool {
+        line.contains("AC Launch")
+    }
+
+    /// The lines Steam ends an exit sync with.
+    ///
+    /// Counted in this machine's two cloud logs rather than guessed at, which
+    /// is how the first version of this went wrong: it knew "Upload complete in
+    /// build list" and not "Upload complete, result OK", so a real upload that
+    /// finished in six seconds went unrecognised and the teardown sat waiting
+    /// for three minutes. Hence the prefix, and hence the quiet fallback: a
+    /// phrase list is only ever as complete as the logs you have read.
+    static func isTerminal(_ line: String) -> Bool {
+        line.contains("Successfully synced")
+            || line.contains("Upload complete")
+            || line.contains("Failed sync for")
+    }
+
+    /// When a line was written, from the "[yyyy-MM-dd HH:mm:ss]" it opens
+    /// with, read in `timeZone`.
+    ///
+    /// This Mac's local time by default: the Steam bottle's cloud_log.txt was
+    /// last modified at 00:54:38 -0300 on 2026-09-15, and its last line opens
+    /// with [2026-09-15 00:54:38].
+    static func timestamp(of line: String, timeZone: TimeZone = .current) -> Date? {
+        guard line.first == "[", let close = line.firstIndex(of: "]") else { return nil }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = timeZone
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return formatter.date(from: String(line[line.index(after: line.startIndex)..<close]))
+    }
+
+    /// The titles with an exit sync running, read from the whole log: begun,
+    /// not ended, and no launch sync since.
+    ///
+    /// For a caller that arrives after the sync began -- a launch or a Stop
+    /// that follows a game which exited on its own seconds earlier -- and so
+    /// cannot have had a tail open for its first line.
+    ///
+    /// Only a sync begun within `within` of `now` counts. The log is
+    /// cumulative, and a sync that Steam never finished, because it was ended
+    /// in the middle, stays open in it for good. The deadline is the chosen
+    /// bound, because it is the most any wait gives an exit sync; a sync begun
+    /// before it has already had what a teardown would give it. A line whose
+    /// time cannot be read does not count.
+    static func underWay(inLog content: String, scope: Scope, now: Date,
+                         within: TimeInterval = deadline,
+                         timeZone: TimeZone = .current) -> Set<String> {
+        var begun: [String: Date] = [:]
+        var open: Set<String> = []
+        for piece in content.split(whereSeparator: \.isNewline) {
+            let line = String(piece)
+            guard let app = appID(in: line), scope.covers(app) else { continue }
+            if isLaunchSync(line) || isTerminal(line) {
+                open.remove(app)
+                begun[app] = nil
+            } else if isExitSyncStart(line) {
+                open.insert(app)
+                begun[app] = timestamp(of: line, timeZone: timeZone)
+            }
+        }
+        return open.filter { app in
+            guard let at = begun[app] else { return false }
+            return now.timeIntervalSince(at) <= within
+        }
     }
 }

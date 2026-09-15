@@ -43,22 +43,34 @@ struct GameHeader: View {
                         } else {
                             // Marked stopped now, before the task below first runs --
                             // see stopPressed.
-                            let stopBottle = stopPressed(isEpic: game!.isEpic, selectedBottle: appGlobals.selectedBottle)
+                            let press = stopPressed(isEpic: game!.isEpic, selectedBottle: appGlobals.selectedBottle)
+                            let target = SessionStop.target(isEpic: game!.isEpic, isCustom: game!.isCustom == true,
+                                                            steamAppID: game!.steamAppID)
+                            let knownNames = game!.appNames
+                            let stopped = game!.id
                             Task {
-                                // Stopping by hand deserves the same courtesy as stopping by
-                                // itself: ask Steam to go, let it finish, then close this
-                                // bottle -- not every bottle on the machine.
-                                if let cx = appGlobals.cxAppPath {
-                                    if game!.isEpic {
-                                        // The game is asked to close; its tracker then waits
-                                        // for the launcher's sync and closes the bottle.
-                                        try? await stopEpicGame(appNames: game!.appNames, cxAppPath: cx, bottle: stopBottle)
-                                        return
-                                    }
-                                    try? await quitSteam(cxAppPath: cx, bottle: stopBottle, isNative: false)
-                                    try? await closeBottle(cxAppPath: cx, bottle: stopBottle)
+                                // Stopping by hand ends the game, waits for its store's
+                                // exit sync, asks the client to leave and closes this
+                                // bottle -- not every bottle on the machine. See
+                                // SessionStop.
+                                //
+                                // The playing title is cleared once the game is ended,
+                                // and only while it is still this one and nothing has
+                                // been launched or Play pressed since the press -- see
+                                // GameThumbnail.stopGame.
+                                var released = false
+                                @MainActor func release() {
+                                    released = true
+                                    guard press.ownsTheWindow(launchesNow: LaunchGeneration.shared.launchesAnywhere(),
+                                                              playsNow: LaunchGeneration.shared.playsPressed()),
+                                          libraryPageGlobals.playingID == stopped else { return }
+                                    libraryPageGlobals.playingID = nil
                                 }
-                                libraryPageGlobals.playingID = nil
+                                if let cx = appGlobals.cxAppPath {
+                                    try? await stopEverything(press, target: target, cxAppPath: cx, knownNames: knownNames,
+                                                              whenTheGameIsEnded: release)
+                                }
+                                if !released { release() }
                             }
                         }
                     }, optionsAction: {
@@ -145,7 +157,8 @@ struct GameHeader: View {
             outcome: GameLauncher.outcome(for: game!, isPlaying: isPlaying, needsFix: false,
                                           hasEpicLauncher: !game!.isEpic || epicPlan != nil),
             cxAppPath: appGlobals.cxAppPath)
-        libraryPageGlobals.setLoader(state: true)
+        // Recorded with the loader, as GameLauncher.play records it.
+        let press = libraryPageGlobals.raiseLoaderForPlay()
         // Until the game is seen running, a pad left still is not idle -- the
         // same as Play from a card or the list, which go through GameLauncher.
         IdlePadWatcher.shared.launchStarted()
@@ -212,8 +225,10 @@ struct GameHeader: View {
                         }
                         libraryPageGlobals.playingID = game!.id
                     }, onTerminate: {
-                        libraryPageGlobals.setLoader(state: false) // if doesn't get loaded i need to close the loader
-                        libraryPageGlobals.playingID = nil
+                        // Also when the title never loaded, so the loader comes
+                        // down -- unless a later Play has put it up; see
+                        // LibraryPageGlobals.titleEnded.
+                        libraryPageGlobals.titleEnded(game!.id, raisedBy: press)
                         tObserver = nil
                     },
                      isNative: game!.isNative,

@@ -1396,7 +1396,38 @@ class LibraryPageGlobals: ObservableObject {
     func setLoader(state: Bool) {
         isLaunchingGame = state
     }
-    
+
+    /// Puts up the loader for a press of Play and returns that press's
+    /// number -- see LaunchGeneration.playPressed.
+    ///
+    /// One call for both, so the loader and the count cannot disagree about
+    /// when a Play was pressed; what compares the count is asking whether a
+    /// loader went up after something of its own did.
+    @discardableResult
+    func raiseLoaderForPlay() -> Int {
+        let press = LaunchGeneration.shared.playPressed()
+        isLaunchingGame = true
+        return press
+    }
+
+    /// What a title's tracker clears when it says the title is over: the
+    /// playing title only while it is still this one, and the loader only if
+    /// no Play has been pressed since this title's own.
+    ///
+    /// The window is one for the whole application, and a bottle can hold
+    /// two titles: Play on a second title launches into the bottle where the
+    /// first still runs. Cleared unconditionally, the first one exiting took
+    /// down the second's loader while it started, or cleared the second once
+    /// it was playing -- its card lost Stop and the pad was handed back while
+    /// it played. Found by reading the code, not seen live. A later Play's
+    /// loader is its own launch's to take down: its tracker, a launch that
+    /// started nothing, a throw (GameLauncher.play, GameHeader.playGame), or
+    /// a Stop.
+    func titleEnded(_ id: String, raisedBy press: Int) {
+        if LaunchGeneration.shared.playsPressed() == press { isLaunchingGame = false }
+        if playingID == id { playingID = nil }
+    }
+
     func setPlayingID( _ id: String?) {
         playingID = id
     }

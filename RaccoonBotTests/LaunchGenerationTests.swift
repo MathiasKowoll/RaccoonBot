@@ -340,7 +340,7 @@ struct LaunchGenerationTests {
         let launch = PendingLaunch()
         var seen: [Int] = []
         let generation = await readyBottleForLaunch(
-            id: "1", bottle: steam, bottleURL: URL(string: steam)!, hidTraceEnabled: false, launch: launch,
+            id: "1", bottle: steam, bottleURL: URL(string: steam)!, cxAppPath: "", hidTraceEnabled: false, launch: launch,
             settle: { _ in seen.append(LaunchGeneration.shared.current(for: steam)); return .notRunning },
             clearOrphans: { _ in seen.append(LaunchGeneration.shared.current(for: steam)) })
 
@@ -357,7 +357,7 @@ struct LaunchGenerationTests {
         let launch = PendingLaunch()
         var cleared = false
         let generation = await readyBottleForLaunch(
-            id: "1", bottle: steam, bottleURL: URL(string: steam)!, hidTraceEnabled: false, launch: launch,
+            id: "1", bottle: steam, bottleURL: URL(string: steam)!, cxAppPath: "", hidTraceEnabled: false, launch: launch,
             settle: { _ in
                 stopPressed(isEpic: false, selectedBottle: steam)
                 return .stillUp(afterSeconds: 20, names: ["wineserver"])
@@ -375,7 +375,7 @@ struct LaunchGenerationTests {
         let steam = bottle("Steam")
         let launch = PendingLaunch()
         let generation = await readyBottleForLaunch(
-            id: "1", bottle: steam, bottleURL: URL(string: steam)!, hidTraceEnabled: false, launch: launch,
+            id: "1", bottle: steam, bottleURL: URL(string: steam)!, cxAppPath: "", hidTraceEnabled: false, launch: launch,
             settle: { _ in .notRunning },
             clearOrphans: { _ in stopPressed(isEpic: false, selectedBottle: steam) })
 
@@ -391,7 +391,7 @@ struct LaunchGenerationTests {
         let launch = PendingLaunch()
         var cleared = false
         let generation = await readyBottleForLaunch(
-            id: "1", bottle: steam, bottleURL: URL(string: steam)!, hidTraceEnabled: false, launch: launch,
+            id: "1", bottle: steam, bottleURL: URL(string: steam)!, cxAppPath: "", hidTraceEnabled: false, launch: launch,
             settle: { _ in
                 LaunchGeneration.shared.launched(bottle: steam)
                 return .notRunning
@@ -411,7 +411,7 @@ struct LaunchGenerationTests {
         let launch = PendingLaunch()
         var cleared = 0
         let generation = await readyBottleForLaunch(
-            id: "1", bottle: steam, bottleURL: URL(string: steam)!, hidTraceEnabled: false, launch: launch,
+            id: "1", bottle: steam, bottleURL: URL(string: steam)!, cxAppPath: "", hidTraceEnabled: false, launch: launch,
             settle: { _ in
                 stopPressed(isEpic: false, selectedBottle: other)
                 return .cameDown(afterSeconds: 3)
@@ -423,13 +423,270 @@ struct LaunchGenerationTests {
         #expect(launch.decided == nil)
     }
 
-    /// The bottle a Stop acts on is the bottle it marks.
+    /// The bottle a Stop acts on is the bottle it marks, and the generation it
+    /// hands back is the one it marked.
     @Test @MainActor func stopPressedMarksTheBottleItReturns() {
         let steam = bottle("Steam")
         let running = LaunchGeneration.shared.launched(bottle: steam)
-        #expect(stopPressed(isEpic: false, selectedBottle: steam) == steam)
+        let press = stopPressed(isEpic: false, selectedBottle: steam)
+        #expect(press.bottle == steam)
+        #expect(press.generation == running)
+        // Compared, not equated: another suite launching in bottles of its
+        // own moves the count of every launch at any moment.
+        #expect(press.launchesAnywhere <= LaunchGeneration.shared.launchesAnywhere())
         #expect(LaunchGeneration.shared.wasStopped(running, for: steam))
         #expect(LaunchGeneration.shared.supersedes(running, for: steam) == false)
+    }
+
+    /// A fault found by reading the code, not seen live: a Stop cleared the
+    /// playing title, or the toolbar's loader, once its whole teardown had
+    /// returned, and a title launched in another bottle during those minutes
+    /// lost them. Nothing launched anywhere since the press is what a Stop's
+    /// clearing is conditioned on.
+    @Test @MainActor func aStopOwnsTheWindowOnlyUntilSomethingIsLaunchedAnywhere() {
+        let steam = bottle("Steam"), other = bottle("Other")
+        let press = stopPressed(isEpic: false, selectedBottle: steam)
+        #expect(press.ownsTheWindow(launchesNow: press.launchesAnywhere, playsNow: press.playsPressed))
+        LaunchGeneration.shared.launched(bottle: other)
+        #expect(press.ownsTheWindow(launchesNow: LaunchGeneration.shared.launchesAnywhere(),
+                                    playsNow: press.playsPressed) == false)
+
+        let again = stopPressed(isEpic: false, selectedBottle: steam)
+        LaunchGeneration.shared.launched(bottle: steam)
+        #expect(again.ownsTheWindow(launchesNow: LaunchGeneration.shared.launchesAnywhere(),
+                                    playsNow: again.playsPressed) == false)
+    }
+
+    /// A fault found by reading the code, not seen live: a launch is counted
+    /// once its task reaches readyBottleForLaunch, and its Play puts the
+    /// loader up at the press, before that. The toolbar's Stop compared the
+    /// count alone, so a Play pressed in between had its loader taken down
+    /// while it started. The launch count is held still here: the press alone
+    /// takes the window.
+    @Test @MainActor func aPlayPressedButNotYetCountedTakesTheWindowFromAStop() {
+        let press = stopPressed(isEpic: false, selectedBottle: bottle("Steam"))
+        let globals = LibraryPageGlobals()
+        globals.raiseLoaderForPlay()
+        #expect(globals.isLaunchingGame)
+        #expect(press.ownsTheWindow(launchesNow: press.launchesAnywhere,
+                                    playsNow: LaunchGeneration.shared.playsPressed()) == false)
+    }
+
+    /// A fault found by reading the code, not seen live: a title's tracker
+    /// cleared the loader and the playing title whoever they belonged to, and
+    /// a bottle can hold two titles. Play on B while A runs launches into A's
+    /// bottle; A exiting took down B's loader while B started, or cleared B
+    /// once it was playing.
+    @Test @MainActor func aTitleEndingClearsOnlyTheWindowStillItsOwn() {
+        let globals = LibraryPageGlobals()
+        // A is pressed and seen running, and its loader comes down.
+        let a = globals.raiseLoaderForPlay()
+        globals.playingID = "A"
+        globals.setLoader(state: false)
+        // B is pressed while A plays, and is still starting when A exits.
+        let b = globals.raiseLoaderForPlay()
+        globals.titleEnded("A", raisedBy: a)
+        #expect(globals.isLaunchingGame, "the loader is B's")
+        #expect(globals.playingID == nil, "A is over")
+        // B is seen running; A's tracker saying A is over again clears
+        // nothing of B's.
+        globals.playingID = "B"
+        globals.titleEnded("A", raisedBy: a)
+        #expect(globals.playingID == "B")
+        #expect(globals.isLaunchingGame)
+        // B's own end, with no Play since, clears the window as it always did.
+        // A Stop pressed in between is not a Play.
+        stopPressed(isEpic: false, selectedBottle: bottle("Steam"))
+        globals.titleEnded("B", raisedBy: b)
+        #expect(globals.isLaunchingGame == false)
+        #expect(globals.playingID == nil)
+    }
+
+    // MARK: - Never a Steam that is not running
+
+    /// A fault found by reading the code: quitSteam scanned for steam.exe and
+    /// sent "Steam.exe -shutdown" whatever the scan found, and the teardown
+    /// after a custom title, which never started Steam, called it. With no
+    /// Steam running that request starts one -- 25 such starts in the Steam
+    /// bottle's bootstrap_log.txt. Nothing is sent here: `send` records.
+    @Test @MainActor func onlyASteamInTheBottleIsAskedToLeave() async throws {
+        let steam = bottle("Steam")
+        var sent: [String] = []
+
+        try await quitSteam(cxAppPath: "/nowhere", bottle: steam, isNative: false,
+                            scan: { _ in [BottleProcesses.Running(pid: 31, name: "steamwebhelper.exe")] },
+                            send: { sent.append($0) })
+        #expect(sent.isEmpty, "a helper Steam left behind is not a Steam")
+        #expect(SteamShutdowns.shared.askedToLeave(in: steam).isEmpty)
+
+        var looked = false
+        try await quitSteam(cxAppPath: "/nowhere", bottle: "Steam", isNative: false,
+                            scan: { _ in looked = true; return [BottleProcesses.Running(pid: 30, name: "steam.exe")] },
+                            send: { sent.append($0) })
+        #expect(looked == false)
+        #expect(sent.isEmpty, "a bottle that cannot be looked in is not asked")
+
+        try await quitSteam(cxAppPath: "/nowhere", bottle: steam, isNative: false,
+                            scan: { _ in [BottleProcesses.Running(pid: 30, name: "Steam.exe"),
+                                          BottleProcesses.Running(pid: 31, name: "steamwebhelper.exe")] },
+                            send: { sent.append($0) })
+        #expect(sent.count == 1)
+        #expect(sent.first?.hasSuffix("-shutdown") == true)
+        #expect(SteamShutdowns.shared.askedToLeave(in: steam).map(\.pid) == [30])
+    }
+
+    // MARK: - A tracker of a session taken over says nothing more
+
+    /// Polls `condition` until it holds or `seconds` have passed.
+    @MainActor
+    private func eventually(within seconds: Double = 10, _ condition: () -> Bool) async -> Bool {
+        let end = Date().addingTimeInterval(seconds)
+        while Date() < end {
+            if condition() { return true }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        return condition()
+    }
+
+    /// A fault found by reading the code, not seen live. A restarted Steam
+    /// writes "Client version:" to gameprocess_log.txt, which empties the
+    /// process log's record, and the last session's watch read that as its
+    /// game running again: onLoad marked the old title playing and dropped
+    /// the newer launch's loader. A launch that closes the session left open
+    /// restarts Steam every time. A session taken over by a newer launch or
+    /// by a Stop stands down instead; one that was not still reads it as
+    /// before, and is what says the watches have read the line.
+    @Test @MainActor func aSteamRestartDoesNotMarkATakenOverSessionPlaying() async throws {
+        let appID = 4242
+        struct Watched {
+            let bottle: String
+            let log: URL
+            let calls: Calls
+            let launch: PendingLaunch
+            let tracker: Task<Void, Error>
+        }
+        var watched: [Watched] = []
+        for name in ["NotTakenOver", "Launched", "Stopped"] {
+            let steamPath = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("steam-\(UUID().uuidString)")
+            try FileManager.default.createDirectory(at: steamPath.appendingPathComponent("logs"), withIntermediateDirectories: true)
+            let steamBottle = bottle(name)
+            let calls = Calls()
+            let launch = PendingLaunch()
+            // No log yet, so the process log reads it from its start once
+            // it is written.
+            let tracker = Task { @MainActor in
+                _ = try await getGameTracker(appNames: ["Game.exe"], cxAppPath: "", bottle: steamBottle,
+                                             onLoad: { _ in calls.record("onLoad") },
+                                             onTerminate: { calls.record("onTerminate") },
+                                             isNative: false, steamID: appID,
+                                             steamPath: steamPath.path(percentEncoded: false), launch: launch)
+            }
+            watched.append(Watched(bottle: steamBottle, log: steamPath.appendingPathComponent("logs/gameprocess_log.txt"),
+                                   calls: calls, launch: launch, tracker: tracker))
+        }
+        defer {
+            for session in watched {
+                session.tracker.cancel()
+                try? FileManager.default.removeItem(at: session.log.deletingLastPathComponent().deletingLastPathComponent())
+            }
+        }
+        // The trackers open their logs before they wait for the launch.
+        try await Task.sleep(for: .milliseconds(200))
+        for session in watched {
+            session.launch.decide(.started(generation: LaunchGeneration.shared.launched(bottle: session.bottle)))
+            try Data(("[2026-09-15 00:53:40] AppID \(appID) adding PID 100 as a tracked process \"C:\\Games\\Game.exe\"\r\n"
+                      + "[2026-09-15 00:54:37] AppID \(appID) no longer tracking PID 100, exit code 0\r\n").utf8)
+                .write(to: session.log)
+        }
+        #expect(await eventually { watched.allSatisfy { $0.calls.taken == ["onTerminate"] } })
+
+        LaunchGeneration.shared.launched(bottle: watched[1].bottle)
+        LaunchGeneration.shared.stopped(bottle: watched[2].bottle)
+        for session in watched {
+            let handle = try FileHandle(forWritingTo: session.log)
+            try handle.seekToEnd()
+            try handle.write(contentsOf: Data("[2026-09-15 00:55:12] Client version: 1757880000\r\n".utf8))
+            try handle.close()
+        }
+        #expect(await eventually { watched[0].calls.taken == ["onTerminate", "onLoad"] })
+        // Two more looks of a watch that polls every second.
+        try await Task.sleep(for: .milliseconds(2500))
+        #expect(watched[1].calls.taken == ["onTerminate"], "a newer launch took the bottle")
+        #expect(watched[2].calls.taken == ["onTerminate"], "Stop was pressed for the bottle")
+    }
+
+    /// A temporary directory standing in for a bottle, with no wineserver:
+    /// nothing is ever running in it.
+    private func epicBottle() throws -> (bottle: String, log: URL) {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("Epic-\(UUID().uuidString)")
+        let log = EpicLauncherLogWatcher.logURL(inBottleAt: directory)
+        try FileManager.default.createDirectory(at: log.deletingLastPathComponent(), withIntermediateDirectories: true)
+        return (directory.absoluteString, log)
+    }
+
+    @MainActor
+    private func epicTracker(_ bottle: String, calls: Calls, patience: TimeInterval = 180) async throws {
+        let launch = PendingLaunch()
+        launch.decide(.started(generation: LaunchGeneration.shared.launched(bottle: bottle)))
+        _ = try await getGameTracker(appNames: ["AlanWake2.exe"], cxAppPath: "", bottle: bottle,
+                                     onLoad: { calls.record("onLoad " + $0) },
+                                     onTerminate: { calls.record("onTerminate") },
+                                     isNative: false, steamID: nil, steamPath: "", isEpic: true, launch: launch,
+                                     epicStartPatience: patience)
+    }
+
+    /// A fault found by reading the code, not seen live: the Epic tracker's
+    /// wait for its title checked neither a newer launch nor a Stop, and
+    /// after a Stop had closed the bottle it claimed the next game started
+    /// there. The launcher's line reaches both watches; one stands down.
+    @Test @MainActor func anEpicLaunchTakenOverClaimsNoGameStartedAfterIt() async throws {
+        let notTakenOver = try epicBottle(), stopped = try epicBottle()
+        defer {
+            for bottle in [notTakenOver, stopped] {
+                try? FileManager.default.removeItem(at: URL(string: bottle.bottle)!)
+            }
+        }
+        let quiet = Calls(), stoppedCalls = Calls()
+        try await epicTracker(notTakenOver.bottle, calls: quiet)
+        try await epicTracker(stopped.bottle, calls: stoppedCalls)
+        LaunchGeneration.shared.stopped(bottle: stopped.bottle)
+        let line = "[2026.09.03-02.11.30:935][813]LogLauncher: FCommunityPortalLaunchAppTask: Launching app 'Z:/Games/AlanWake2/AlanWake2.exe' with commandline ''\r\n"
+        for bottle in [notTakenOver, stopped] {
+            try Data(line.utf8).write(to: bottle.log)
+        }
+        #expect(await eventually { quiet.taken == ["onLoad AlanWake2.exe"] })
+        // Three more looks of a watch that looks every half second.
+        try await Task.sleep(for: .milliseconds(1500))
+        #expect(stoppedCalls.taken.isEmpty)
+    }
+
+    /// And a Stop before the launcher's time is up leaves the window to the
+    /// Stop: the tracker does not release it, nor begin waiting on the
+    /// launcher for half an hour.
+    @Test @MainActor func aStopBeforeTheLauncherStartsAnythingEndsTheEpicWatch() async throws {
+        let epic = bottle("Epic")
+        let calls = Calls()
+        try await epicTracker(epic, calls: calls, patience: 1)
+        LaunchGeneration.shared.stopped(bottle: epic)
+        try await Task.sleep(for: .milliseconds(2500))
+        #expect(calls.taken.isEmpty)
+        #expect(AwaitedTitleStarts.shared.awaited(in: epic).isEmpty)
+    }
+
+    /// A fault found by reading the code, not seen live: past the launcher's
+    /// time the watch went on for half an hour with the launcher's start
+    /// awaited, and only a newer launch ended that, never a Stop. So a
+    /// launch into the bottle the Stop had closed would not close a launcher
+    /// opened there since.
+    @Test @MainActor func aStopEndsTheEpicLaunchersAwaitedStart() async throws {
+        let epic = bottle("Epic")
+        let calls = Calls()
+        try await epicTracker(epic, calls: calls, patience: 0.5)
+        #expect(await eventually { AwaitedTitleStarts.shared.awaited(in: epic) == [.epic] })
+        #expect(calls.taken == ["onTerminate"])
+        LaunchGeneration.shared.stopped(bottle: epic)
+        // The watch looks every two seconds.
+        #expect(await eventually(within: 6) { AwaitedTitleStarts.shared.awaited(in: epic).isEmpty })
     }
 
     // MARK: - A teardown asks again after each of its waits

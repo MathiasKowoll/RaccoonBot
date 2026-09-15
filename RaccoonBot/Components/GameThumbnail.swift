@@ -257,9 +257,9 @@ struct GameThumbnail: View {
         }
     }
 
-    /// Stopping by hand deserves the same courtesy as stopping by itself: ask
-    /// Steam to go, let it finish, then close this bottle -- not every bottle
-    /// on the machine.
+    /// Stopping by hand ends the game, waits for its store's exit sync, asks
+    /// the client to leave and closes this bottle -- not every bottle on the
+    /// machine. See SessionStop.
     func stopGame() {
         if item.isNative {
             console.log("stop action not implemented for macOS")
@@ -267,19 +267,31 @@ struct GameThumbnail: View {
         }
         // Marked stopped now, before the task below first runs -- see
         // stopPressed.
-        let stopBottle = stopPressed(isEpic: item.isEpic, selectedBottle: appGlobals.selectedBottle)
+        let press = stopPressed(isEpic: item.isEpic, selectedBottle: appGlobals.selectedBottle)
+        let target = SessionStop.target(isEpic: item.isEpic, isCustom: item.isCustom == true,
+                                        steamAppID: item.steamAppID)
+        let stopped = item.id
         Task {
-            if let cx = appGlobals.cxAppPath {
-                if item.isEpic {
-                    // The game is asked to close; its tracker then waits for
-                    // the launcher's sync and closes the bottle.
-                    try? await stopEpicGame(appNames: item.appNames, cxAppPath: cx, bottle: stopBottle)
-                    return
-                }
-                try? await quitSteam(cxAppPath: cx, bottle: stopBottle, isNative: false)
-                try? await closeBottle(cxAppPath: cx, bottle: stopBottle)
+            // Once the game is ended, and only while the playing title is
+            // still this one and nothing has been launched or Play pressed
+            // since the press: the rest of a Stop can take minutes, and a
+            // title launched in them has a playing state of its own -- see
+            // StopPress.ownsTheWindow. The title as well, because a Play
+            // pressed before this Stop can still mark its title playing
+            // during it.
+            var released = false
+            @MainActor func release() {
+                released = true
+                guard press.ownsTheWindow(launchesNow: LaunchGeneration.shared.launchesAnywhere(),
+                                          playsNow: LaunchGeneration.shared.playsPressed()),
+                      libraryPageGlobals.playingID == stopped else { return }
+                libraryPageGlobals.playingID = nil
             }
-            libraryPageGlobals.playingID = nil
+            if let cx = appGlobals.cxAppPath {
+                try? await stopEverything(press, target: target, cxAppPath: cx, knownNames: item.appNames,
+                                          whenTheGameIsEnded: release)
+            }
+            if !released { release() }
         }
     }
 

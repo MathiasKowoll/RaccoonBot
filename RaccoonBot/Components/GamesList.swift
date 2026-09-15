@@ -518,16 +518,31 @@ struct GamesList: View {
                     Button {
                         // Marked stopped now, before the task below first runs --
                         // see stopPressed.
-                        let stopBottle = stopPressed(isEpic: false, selectedBottle: appGlobals.selectedBottle)
+                        let press = stopPressed(isEpic: false, selectedBottle: appGlobals.selectedBottle)
                         Task {
-                            // Stopping by hand deserves the same courtesy as stopping by
-                            // itself: ask Steam to go, let it finish, then close this
-                            // bottle -- not every bottle on the machine.
-                            if let cx = appGlobals.cxAppPath {
-                                try? await quitSteam(cxAppPath: cx, bottle: stopBottle, isNative: false)
-                                try? await closeBottle(cxAppPath: cx, bottle: stopBottle)
+                            // Stopping by hand ends whatever game runs in this bottle,
+                            // waits for the stores' exit syncs, asks the clients to
+                            // leave and closes this bottle -- not every bottle on the
+                            // machine. This button does not know which title is
+                            // running, so it waits for every store's sync. See
+                            // SessionStop.
+                            //
+                            // The loader comes down once the game is ended, and only
+                            // if nothing has been launched or Play pressed since the
+                            // press: a Play pressed during the Stop puts up a loader
+                            // of its own -- see StopPress.ownsTheWindow.
+                            var released = false
+                            @MainActor func release() {
+                                released = true
+                                guard press.ownsTheWindow(launchesNow: LaunchGeneration.shared.launchesAnywhere(),
+                                                          playsNow: LaunchGeneration.shared.playsPressed()) else { return }
+                                libraryPageGlobals.isLaunchingGame = false
                             }
-                            libraryPageGlobals.isLaunchingGame = false
+                            if let cx = appGlobals.cxAppPath {
+                                try? await stopEverything(press, target: .everything, cxAppPath: cx,
+                                                          whenTheGameIsEnded: release)
+                            }
+                            if !released { release() }
                         }
                     } label: {
                         Image(systemName: "exclamationmark.octagon")

@@ -141,7 +141,10 @@ final class GameLauncher {
         let padLines = padLinesAtLaunch(for: item, outcome: outcome, cxAppPath: appGlobals.cxAppPath)
 
         libraryPageGlobals.selectedGame = updatedItem
-        libraryPageGlobals.setLoader(state: true)
+        // The press is recorded with the loader, so the tracker below takes
+        // down only a loader no later Play has put up -- see
+        // LibraryPageGlobals.titleEnded.
+        let press = libraryPageGlobals.raiseLoaderForPlay()
         // Until the game is seen running, a pad left still is not idle.
         IdlePadWatcher.shared.launchStarted()
 
@@ -199,8 +202,7 @@ final class GameLauncher {
                             }
                         },
                         onTerminate: {
-                            libraryPageGlobals.setLoader(state: false)
-                            libraryPageGlobals.playingID = nil
+                            libraryPageGlobals.titleEnded(item.id, raisedBy: press)
                             Task { @MainActor in self.observers[item.id] = nil }
                         },
                         isNative: item.isNative,

@@ -574,21 +574,22 @@ class SteamCloudSyncWatcher: SteamLogWatcher {
         super.init(steamID: steamID, steamPath: steamPath, fileName: "cloud_log.txt")
     }
 
-    /// The lines Steam ends an exit sync with.
-    ///
-    /// Counted in this machine's two cloud logs rather than guessed at, which
-    /// is how the first version of this went wrong: it knew "Upload complete in
-    /// build list" and not "Upload complete, result OK", so a real upload that
-    /// finished in six seconds went unrecognised and the teardown sat waiting
-    /// for three minutes. Hence the prefix, and hence the quiet fallback below:
-    /// a phrase list is only ever as complete as the logs you have read.
-    /// Exposed so the vocabulary can be checked against real log lines.
-    static func isTerminalForTesting(_ line: String) -> Bool { isTerminal(line) }
+    /// Follows every title's exit sync, for a Stop or a launch that closes a
+    /// session without knowing whose sync it is waiting for. Built, like the
+    /// other, before anything it waits for can begin.
+    convenience init(everyTitleIn steamPath: String) {
+        self.init(steamID: "", steamPath: steamPath)
+    }
 
-    private static func isTerminal(_ line: String) -> Bool {
-        line.contains("Successfully synced")
-            || line.contains("Upload complete")
-            || line.contains("Failed sync for")
+    /// Exposed so the vocabulary can be checked against real log lines; the
+    /// phrases, and how they were counted, are SteamExitSync.isTerminal's.
+    static func isTerminalForTesting(_ line: String) -> Bool { SteamExitSync.isTerminal(line) }
+
+    /// The exit syncs running now, read from the whole log -- see
+    /// SteamExitSync.underWay. Nothing, when there is no log to read.
+    static func underWay(steamPath: String, scope: SteamExitSync.Scope, now: Date = Date()) -> Set<String> {
+        guard let data = FileManager.default.contents(atPath: "\(steamPath)/logs/cloud_log.txt") else { return [] }
+        return SteamExitSync.underWay(inLog: String(decoding: data, as: UTF8.self), scope: scope, now: now)
     }
 
     /// Wait for Steam to finish the save-data upload it runs when a game exits.
@@ -606,51 +607,54 @@ class SteamCloudSyncWatcher: SteamLogWatcher {
     /// So: only lines written since the game started count, and finished means
     /// Steam said so -- uploaded, synced, or failed -- not merely that the
     /// words appear somewhere in the file.
+    ///
+    /// The rules -- the fifteen seconds for a sync to begin, the six of quiet
+    /// that end one, the minute that ends the wait -- are SteamExitSync's.
     func waitForSteamCloudSync() async throws {
-        let appIDMarker = "[AppID \(self.steamID)]"
-        let deadline = Date().addingTimeInterval(60)
-        // If no exit sync has even begun after this long, there is not going to
-        // be one -- cloud saves are off for this title, or Steam is not logged
-        // in. Waiting the full deadline for it would just delay the teardown.
-        let patienceForItToBegin = Date().addingTimeInterval(15)
+        try await waitForExitSync(scope: .app(steamID))
+    }
 
-        var sawExitSync = false
-        var pendingUploads = 0
-        // When this app last said anything. Steam writes an exit sync in one
-        // burst; once it has been quiet for a few seconds it is done, whatever
-        // words it finished with.
-        var lastHeardFrom = Date()
-
-        while Date() < deadline {
-            for line in tail.newLines() where line.contains(appIDMarker) {
-                lastHeardFrom = Date()
-                if line.contains("Starting sync (") && line.contains("AC Exit") {
-                    sawExitSync = true
-                    console.log("\(self.steamID): steam is syncing save data on exit")
-                } else if line.contains("Need to upload file") {
-                    pendingUploads += 1
-                } else if sawExitSync && Self.isTerminal(line) {
-                    if line.contains("Failed sync") {
-                        console.warn("\(self.steamID): steam could not sync save data: \(line)")
-                    } else if pendingUploads > 0 {
-                        console.log("\(self.steamID): save data uploaded (\(pendingUploads) file(s))")
-                    } else {
-                        console.log("\(self.steamID): save data already up to date")
-                    }
-                    return
+    /// The same wait, for one title's exit sync or for every title's, with
+    /// `alreadyUnderWay` counted as begun: the syncs a caller found running
+    /// in the whole log before this tail had anything to read.
+    func waitForExitSync(scope: SteamExitSync.Scope, alreadyUnderWay: Set<String> = []) async throws {
+        let who: String
+        if case .app(let id) = scope { who = "\(id): " } else { who = "" }
+        var sync = SteamExitSync(scope: scope, started: Date(), alreadyUnderWay: alreadyUnderWay)
+        while true {
+            // A whole read before the verdict: see SteamExitSync on the launch
+            // sync that can follow an earlier session's exit sync in one read.
+            for line in tail.newLines() {
+                switch sync.observe(line, at: Date()) {
+                case .began(let app):
+                    console.log("\(app): steam is syncing save data on exit")
+                case .uploaded(let app, let files):
+                    console.log("\(app): save data uploaded (\(files) file(s))")
+                case .upToDate(let app):
+                    console.log("\(app): save data already up to date")
+                case .failed(let app, let failure):
+                    console.warn("\(app): steam could not sync save data: \(failure)")
+                case nil:
+                    break
                 }
             }
-            if !sawExitSync && Date() > patienceForItToBegin {
-                console.log("\(self.steamID): steam started no exit sync; nothing to wait for")
+            switch sync.verdict(at: Date()) {
+            case .waiting:
+                break
+            case .finished:
                 return
-            }
-            if sawExitSync && Date().timeIntervalSince(lastHeardFrom) > 6 {
-                console.log("\(self.steamID): steam has gone quiet; the sync is done")
+            case .noExitSync:
+                console.log("\(who)steam started no exit sync; nothing to wait for")
+                return
+            case .wentQuiet:
+                console.log("\(who)steam has gone quiet; the sync is done")
+                return
+            case .outOfTime:
+                console.warn("\(who)steam did not finish syncing save data in time; closing anyway")
                 return
             }
             try await Task.sleep(nanoseconds: 200_000_000)
         }
-        console.warn("\(self.steamID): steam did not finish syncing save data in time; closing anyway")
     }
 }
 
@@ -658,67 +662,34 @@ class SteamLaunchWatcher: SteamLogWatcher {
     init (steamID: String, steamPath: String) {
         super.init(steamID: steamID, steamPath: steamPath, fileName: "gameprocess_log.txt")
     }
-    
-    func getGameExe() async throws -> String {
-        let appIDMarker = "AppID \(self.steamID) adding PID"
-        var appExe = ""
-        let deadline = Date().addingTimeInterval(90)
-        var polling = true
-        let pattern = /[^\\]+\.exe/
-        while polling {
-            try await Task.sleep(nanoseconds: 1_000_000_000)
-            do {
-                let content = try String(contentsOfFile: logPath, encoding: .utf8)
-                // Split by lines, not by "[".
-            //
-            // Splitting on the bracket that opens each entry's timestamp works
-            // until a path contains one, and Ninja Gaiden 3 installs into
-            // "[NINJA GAIDEN Master Collection] NINJA GAIDEN 3 Razor's Edge".
-            // The line broke in the middle, the AppID landed in one piece and
-            // the executable in another, and the game was never identified --
-            // ninety seconds of waiting, every launch.
-            for fileContentLine in content.split(whereSeparator: \.isNewline) {
-                    if(fileContentLine.contains(appIDMarker)) {
-                        let match = fileContentLine.firstMatch(of: pattern)
-                        print(fileContentLine)
-                        appExe = String(match?.output ?? "not found")
-                        polling = false
-                    }
+
+    /// Recognises the title: the name Steam gives it in its process log, then
+    /// something by that name running. Both steps are in
+    /// SteamIdentificationWait.recognise, where the tests run them; what is
+    /// left here is reading the file and listing the running applications.
+    ///
+    /// No default wait. That makes a call that leaves it out fail to compile;
+    /// it says nothing about what the wait was built from.
+    func trackLaunch(wait: SteamIdentificationWait) async throws -> SteamLaunchIdentification.Identification {
+        try await wait.recognise(
+            appID: steamID,
+            readLog: {
+                do {
+                    let content = try String(contentsOfFile: logPath, encoding: .utf8)
+                    console.log("File \(self.fileName) found")
+                    return content
+                } catch {
+                    console.error(String(describing: error))
+                    console.error("File \(self.fileName) seems missing, retrying...")
+                    return nil
                 }
-                console.log("File \(self.fileName) found")
-            } catch {
-                console.error(String(describing: error))
-                console.error("File \(self.fileName) seems missing, retrying...")
-            }
-            if(Date() > deadline) {
-                console.log("\(self.steamID): App name fetching timed out")
-                polling = false
-            }
-        }
-        return appExe
-    }
-    
-    func trackLaunch() async throws -> String {
-        var polling = true
-        var returnedValue = ""
-        let appName = try await getGameExe()
-        let deadline = Date().addingTimeInterval(90)
-        console.log("App name found: \(appName)")
-        while polling {
-            try await Task.sleep(nanoseconds: 1_000_000_000)
-            if(Date() > deadline) {
-                console.log("\(self.steamID): Launch tracking timed out")
-                polling = false
-            }
-            let appNames = NSWorkspace.shared.runningApplications
-                .flatMap{ app in [app.executableURL?.lastPathComponent ?? "none", app.bundleURL?.lastPathComponent ?? "none"] }
-                .filter { lastpathcomponent in lastpathcomponent.contains(".exe")}
-            if appNames.contains(appName) {
-                returnedValue = appName
-                polling = false
-            }
-        }
-        return returnedValue
+            },
+            runningExecutables: {
+                NSWorkspace.shared.runningApplications
+                    .flatMap{ app in [app.executableURL?.lastPathComponent ?? "none", app.bundleURL?.lastPathComponent ?? "none"] }
+                    .filter { lastpathcomponent in lastpathcomponent.contains(".exe")}
+            },
+            log: { line in console.log(line) })
     }
 }
 
@@ -844,9 +815,13 @@ func watchSteamSession(_ state: SteamAppState,
 /// The steps are parameters only so a test can launch inside a wait and see
 /// what is still asked; the tracker passes the real ones.
 enum SessionTeardown {
-    /// Returns false when a game was launched into the bottle during one of
-    /// the waits. Nothing more is asked of anything then, and the window is
-    /// the newer session's, not this teardown's to release.
+    /// Returns false when a game was launched into the bottle, or Stop was
+    /// pressed for it, during one of the waits. Nothing more is asked of
+    /// anything then. After a launch the window is the newer session's, not
+    /// this teardown's to release; after a Stop the stop closes the bottle
+    /// itself -- see SessionStop -- and a second shutdown sent to Steam from
+    /// here could arrive after Steam had gone, which is the request the Epic
+    /// branch below refuses to send because it would start one.
     static func run(isEpic: Bool, generation: Int, bottle: String, reason: String,
                     waitForEpicLauncher: () async throws -> Void,
                     waitForCloudSync: () async throws -> Void,
@@ -855,9 +830,15 @@ enum SessionTeardown {
                     quitSteam: () async throws -> Void,
                     closeBottle: (_ clients: [String]) async throws -> Void) async throws -> Bool {
         func launchedSinceThisBegan() -> Bool {
-            guard LaunchGeneration.shared.supersedes(generation, for: bottle) else { return false }
-            console.log("not closing down: a game has been launched since this teardown began (\(reason))")
-            return true
+            if LaunchGeneration.shared.supersedes(generation, for: bottle) {
+                console.log("not closing down: a game has been launched since this teardown began (\(reason))")
+                return true
+            }
+            if LaunchGeneration.shared.wasStopped(generation, for: bottle) {
+                console.log("not closing down: Stop was pressed since this teardown began, and the stop closes the bottle (\(reason))")
+                return true
+            }
+            return false
         }
         if isEpic {
             // The Epic launcher uploads save data when a game exits, as
@@ -890,6 +871,8 @@ enum SessionTeardown {
             // has already happened here.
             try await waitForCloudSync()
             if launchedSinceThisBegan() { return false }
+            // Also after a custom title, which never started Steam: quitSteam
+            // asks only a Steam that is in the bottle.
             try await quitSteam()
             // Steam has been asked, not told. Give it time to finish writing
             // its own state before ending anything.
@@ -899,7 +882,10 @@ enum SessionTeardown {
     }
 }
 
-func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoad: @escaping (_ appName: String) -> Void, onTerminate: @escaping () -> Void, isNative: Bool, steamID: Int?, steamPath: String, isEpic: Bool = false, launch: PendingLaunch? = nil) async throws -> TerminationObserver {
+/// `epicStartPatience` is how long an Epic title's launcher is given to start
+/// it before the window is released; a parameter only so a test can reach
+/// what comes after it.
+func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoad: @escaping (_ appName: String) -> Void, onTerminate: @escaping () -> Void, isNative: Bool, steamID: Int?, steamPath: String, isEpic: Bool = false, launch: PendingLaunch? = nil, epicStartPatience: TimeInterval = 180) async throws -> TerminationObserver {
     // `appNames` lists every executable a game is known by, and for a game with
     // a launcher that is two: the launcher, and the game the launcher starts.
     // The launcher exits as soon as it has handed off -- that is its whole job.
@@ -968,6 +954,18 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
             console.log("not closing down: a game has been launched since (\(reason))")
             return
         }
+        // Stop was pressed for this session, and the stop ends the game,
+        // waits for the store and closes the bottle itself -- see
+        // SessionStop. Killing the game is what brings most trackers here,
+        // and a teardown of their own on top of the stop's would send Steam
+        // its shutdown a second time, possibly after Steam had gone. The
+        // window is still released, as the teardown would have released it.
+        if LaunchGeneration.shared.wasStopped(generation, for: bottle) {
+            guard loaded.claimShutdown() else { return }
+            console.log("not closing down: Stop was pressed, and the stop closes this bottle (\(reason))")
+            onTerminate()
+            return
+        }
         // The last word, and it belongs to the machine rather than to a log.
         //
         // Every judgement that leads here is made from Steam's own record, and
@@ -995,10 +993,11 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
                 waitForEpicLauncher: { try await epicLog?.waitForLauncherToSettle() },
                 // No watcher for a native Steam game, and so no wait.
                 waitForCloudSync: { try await cloudSync?.waitForSteamCloudSync() },
+                // Steam itself, as quitSteam looks for it: a web helper or an
+                // error reporter Steam left behind is not a Steam to ask.
                 steamIsInBottle: {
                     guard let dir = BottleReference(bottle)?.directory else { return false }
-                    return BottleProcesses.running(inBottleAt: dir)
-                        .contains(where: { $0.name.lowercased().hasPrefix("steam") })
+                    return !StoreClients.steams(among: BottleProcesses.running(inBottleAt: dir)).isEmpty
                 },
                 quitEpic: { try await quitEpic(cxAppPath: cxAppPath, bottle: bottle) },
                 // The Steam an Epic session asks to leave is the one in its
@@ -1129,6 +1128,22 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
                         return
                     }
                 } else if reportedIdle {
+                    // Not for a session a newer launch or a Stop has taken
+                    // over. A "Client version:" line empties this log's record
+                    // -- the Steam bottle's gameprocess_log.txt holds 896 of
+                    // them -- and a launch that closes the session left open
+                    // restarts Steam. That reads here exactly like the game
+                    // coming back; onLoad would
+                    // then mark this title playing and drop the newer
+                    // launch's loader in the middle of its start. The window
+                    // was already released, and the teardown below would
+                    // stand down for the same reason, so nothing is left to
+                    // do.
+                    if LaunchGeneration.shared.takenOver(generation, for: bottle) {
+                        console.log("steam's record of \(steamID.map(String.init) ?? "the game") emptied, but this bottle "
+                                    + "has been taken over by a newer launch or a Stop; standing down")
+                        return
+                    }
                     console.log("the game is running again; it was still starting")
                     onLoad(loaded.name ?? "")
                     reportedIdle = false
@@ -1168,9 +1183,28 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
             // So the bottle is watched for the same fact from the other
             // side: a process that is neither wine's furniture, nor Steam's,
             // nor the launcher's own is the game.
-            let deadline = Date().addingTimeInterval(180)
+            //
+            // Every look first asks whether the bottle is still this launch's.
+            // A Stop closes it, and a newer launch takes it; the next game
+            // started there belongs to that launch, or to nobody, and would
+            // be claimed here as this title. Asked of the launch's own
+            // generation, as the Steam tracker asks, and through takenOver,
+            // which a Stop answers too. On the main actor, as this task
+            // reaches AwaitedTitleStarts; `why` is written when it stands
+            // down.
+            func standsDown(_ why: String) async -> Bool {
+                await MainActor.run {
+                    guard LaunchGeneration.shared.takenOver(generation, for: bottle) else { return false }
+                    console.log(why)
+                    return true
+                }
+            }
+            let deadline = Date().addingTimeInterval(epicStartPatience)
             var found: String?
             while Date() < deadline, found == nil {
+                if await standsDown("epic: this bottle has been taken over by a newer launch or a Stop before the title started; standing down") {
+                    return
+                }
                 if let named = await epicLog?.launchedExecutableInNewLines() {
                     console.log("epic: the launcher started \(named)")
                     found = named
@@ -1192,7 +1226,7 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
             // save never waited for. So the window is released -- that is
             // what onTerminate is for -- and the search goes on.
             if found == nil {
-                console.warn("epic: nothing started in this bottle in 180s; releasing the window, still watching")
+                console.warn("epic: nothing started in this bottle in \(Int(epicStartPatience))s; releasing the window, still watching")
                 await MainActor.run { onTerminate() }
                 // Still watching, but not for ever and not for anyone.
                 //
@@ -1205,17 +1239,25 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
                 // launched later would pin the ABANDONED card as playing, with
                 // no way to clear it.
                 //
-                // Two ways out, then. A launch of something else in this bottle
-                // means this watcher is watching for a game nobody is waiting
-                // for -- and by now this launch's own generation is three
-                // minutes old, so a change can only be somebody else's. And a
+                // Two ways out, then. The bottle taken over -- a launch of
+                // something else in it, or a Stop pressed for it -- means this
+                // watcher is watching for a game nobody is waiting for. And a
                 // half hour of nothing is nothing: whatever this was, it is not
                 // still starting.
-                let mine = LaunchGeneration.shared.current(for: bottle)
                 let giveUpAt = Date().addingTimeInterval(1800)
+                // The launcher is still starting this title as far as anyone
+                // knows, and with the window free a launch must not close it
+                // in the middle -- see AwaitedTitleStarts. Ended however this
+                // watch ends: standing down, or after the loop. A Stop is a way
+                // out too: left up, the entry kept a launch into the bottle
+                // the Stop had closed from closing the launcher opened there
+                // since, for up to this half hour.
+                await MainActor.run {
+                    AwaitedTitleStarts.shared.began(.epic, generation: generation, bottle: bottle, until: giveUpAt)
+                }
                 while found == nil, Date() < giveUpAt {
-                    if LaunchGeneration.shared.supersedes(mine, for: bottle) {
-                        console.log("epic: another launch has taken this bottle; standing down")
+                    if await standsDown("epic: this bottle has been taken over by a newer launch or a Stop; standing down") {
+                        await MainActor.run { AwaitedTitleStarts.shared.ended(.epic, generation: generation, bottle: bottle) }
                         return
                     }
                     if let named = await epicLog?.launchedExecutableInNewLines() {
@@ -1226,6 +1268,7 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
                         try? await Task.sleep(nanoseconds: 2_000_000_000)
                     }
                 }
+                await MainActor.run { AwaitedTitleStarts.shared.ended(.epic, generation: generation, bottle: bottle) }
                 if found == nil {
                     console.warn("epic: nothing started in this bottle in half an hour; standing down")
                     return
@@ -1238,6 +1281,12 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
             // teardown's wait for the sync that runs AFTER the title exits --
             // and the launcher would be asked to leave mid-upload.
             await epicLog?.drainPastLaunch()
+            // Asked again after the last look: a game a newer launch started
+            // can be what that look found, since the launch is counted before
+            // its title's command runs.
+            if await standsDown("epic: \(exe) is running, but this bottle has been taken over by a newer launch or a Stop; standing down") {
+                return
+            }
             await MainActor.run {
                 loaded.name = exe
                 onLoad(exe)
@@ -1287,6 +1336,12 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
                 } else {
                     idleSince = nil
                     if reportedIdle {
+                        // What runs now may be a newer launch's game, or one
+                        // started in the bottle a Stop closed -- the same
+                        // reason the process-log watch stands down.
+                        if await standsDown("epic: a game is running, but this bottle has been taken over by a newer launch or a Stop; standing down") {
+                            return
+                        }
                         console.log("the game is running again; it was still starting")
                         await MainActor.run { onLoad(exe) }
                         reportedIdle = false
@@ -1298,47 +1353,108 @@ func getGameTracker(appNames: [String], cxAppPath: String, bottle: String, onLoa
     }
 
     if let steamID = steamID {
-        do {
-            let appName = try await SteamLaunchWatcher(steamID: String(steamID), steamPath: steamPath).trackLaunch()
-            if appName != "" {
-                console.log("found game \(appName), loading...")
-                loaded.name = appName
-                onLoad(appName)
-                // The registry flag is deliberately not a trigger. Steam
-                // clears it in the same instant it logs the removal, so it
-                // dips mid-launch exactly as that line does. It is kept for
-                // games where Steam writes no process log at all, and even
-                // then only after the same idle wait.
-                if let steamState, processLog == nil {
-                    Task(priority: .background) {
-                        await watchSteamSession(steamState, appID: steamID, then: shutDown)
-                    }
+        // Past the old limit, recognising the title is timed from when Steam
+        // starts it, not from the command -- see SteamLaunchIdentification.
+        // Steam took two minutes to start Ninja Gaiden 3 on 2026-09-15, most
+        // of it waiting at its own ShowInterstitials step, longer than this
+        // wait allowed, and that session did not close with the game.
+        //
+        // What Steam has started is taken from the process log, which has
+        // followed this title since before the command and so, unlike the
+        // name, cannot be answered by an earlier session. The name still
+        // comes from where it always did, and is still set once, below: a
+        // late start is recognised by exactly the path a fast one takes, and
+        // the observer this returns is armed the same way. The name is not
+        // taken from the process log's entries instead: Steam starts MGS4's
+        // launcher.exe, Nioh's nioh_launcher.exe and RDR2's PlayRDR2.exe
+        // first, so the first entry would name a launcher, and a launcher's
+        // exit would then close the session. The whole-file read can name a
+        // launcher or a helper too, when an earlier session ended on one;
+        // past the old limit a name is looked for only if it was read inside
+        // it, and only while it is the one executable Steam has started.
+        // Inside it nothing has changed.
+        //
+        // Which log is handed over here is not run by any test: they build
+        // the wait the same way, from a log of their own.
+        let wait = SteamIdentificationWait(
+            following: processLog,
+            bottleTakenOver: { LaunchGeneration.shared.takenOver(generation, for: bottle) },
+            releaseWindow: { why in
+                if why == .steamHasStartedNothing {
+                    console.warn("steam has started nothing for \(steamID) yet; "
+                                 + "releasing the window, still waiting for it")
+                    // With the window free, Play can be pressed again, and a
+                    // launch must not close this Steam in the middle of the
+                    // start -- see AwaitedTitleStarts. Bounded from now by the
+                    // limit the wait itself keeps from the launch, so a little
+                    // past it; the wait ends the entry sooner, below.
+                    AwaitedTitleStarts.shared.began(.steam, generation: generation, bottle: bottle,
+                                                    until: Date().addingTimeInterval(SteamLaunchIdentification.steamStartLimit))
                 }
-            } else {
-                // Failing to recognise the game is not evidence that there
-                // isn't one, and this branch used to close the bottle as
-                // though it were. It killed MGS4 ninety seconds into every
-                // launch -- exactly the length of this wait -- because Steam
-                // records that game as
-                //
-                //   adding PID 1752 as a tracked process ""-region eu -lan en
-                //   -selfregion EU -resolution 0 -launcherpath launcher.exe"
-                //
-                // which is a command line, not an executable name. Nothing by
-                // that name was ever going to appear, so the wait always
-                // expired, and the game playing at the time was destroyed for
-                // it.
-                //
-                // So this only stops watching. The window is released, and the
-                // process log -- which never needed the name -- carries on
-                // deciding when the session is really over.
-                console.warn("could not tell which executable is the game; "
-                             + "leaving it running and watching steam instead")
                 onTerminate()
-            }
+            })
+        let identification: SteamLaunchIdentification.Identification
+        do {
+            identification = try await SteamLaunchWatcher(steamID: String(steamID), steamPath: steamPath).trackLaunch(wait: wait)
         } catch {
+            AwaitedTitleStarts.shared.ended(.steam, generation: generation, bottle: bottle)
             console.log("\(appNames.joined(separator: ", ")), timeout...")
-            onTerminate()
+            wait.releaseWindowOnce(.notRecognised)
+            return tOb
+        }
+        // However the wait ended -- the title found, not recognised, or the
+        // bottle taken over -- Steam is no longer waited on for this launch.
+        AwaitedTitleStarts.shared.ended(.steam, generation: generation, bottle: bottle)
+        switch identification {
+        case .stoodDown:
+            // The wait was still going past the old limit -- Steam had started
+            // nothing for the title yet, or had started it and it had not been
+            // seen running -- when a newer launch took the bottle or Stop was
+            // pressed. Its window is not this tracker's to touch, and no
+            // observer is handed back: the caller would store it over the
+            // newer launch's own. It throws the error a tracker whose launch
+            // started nothing throws, which neither caller reads -- but this
+            // launch did start, so the reason is written here rather than by
+            // the launch.
+            console.log("\(steamID): the bottle was taken over while still waiting to recognise the game; standing down")
+            throw LaunchStoodDown()
+        case .found(let appName):
+            console.log("found game \(appName), loading...")
+            loaded.name = appName
+            onLoad(appName)
+            // The registry flag is deliberately not a trigger. Steam
+            // clears it in the same instant it logs the removal, so it
+            // dips mid-launch exactly as that line does. It is kept for
+            // games where Steam writes no process log at all, and even
+            // then only after the same idle wait.
+            if let steamState, processLog == nil {
+                Task(priority: .background) {
+                    await watchSteamSession(steamState, appID: steamID, then: shutDown)
+                }
+            }
+        case .notFound:
+            // Failing to recognise the game is not evidence that there
+            // isn't one, and this branch used to close the bottle as
+            // though it were. It killed MGS4 ninety seconds into every
+            // launch -- exactly the length of this wait -- because Steam
+            // records that game as
+            //
+            //   adding PID 1752 as a tracked process ""-region eu -lan en
+            //   -selfregion EU -resolution 0 -launcherpath launcher.exe"
+            //
+            // which is a command line, not an executable name. Nothing by
+            // that name was ever going to appear, so the wait always
+            // expired, and the game playing at the time was destroyed for
+            // it.
+            //
+            // So this only stops watching. The window is released, and the
+            // process log -- which never needed the name -- carries on
+            // deciding when the session is really over. A wait that already
+            // released the window while Steam had started nothing does not
+            // release it again -- see releaseWindowOnce.
+            console.warn("could not tell which executable is the game; "
+                         + "leaving it running and watching steam instead")
+            wait.releaseWindowOnce(.notRecognised)
         }
     }
     return tOb

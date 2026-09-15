@@ -94,8 +94,30 @@ enum BottleProcesses {
         "tabtip.exe", "winemenubuilder.exe",
     ]
 
-    private static let steamCacheLock = NSLock()
-    private static var steamCache: [String: Set<String>] = [:]
+    // `nonisolated`, with the walks that use it, so the names can be read
+    // off the main actor together with the scan they are compared with. The
+    // lock is what makes the cache safe to share.
+    nonisolated private static let steamCacheLock = NSLock()
+    nonisolated(unsafe) private static var steamCache: [String: Set<String>] = [:]
+
+    /// Every executable under `root`, lowercased, leaving out the folders
+    /// `skip` names -- asked of each folder with its depth below `root`, 1
+    /// for a folder directly in it.
+    nonisolated static func executables(under root: URL,
+                                        skippingFolder skip: (_ folder: URL, _ level: Int) -> Bool) -> Set<String> {
+        var names: Set<String> = []
+        guard let walker = FileManager.default.enumerator(
+            at: root, includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]) else { return names }
+        for case let file as URL in walker {
+            if (try? file.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true {
+                if skip(file, walker.level) { walker.skipDescendants() }
+            } else if file.pathExtension.lowercased() == "exe" {
+                names.insert(file.lastPathComponent.lowercased())
+            }
+        }
+        return names
+    }
 
     /// Steam's own executables, read from the Steam that is about to run.
     ///
@@ -108,20 +130,26 @@ enum BottleProcesses {
     /// Asking the directory instead costs a twentieth of a second and cannot go
     /// stale. There are twenty-five of them in this bottle, and the answer is
     /// remembered per bottle after the first look.
-    static func steamsOwnExecutables(inBottleAt bottle: URL) -> Set<String> {
+    ///
+    /// Not steamapps. It is Steam's default library -- libraryfolders.vdf in
+    /// the Steam bottle lists the Steam folder itself as library "0" -- so a
+    /// title installed there, and the redistributable installers Steam runs
+    /// from steamapps/common/Steamworks Shared, would be taken for Steam's
+    /// own. That was harmless while this only kept a teardown from waiting
+    /// for them; since a Stop ends only what is not Steam's own, and a launch
+    /// closes a bottle with nothing else in it, such a title would have been
+    /// ended with Steam, unasked. The twenty-five above are all outside it:
+    /// the other thirteen .exe files in this bottle's Steam folder are
+    /// Steamworks Shared's installers.
+    nonisolated static func steamsOwnExecutables(inBottleAt bottle: URL) -> Set<String> {
         let key = bottle.path(percentEncoded: false)
         steamCacheLock.lock()
         if let known = steamCache[key] { steamCacheLock.unlock(); return known }
         steamCacheLock.unlock()
 
         let steam = bottle.appendingPathComponent("drive_c/Program Files (x86)/Steam")
-        var names: Set<String> = []
-        if let walker = FileManager.default.enumerator(
-            at: steam, includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles, .skipsPackageDescendants]) {
-            for case let file as URL in walker where file.pathExtension.lowercased() == "exe" {
-                names.insert(file.lastPathComponent.lowercased())
-            }
+        let names = executables(under: steam) { folder, level in
+            level == 1 && folder.lastPathComponent.lowercased() == "steamapps"
         }
         steamCacheLock.lock()
         steamCache[key] = names
@@ -135,7 +163,18 @@ enum BottleProcesses {
     /// the count, the teardown after an Epic title would have refused forever
     /// -- "EpicGamesLauncher.exe is running in this bottle" -- and the window
     /// would never have been released.
-    static func launchersOwnExecutables(inBottleAt bottle: URL) -> Set<String> {
+    ///
+    /// Not a title the launcher installed in there. Its own installs go to
+    /// "Program Files\Epic Games" by default and every title on this machine
+    /// is on an external drive, so nothing measured here is affected; but a
+    /// title somebody installs under this folder would have been taken for
+    /// the launcher's, which a Stop never ends and a launch closes the bottle
+    /// under -- Steam's steamapps, above, for the same reason. The folders
+    /// are read from the launcher's own record of what it installed, its
+    /// .item manifests, which in the Steam bottle name nine titles and add-ons
+    /// and none of the launcher's own folders. `.egstore` cannot say it: Epic
+    /// Online Services carries one of its own in this bottle.
+    nonisolated static func launchersOwnExecutables(inBottleAt bottle: URL) -> Set<String> {
         let key = "epic:" + bottle.path(percentEncoded: false)
         steamCacheLock.lock()
         if let known = steamCache[key] { steamCacheLock.unlock(); return known }
@@ -155,18 +194,48 @@ enum BottleProcesses {
         // DirectXRedist and any Launcher.old-* copy come along, which is
         // right: none of them is a game either.
         let launcher = bottle.appendingPathComponent("drive_c/Program Files (x86)/Epic Games")
-        var names: Set<String> = []
-        if let walker = FileManager.default.enumerator(
-            at: launcher, includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles, .skipsPackageDescendants]) {
-            for case let file as URL in walker where file.pathExtension.lowercased() == "exe" {
-                names.insert(file.lastPathComponent.lowercased())
-            }
+        let titles = epicTitleFolders(inBottleAt: bottle)
+        let names = executables(under: launcher) { folder, _ in
+            titles.contains(folderKey(folder))
         }
         steamCacheLock.lock()
         steamCache[key] = names
         steamCacheLock.unlock()
         return names
+    }
+
+    /// The folders the Epic launcher in this bottle installed titles into, as
+    /// `folderKey` spells them, from its .item manifests.
+    ///
+    /// Read from the launcher's conventional data folder, not from the
+    /// AppDataPath its registry key can move it to: reading that key parses
+    /// the whole of system.reg, and this is on the way to every teardown's
+    /// last check. A bottle with its data moved finds no manifests here and
+    /// keeps the walk as it was.
+    nonisolated static func epicTitleFolders(inBottleAt bottle: URL) -> Set<String> {
+        let drives = BottleDrives(bottle: bottle)
+        guard case .resolved(let data) = drives.resolve(EpicLibrary.defaultDataPath) else { return [] }
+        let manifests = data.appendingPathComponent("Manifests")
+        let files = (try? FileManager.default.contentsOfDirectory(at: manifests, includingPropertiesForKeys: nil)) ?? []
+        var folders: Set<String> = []
+        for file in files where file.pathExtension.lowercased() == "item" {
+            guard let bytes = try? Data(contentsOf: file),
+                  let manifest = try? JSONDecoder().decode(EpicManifest.self, from: bytes),
+                  let location = manifest.InstallLocation, !location.isEmpty,
+                  case .resolved(let folder) = drives.resolve(location) else { continue }
+            folders.insert(folderKey(folder))
+        }
+        return folders
+    }
+
+    /// One spelling for a folder, whichever way it was reached: symbolic
+    /// links resolved -- the temporary directory is one -- lowercased, since
+    /// a manifest's Windows path need not match the folder's case, and with
+    /// no trailing slash.
+    nonisolated static func folderKey(_ folder: URL) -> String {
+        var path = folder.resolvingSymlinksInPath().path(percentEncoded: false).lowercased()
+        while path.count > 1 && path.hasSuffix("/") { path.removeLast() }
+        return path
     }
 
     /// Anything running in this bottle that belongs to neither wine, nor
@@ -195,19 +264,38 @@ enum BottleProcesses {
     /// is how a relaunched MGS4 got killed by a decision taken about the attempt
     /// before it. This asks the machine instead of the record.
     static func gamesRunning(inBottleAt bottle: URL) -> [String] {
-        let known = wineFurniture
+        games(among: running(inBottleAt: bottle), notGames: notGames(inBottleAt: bottle)).map(\.name)
+    }
+
+    /// Every name in this bottle that is not a game: wine's own, Steam's
+    /// and the Epic launcher's.
+    nonisolated static func notGames(inBottleAt bottle: URL) -> Set<String> {
+        wineFurniture
             .union(steamsOwnExecutables(inBottleAt: bottle))
             .union(launchersOwnExecutables(inBottleAt: bottle))
-        // Compared at the length lsof is willing to report, in both
-        // directions: a known name longer than the cap is stored cut down to
-        // it, and the running name is cut the same way before the comparison.
-        let knownAtLimit = Set(known.map { String($0.prefix(lsofNameLimit)) })
-        return running(inBottleAt: bottle)
-            .map(\.name)
-            .filter { name in
-                let lower = name.lowercased()
-                return !known.contains(lower) && !knownAtLimit.contains(String(lower.prefix(lsofNameLimit)))
-            }
+    }
+
+    /// The rule `gamesRunning` keeps, taking the scan and the names rather
+    /// than making them: a Stop ends exactly the processes this counts, by
+    /// pid, and every answer can be tested without a live bottle.
+    ///
+    /// Compared lowercased and at the length lsof is willing to report, in
+    /// both directions: a known name longer than the cap is stored cut down
+    /// to it, and the running name is cut the same way before the comparison.
+    ///
+    /// A server is never a game, whatever the engine calls it. The set knows
+    /// only the plain name, and `occupancy` records engines that name it for
+    /// their architecture instead; left to the set, such a server read as a
+    /// game, and nothing that asks this would ever find its bottle free.
+    nonisolated static func games(among processes: [Running], notGames known: Set<String>) -> [Running] {
+        let lowered = Set(known.map { $0.lowercased() })
+        let knownAtLimit = Set(lowered.map { String($0.prefix(lsofNameLimit)) })
+        return processes.filter { process in
+            let lower = process.name.lowercased()
+            return !lower.contains("wineserver")
+                && !lowered.contains(lower)
+                && !knownAtLimit.contains(String(lower.prefix(lsofNameLimit)))
+        }
     }
 
     /// Is the server that owns these processes still alive?
@@ -386,7 +474,7 @@ enum BottleProcesses {
     /// Asks first, then insists. Returns what would not go.
     @discardableResult
     static func end(inBottleAt bottle: URL, gracePeriod: TimeInterval = 3) async -> [Running] {
-        let doomed = running(inBottleAt: bottle)
+        let doomed = await scanOffTheMainActor(bottle)
         guard !doomed.isEmpty else { return [] }
 
         console.warn("ending \(doomed.count) leftover process(es) of this bottle: "
@@ -416,7 +504,7 @@ enum BottleProcesses {
         //
         // Matched on pid AND name so a pid the system has since reused is not
         // condemned for the sins of the process that held it.
-        let stubborn = stillThere(running(inBottleAt: bottle), of: doomed)
+        let stubborn = stillThere(await scanOffTheMainActor(bottle), of: doomed)
         for process in stubborn {
             console.warn("\(process.name) ignored the request; ending it")
             kill(process.pid, SIGKILL)
@@ -424,7 +512,18 @@ enum BottleProcesses {
         try? await Task.sleep(nanoseconds: 500_000_000)
         // Filtered too: a newcomer reported here would be logged as a process
         // that would not end, which is a false accusation and a misleading log.
-        return stillThere(running(inBottleAt: bottle), of: doomed)
+        return stillThere(await scanOffTheMainActor(bottle), of: doomed)
+    }
+
+    /// One scan, run off the main actor.
+    ///
+    /// Each scan starts lsof and waits for it, and `end` and `clearOrphans`
+    /// are called from the main actor -- by closeBottle and by a launch --
+    /// where a scan made in place held the window for as long as lsof ran.
+    /// Detached rather than a nonisolated async function: with approachable
+    /// concurrency on, such a function runs on its caller's actor.
+    nonisolated static func scanOffTheMainActor(_ bottle: URL) async -> [Running] {
+        await Task.detached(priority: .utility) { running(inBottleAt: bottle) }.value
     }
 
     /// Applications that run wine themselves.
@@ -492,7 +591,7 @@ enum BottleProcesses {
     /// server that owned them, still holding the bottle's devices. Nothing is
     /// touched while a server is alive -- that is somebody's game.
     static func clearOrphans(inBottleAt bottle: URL) async {
-        let left = running(inBottleAt: bottle)
+        let left = await scanOffTheMainActor(bottle)
         guard !left.isEmpty else { return }
         guard !left.contains(where: { $0.name.contains("wineserver") }) else {
             console.log("a wineserver is alive in this bottle; leaving its processes alone")

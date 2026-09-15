@@ -65,7 +65,9 @@ func closeBottle(cxAppPath: String, bottle: String,
     let deadline = Date().addingTimeInterval(settleTimeout)
     while Date() < deadline {
         if superseded() { return }
-        let here = BottleProcesses.running(inBottleAt: directory)
+        // Off the main actor: a scan runs lsof and waits for it, and a launch
+        // closing a session left open waits here with its loader on screen.
+        let here = await BottleProcesses.scanOffTheMainActor(directory)
         if here.isEmpty {
             console.log("the bottle closed on its own")
             return
@@ -77,7 +79,7 @@ func closeBottle(cxAppPath: String, bottle: String,
         try await Task.sleep(nanoseconds: 500_000_000)
     }
 
-    let left = BottleProcesses.running(inBottleAt: directory)
+    let left = await BottleProcesses.scanOffTheMainActor(directory)
     if left.contains(where: { p in clients.contains { p.name.lowercased().hasPrefix($0) } }) {
         console.warn("\(clients.joined(separator: " and ")) did not go in \(Int(settleTimeout))s: "
                      + left.map(\.name).sorted().joined(separator: ", "))
@@ -115,7 +117,22 @@ func closeBottle(cxAppPath: String, bottle: String,
     // while that server is still exiting, its directory reads as a session.
 }
 
-func quitSteam(cxAppPath: String, bottle: String, isNative: Bool) async throws -> Void {
+/// Asks the Steam in a bottle to leave -- only a Steam that is there.
+///
+/// "Steam.exe -shutdown" with no Steam running starts one: the Steam bottle's
+/// bootstrap_log.txt records 25 client starts launched with nothing but
+/// -shutdown. closeBottle then waits for that Steam and ends the prefix in
+/// the middle of its start. So the rule is kept here, where the request is
+/// sent, for every caller: the teardown after a custom title, which never
+/// started Steam, the Epic teardown, the Stop and the close before a launch.
+/// A bottle given by name alone cannot be looked in, and is not asked
+/// either; closeBottle cannot close such a bottle.
+///
+/// `scan` and `send` are parameters only so a test can say what the bottle
+/// holds and see what would be sent; with no `send`, the command is run.
+func quitSteam(cxAppPath: String, bottle: String, isNative: Bool,
+               scan: (URL) async -> [BottleProcesses.Running] = { await BottleProcesses.scanOffTheMainActor($0) },
+               send: ((String) throws -> Void)? = nil) async throws -> Void {
     console.log("quitting steam...")
     if(isNative) {
         let steamBundleID = "com.valvesoftware.steam"
@@ -131,7 +148,20 @@ func quitSteam(cxAppPath: String, bottle: String, isNative: Bool) async throws -
             console.error("cannot quit steam: \(bottle) does not name a bottle")
             return
         }
-        try safeShell("\(ref.environmentPrefix)\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \"\(ref.name)\" \"C:\\Program Files (x86)\\Steam\\Steam.exe\" -shutdown")
+        // Which Steam this request goes to, read before it is sent and written
+        // down once it has been, so that nothing asks that Steam again while
+        // it leaves -- see SteamShutdowns. A throw sent nothing.
+        var steams: [BottleProcesses.Running] = []
+        if let directory = ref.directory {
+            steams = StoreClients.steams(among: await scan(directory))
+        }
+        guard !steams.isEmpty else {
+            console.log("steam is not running in this bottle; not sending it a shutdown, which would start one")
+            return
+        }
+        let command = "\(ref.environmentPrefix)\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \"\(ref.name)\" \"C:\\Program Files (x86)\\Steam\\Steam.exe\" -shutdown"
+        if let send { try send(command) } else { try safeShell(command) }
+        SteamShutdowns.shared.record(steams, in: bottle)
     }
 }
 
@@ -151,19 +181,34 @@ func quitEpic(cxAppPath: String, bottle: String) async throws {
     try safeShell("\(ref.environmentPrefix)\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \"\(ref.name)\" taskkill /IM EpicGamesLauncher.exe")
 }
 
-/// Stop an Epic title by hand: the GAME is asked to close, not the launcher.
-///
-/// Stopping a Steam title asks Steam to shut down, which takes the game with
-/// it and syncs on the way. The Epic launcher has no such request, and ending
-/// the bottle under a running game is a save lost. So the game itself gets
-/// WM_CLOSE -- most titles quit and save on it -- and the session's tracker
-/// then does what it does when a game exits on its own: waits for the
-/// launcher to finish syncing, asks it to leave, closes the bottle.
-func stopEpicGame(appNames: [String], cxAppPath: String, bottle: String) async throws {
-    guard let ref = BottleReference(bottle) else { return }
-    for name in appNames where name.lowercased().hasSuffix(".exe") {
-        console.log("asking \(name) to close...")
-        try safeShell("\(ref.environmentPrefix)\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \"\(ref.name)\" taskkill /IM \"\(name)\"")
+/// One press of Stop: the bottle it acts on, the generation that bottle was
+/// on when it was pressed, and how many launches had been counted and presses
+/// of Play recorded, anywhere, by then.
+nonisolated struct StopPress: Equatable {
+    let bottle: String
+    let generation: Int
+    let launchesAnywhere: Int
+    let playsPressed: Int
+
+    /// Whether what the window shows -- the playing title, the loader -- is
+    /// still this Stop's to clear: nothing has been launched, in any bottle,
+    /// and no Play pressed, since the press.
+    ///
+    /// A Stop waits for the game, the stores' exit syncs and the bottle, and
+    /// a Play pressed meanwhile, here or in another bottle, puts up a loader
+    /// and a playing title of its own that a Stop clearing them afterwards
+    /// would take away. The bottle's own generation cannot say so for another
+    /// bottle, so every launch's count is compared.
+    ///
+    /// The presses too, because the count is not the press. A launch is
+    /// counted once its task reaches readyBottleForLaunch, and a native one
+    /// never is, while the loader goes up at the press, before that task
+    /// first runs. A Play pressed just before a Stop's game was ended, and
+    /// not counted yet, had its loader taken down by the toolbar's Stop while
+    /// it started -- found by reading the code, not seen live. `launchesNow`
+    /// and `playsNow` are parameters so a test can say them.
+    func ownsTheWindow(launchesNow: Int, playsNow: Int) -> Bool {
+        launchesNow == launchesAnywhere && playsNow == playsPressed
     }
 }
 
@@ -177,13 +222,177 @@ func stopEpicGame(appNames: [String], cxAppPath: String, bottle: String) async t
 /// learns which bottle to close only by marking it, and the bottle it closes
 /// and the bottle it marks are the same one. An Epic title runs where its
 /// launcher is.
+///
+/// The generation comes back with the bottle, recorded by the same mark. The
+/// stop is decided at that moment, so a Play pressed while the stop waits for
+/// the game or for the store takes the bottle from it -- see SessionStop.run.
+///
+/// The counts of every launch and every press of Play are read before the
+/// mark: one that moves between the reads then makes the Stop leave the
+/// window alone, which is the direction that clears nothing of that launch's.
 @discardableResult
-func stopPressed(isEpic: Bool, selectedBottle: String) -> String {
+func stopPressed(isEpic: Bool, selectedBottle: String) -> StopPress {
     let bottle = isEpic
         ? (EpicLaunch.target(settings: StoreConfig.settings(for: .epic), selectedBottle: selectedBottle)?.bottle ?? selectedBottle)
         : selectedBottle
-    LaunchGeneration.shared.stopped(bottle: bottle)
-    return bottle
+    let playsPressed = LaunchGeneration.shared.playsPressed()
+    let launchesAnywhere = LaunchGeneration.shared.launchesAnywhere()
+    let generation = LaunchGeneration.shared.stopped(bottle: bottle)
+    return StopPress(bottle: bottle, generation: generation, launchesAnywhere: launchesAnywhere,
+                     playsPressed: playsPressed)
+}
+
+/// Where the Steam in a bottle keeps its logs' folder.
+private func steamFolder(inBottleAt directory: URL) -> String {
+    directory.appendingPathComponent("drive_c/Program Files (x86)/Steam").path(percentEncoded: false)
+}
+
+/// One scan of a bottle, off the main actor: it runs lsof and waits for it.
+private func scanOffTheMainActor(_ directory: URL) async -> [BottleProcesses.Running] {
+    await Task.detached(priority: .userInitiated) { BottleProcesses.running(inBottleAt: directory) }.value
+}
+
+/// Everything a Stop button does once the bottle is marked, in the order
+/// SessionStop.run keeps, with the real steps.
+///
+/// How a game is asked to close. Not with SIGTERM: in the Wine 11.0 sources
+/// on this machine the only SIGTERM handler is wineserver's
+/// (server/signal.c) and dlls/ntdll/unix installs none, so the signal ends a
+/// Windows process the way SIGKILL does, and nothing of the game runs to save
+/// on it. wine's taskkill without /F posts WM_CLOSE to the process's
+/// top-level windows (programs/taskkill/taskkill.c, pid_enum_proc) -- the
+/// request a window's close button makes, and the one this application
+/// already sent an Epic title. It names processes by image name, not by the
+/// pids lsof gives, which is SessionStop.imageNames' business; the kill after
+/// the grace goes by pid. The request is sent without waiting for it, so the
+/// grace also covers the time wine takes to start taskkill.
+///
+/// `knownNames` are the executables the title is known by, used to complete a
+/// name lsof cut short and to tell whether the Stop ended another title's
+/// game too. The toolbar has none to give.
+///
+/// `whenTheGameIsEnded` is called once the game is ended, before the waits
+/// for the stores -- see SessionStop.run -- and not at all when the bottle
+/// cannot be named.
+func stopEverything(_ press: StopPress, target: SessionStop.Target,
+                    cxAppPath: String, knownNames: [String] = [],
+                    whenTheGameIsEnded: () -> Void = {}) async throws {
+    guard let ref = BottleReference(press.bottle), let directory = ref.directory else {
+        console.error("cannot stop \(press.bottle): it does not name a bottle")
+        return
+    }
+    let steamPath = steamFolder(inBottleAt: directory)
+    var steamSync: SteamCloudSyncWatcher?
+    var epicSync: EpicLauncherLogWatcher?
+    _ = try await SessionStop.run(
+        target: target, generation: press.generation, bottle: press.bottle,
+        knownNames: knownNames,
+        watchExitSyncs: {
+            // The tails first, then the whole logs: a line written between the
+            // two is read by both, where the other way round it would be read
+            // by neither.
+            steamSync = SteamCloudSyncWatcher(everyTitleIn: steamPath)
+            epicSync = EpicLauncherLogWatcher(bottle: directory)
+            let epicLog = FileManager.default.contents(
+                atPath: EpicLauncherLogWatcher.logURL(inBottleAt: directory).path(percentEncoded: false))
+            return SessionStop.UnderWay(
+                steam: SteamCloudSyncWatcher.underWay(steamPath: steamPath, scope: .anyApp),
+                epic: epicLog.map { EpicSettle.syncUnderWay(inLog: String(decoding: $0, as: UTF8.self)) } ?? false)
+        },
+        gamesToEnd: {
+            // The names with the scan, off the main actor: the first look at
+            // a bottle's names walks the Steam and Epic Games folders.
+            let (here, notGames) = await Task.detached(priority: .userInitiated) {
+                (BottleProcesses.running(inBottleAt: directory), BottleProcesses.notGames(inBottleAt: directory))
+            }.value
+            return SessionStop.condemned(among: here, notGames: notGames)
+        },
+        askToClose: { condemned in
+            console.log("stop: asking " + Set(condemned.map(\.name)).sorted().joined(separator: ", ") + " to close")
+            let names = SessionStop.imageNames(toAsk: condemned, knownNames: knownNames)
+            guard !names.isEmpty else { return }
+            try safeShell("\(ref.environmentPrefix)\(cxAppPath)/Contents/SharedSupport/CrossOver/bin/wine --bottle \"\(ref.name)\" taskkill \(SessionStop.taskkillArguments(names))")
+        },
+        grace: { condemned in
+            let deadline = Date().addingTimeInterval(SessionStop.grace)
+            while Date() < deadline {
+                // A cancelled sleep returns at once, and ignoring that would
+                // turn the grace into lsof in a tight loop.
+                guard (try? await Task.sleep(nanoseconds: 500_000_000)) != nil else { return }
+                if BottleProcesses.stillThere(await scanOffTheMainActor(directory), of: condemned).isEmpty { return }
+            }
+        },
+        scan: { await scanOffTheMainActor(directory) },
+        kill: { stubborn in
+            for process in stubborn {
+                console.warn("stop: \(process.name) did not close in \(Int(SessionStop.grace)) s; ending it")
+                kill(process.pid, SIGKILL)
+            }
+        },
+        gameEnded: whenTheGameIsEnded,
+        clients: {
+            StoreClients(processes: await scanOffTheMainActor(directory),
+                         alreadyAsked: SteamShutdowns.shared.askedToLeave(in: press.bottle))
+        },
+        waitForSteamExitSync: { scope, underWay in
+            try await steamSync?.waitForExitSync(scope: scope, alreadyUnderWay: underWay)
+        },
+        waitForEpicExitSync: { try await epicSync?.waitForLauncherToSettle() },
+        quitEpic: { try await quitEpic(cxAppPath: cxAppPath, bottle: press.bottle) },
+        quitSteam: { try await quitSteam(cxAppPath: cxAppPath, bottle: press.bottle, isNative: false) },
+        closeBottle: { clients in
+            try await closeBottle(cxAppPath: cxAppPath, bottle: press.bottle,
+                                  clients: clients, decidedAt: press.generation)
+        })
+}
+
+/// Close the session a launch found left open, with the real steps, in the
+/// order LeftOpenSession.close keeps.
+///
+/// Returns whether the launch is still wanted. A close that throws -- zsh
+/// could not be started, which is all safeShell throws for -- goes on to the
+/// launch, into the bottle as it is, which is what launches did before.
+func closeLeftOpenSession(_ request: LeftOpenSession.Request) async -> Bool {
+    guard let directory = BottleReference(request.bottle)?.directory else { return request.stillWanted() }
+    let steamPath = steamFolder(inBottleAt: directory)
+    do {
+        return try await LeftOpenSession.close(
+            clients: request.clients,
+            stillWanted: request.stillWanted,
+            waitForSteamExitSync: {
+                // The tail first, then the whole log, for the reason
+                // stopEverything gives.
+                let watcher = SteamCloudSyncWatcher(everyTitleIn: steamPath)
+                let underWay = SteamCloudSyncWatcher.underWay(steamPath: steamPath, scope: .anyApp)
+                guard !underWay.isEmpty else { return }
+                console.log("steam is still syncing save data for \(underWay.sorted().joined(separator: ", ")); waiting before closing it")
+                try await watcher.waitForExitSync(scope: .anyApp, alreadyUnderWay: underWay)
+            },
+            waitForEpicExitSync: {
+                let watcher = EpicLauncherLogWatcher(bottle: directory)
+                guard let log = FileManager.default.contents(
+                        atPath: EpicLauncherLogWatcher.logURL(inBottleAt: directory).path(percentEncoded: false)),
+                      EpicSettle.syncUnderWay(inLog: String(decoding: log, as: UTF8.self)) else { return }
+                console.log("epic: the launcher is still syncing save data; waiting before closing it")
+                try await watcher.waitForLauncherToSettle()
+            },
+            clientsNow: {
+                StoreClients(processes: await scanOffTheMainActor(directory),
+                             alreadyAsked: SteamShutdowns.shared.askedToLeave(in: request.bottle))
+            },
+            quitEpic: { try await quitEpic(cxAppPath: request.cxAppPath, bottle: request.bottle) },
+            quitSteam: { try await quitSteam(cxAppPath: request.cxAppPath, bottle: request.bottle, isNative: false) },
+            // This launch's own generation: closeBottle stands down when the
+            // bottle's generation has moved on, and it has not moved on from
+            // the launch that is closing it.
+            closeBottle: { clients in
+                try await closeBottle(cxAppPath: request.cxAppPath, bottle: request.bottle,
+                                      clients: clients, decidedAt: request.generation)
+            })
+    } catch {
+        console.error("while closing the session left open: \(error.localizedDescription)")
+        return request.stillWanted()
+    }
 }
 
 func quitWine(cxAppPath: String, bottle: String) async throws -> Void {
@@ -353,7 +562,10 @@ func copyMoltenVK(cxAppPath: String, vulkanLibID: String) throws -> Void {
 /// ALREADY running in the bottle, the new one hands the URI over and exits,
 /// and the game inherits the running launcher's environment instead: opened
 /// from the Epic panel, say, without any of this. That is the one case in
-/// which the game's options do not reach it.
+/// which the game's options do not reach it. A launch now closes a launcher
+/// it finds with no game running -- see LeftOpenSession -- so the case is left
+/// only when a game is already running in the bottle, or the launcher is
+/// still starting a title for an earlier launch -- see AwaitedTitleStarts.
 /// Where a HID trace of this launch is kept.
 ///
 /// The Desktop, named by the clock, the same shape
@@ -382,13 +594,29 @@ func hidTraceLogPath() -> String {
 /// bottle can reach its check inside the wait: with no count yet it passes,
 /// and Steam is sent its shutdown under this launch. And a Stop pressed inside
 /// the wait closes the bottle with the generation it finds: a count after that
-/// stands its teardown down, and the title is started anyway. The two waits
-/// are parameters only so a test can press Stop or Play inside them; the
-/// launch passes neither.
-func readyBottleForLaunch(id: String, bottle: String, bottleURL: URL, hidTraceEnabled: Bool,
+/// stands its teardown down, and the title is started anyway.
+///
+/// A bottle in use with no game in it -- Steam or the Epic launcher left up by
+/// the last session, or opened from RaccoonBot's own Steam button -- is closed
+/// first, and the launch then starts the bottle itself; LeftOpenSession says
+/// why. With a game in it, nothing is closed; nor with a store in it that is
+/// still starting a title for an earlier launch -- see AwaitedTitleStarts.
+///
+/// The waits, the look at the bottle and the close are parameters only so a
+/// test can press Stop or Play inside them; the launch passes none of them.
+func readyBottleForLaunch(id: String, bottle: String, bottleURL: URL, cxAppPath: String, hidTraceEnabled: Bool,
                           launch: PendingLaunch?,
+                          titleStartsAwaited: @MainActor (String) -> Set<AwaitedTitleStarts.Store> = { AwaitedTitleStarts.shared.awaited(in: $0) },
                           settle: (URL) async -> BottleProcesses.Settling = { await BottleProcesses.letShortLivedPrefixComeDown(inBottleAt: $0) },
+                          leftOpen: (URL) async -> LeftOpenSession.Decision = { await LeftOpenSession.decision(inBottleAt: $0) },
+                          closeLeftOpen: (LeftOpenSession.Request) async -> Bool = { await closeLeftOpenSession($0) },
                           clearOrphans: (URL) async -> Void = { await BottleProcesses.clearOrphans(inBottleAt: $0) }) async -> Int? {
+    // Read before the count, and with nothing awaited between the two: the
+    // tracker still waiting for its store to start a title stands down once
+    // this launch is counted, and ends its wait as it goes. Read after it,
+    // the wait could already be gone, and the store would be closed in the
+    // middle of that start.
+    let startsAwaited = titleStartsAwaited(bottle)
     // From here on, any teardown decided before this moment is about a session
     // that no longer exists. So nothing between the top of this function and
     // this line may await.
@@ -423,12 +651,52 @@ func readyBottleForLaunch(id: String, bottle: String, bottleURL: URL, hidTraceEn
     // wine's own processes gets up to BottleProcesses' bound to come down
     // first. It only waits; nothing is ended, and a bottle in use is not
     // waited for.
-    let settling = await settle(bottleURL)
+    var settling = await settle(bottleURL)
     // Before the lines about the wait and before clearOrphans: a launch
     // nobody wants any more has nothing to say about a trace it will not
     // write, and no business ending processes in a bottle that a Stop is
     // closing or a newer launch will clear for itself.
     if noLongerWanted() { return nil }
+
+    // A session left open is closed before the launch -- see LeftOpenSession.
+    // Asked of a fresh scan rather than of the wait's names: telling a game
+    // apart takes Steam's and the launcher's own executables, and the wait's
+    // names leave out wine's tools, a fix installer's reg.exe among them,
+    // which must count as a game here so that nothing is closed under it.
+    //
+    // A tracker of the last session still in its grace or in its teardown
+    // stands down at its next check, because this launch has already been
+    // counted; what closeBottle and BottleProcesses.end would still end is
+    // matched by pid and name to what they found, never to what this launch
+    // starts. An Epic title is not held back from this: its launcher is
+    // started with the title's URI, and a launch through that URI is one of
+    // the starts EpicReadiness records as working from cold.
+    if case .inUse = settling {
+        switch await leftOpen(bottleURL) {
+        case .nothingToClose:
+            break
+        case .gameRunning(let names):
+            console.log("\(names.joined(separator: ", ")) is running in this bottle; launching into it without closing anything")
+        case .close(let clients) where LeftOpenSession.storeStillStarting(clients, awaited: startsAwaited) != nil:
+            let store = LeftOpenSession.storeStillStarting(clients, awaited: startsAwaited) == .steam ? "steam" : "the epic launcher"
+            console.log("\(store) is still starting a title for an earlier launch; launching into this bottle without closing anything")
+        case .close(let clients):
+            console.log("closing the session left open in this bottle before launching game id \(id)")
+            let request = LeftOpenSession.Request(bottle: bottle, bottleURL: bottleURL, cxAppPath: cxAppPath,
+                                                  generation: generation, clients: clients,
+                                                  stillWanted: { !noLongerWanted() })
+            // False only when the launch stopped being wanted, which
+            // noLongerWanted has already written and told the tracker.
+            guard await closeLeftOpen(request) else { return nil }
+            // The prefix should be down now, and the same wait says whether
+            // it is -- or lets what wine keeps up for a moment come down.
+            settling = await settle(bottleURL)
+            if noLongerWanted() { return nil }
+            if case .inUse(let names) = settling {
+                console.warn("this bottle is still in use after closing it (\(names.joined(separator: ", "))); launching into it as it is")
+            }
+        }
+    }
     if case .cameDown(let seconds) = settling {
         console.log("this bottle was up with only wine's own processes in it; it came down after \(seconds) s, before this launch")
     }
@@ -482,6 +750,7 @@ func launchWindowsGame(id: String, cxAppPath: String, selectedBottle: String, st
     // without another suspension, so a Stop or a Play that its last check
     // did not see comes after the title's command.
     guard let generation = await readyBottleForLaunch(id: id, bottle: selectedBottle, bottleURL: bottleURL,
+                                                      cxAppPath: cxAppPath,
                                                       hidTraceEnabled: options!.hidTraceEnabled,
                                                       launch: launch) else { return }
     let f = FileManager.default

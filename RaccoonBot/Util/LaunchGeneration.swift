@@ -36,6 +36,8 @@ final class LaunchGeneration: @unchecked Sendable {
     /// against a teardown whose own bottle could not be identified -- see
     /// `key(for:)`.
     private var anywhere = 0
+    /// Bumped by every press of Play, at the press -- see `playPressed()`.
+    private var plays = 0
     /// The generation each bottle was on when Stop was last pressed for it --
     /// see `stopped(bottle:)`.
     private var stops: [String: Int] = [:]
@@ -79,6 +81,35 @@ final class LaunchGeneration: @unchecked Sendable {
         return key.isEmpty ? anywhere : (values[key] ?? 0)
     }
 
+    /// How many launches have been counted, in every bottle -- what a Stop
+    /// compares to know that nothing was launched anywhere since it was
+    /// pressed; see StopPress.ownsTheWindow.
+    func launchesAnywhere() -> Int {
+        lock.lock(); defer { lock.unlock() }
+        return anywhere
+    }
+
+    /// Records a press of Play and returns its number.
+    ///
+    /// At the press, not at the count: a launch is counted once its task
+    /// reaches readyBottleForLaunch, and a native one never is, while its
+    /// loader is up from the press. Called only through
+    /// LibraryPageGlobals.raiseLoaderForPlay, so a press and a loader are one
+    /// event. What compares it: StopPress.ownsTheWindow and
+    /// LibraryPageGlobals.titleEnded.
+    @discardableResult
+    func playPressed() -> Int {
+        lock.lock(); defer { lock.unlock() }
+        plays += 1
+        return plays
+    }
+
+    /// How many presses of Play have been recorded -- see `playPressed()`.
+    func playsPressed() -> Int {
+        lock.lock(); defer { lock.unlock() }
+        return plays
+    }
+
     /// Has anything been launched IN THIS BOTTLE since `generation` was taken?
     func supersedes(_ generation: Int, for bottle: String) -> Bool {
         current(for: bottle) != generation
@@ -96,19 +127,28 @@ final class LaunchGeneration: @unchecked Sendable {
     /// stopped. So the launch asks `wasStopped` before it does anything to the
     /// bottle.
     ///
-    /// Marked, never bumped. A bump would tell the running session's tracker
-    /// that a game had been launched since, and it would stand down -- and
-    /// the Epic stop leaves the whole teardown to that tracker.
+    /// Marked, never bumped. A bump would tell a launch still waiting for this
+    /// bottle that a newer Play had taken its place, and it would stand down
+    /// as superseded -- which leaves its loader up for a launch that does not
+    /// exist. The running session's tracker is told by the mark instead: its
+    /// teardown stands down on it, because the Stop now ends the game, waits
+    /// for the store and closes the bottle itself -- see SessionStop.
     ///
     /// Keyed like the counter, so a stop and a launch that spell the same
     /// bottle differently still meet, and a bottle that cannot be identified
     /// is answered from the counter every launch bumps.
-    func stopped(bottle: String) {
+    ///
+    /// Returns the generation it recorded, read under the same lock, which is
+    /// the generation the Stop's own teardown is decided at.
+    @discardableResult
+    func stopped(bottle: String) -> Int {
         lock.lock(); defer { lock.unlock() }
         // Not through `current(for:)`: it takes this same lock, and NSLock is
         // not recursive.
         let key = Self.key(for: bottle)
-        stops[key] = key.isEmpty ? anywhere : (values[key] ?? 0)
+        let generation = key.isEmpty ? anywhere : (values[key] ?? 0)
+        stops[key] = generation
+        return generation
     }
 
     /// Was Stop pressed for this bottle while it was on `generation`?
@@ -119,6 +159,15 @@ final class LaunchGeneration: @unchecked Sendable {
     func wasStopped(_ generation: Int, for bottle: String) -> Bool {
         lock.lock(); defer { lock.unlock() }
         return stops[Self.key(for: bottle)] == generation
+    }
+
+    /// Has this bottle been taken from `generation` -- by a newer launch into
+    /// it, or by Stop pressed while it was on that generation?
+    ///
+    /// What a Steam tracker still waiting on Steam past its old limit asks
+    /// before it goes on looking; see SteamLaunchIdentification.
+    func takenOver(_ generation: Int, for bottle: String) -> Bool {
+        supersedes(generation, for: bottle) || wasStopped(generation, for: bottle)
     }
 }
 
@@ -189,7 +238,14 @@ nonisolated final class PendingLaunch: @unchecked Sendable {
     }
 }
 
-/// Thrown by a tracker whose launch started nothing. Both callers arm the
-/// tracker in a task nobody reads the error of, and the launch has already
-/// written why it stood down.
+/// Thrown by a tracker that has nothing left to do for its launch. Both
+/// callers arm the tracker in a task nobody reads the error of, and neither
+/// stores an observer from a tracker that threw.
+///
+/// Two ways there. The launch started nothing, and has already written why it
+/// stood down. Or the launch did start its Steam title, and the tracker was
+/// still waiting past the old ninety-second limit to recognise it -- Steam had
+/// started nothing for it yet, or had started it and it had not been seen
+/// running -- when a newer launch or a Stop took the bottle over; that tracker
+/// writes the reason itself, since the launch had nothing to say.
 nonisolated struct LaunchStoodDown: Error {}

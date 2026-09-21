@@ -192,6 +192,18 @@ enum UnrealConfig {
                               epicCloudSaveFolder: String? = nil) {
         if let exe, !isUnreal(exe: exe) { return }
 
+        // A Steam launch carries no executable, so nothing above has said the
+        // title is Unreal -- and a cloud-save path is not evidence of it.
+        // Granblue Fantasy: Relink (Cygames' own engine, executable at the
+        // top of its folder) records `GBFR/Saved/SaveGames`, a path shaped
+        // exactly like Unreal's, and was handed an Engine.ini it never reads.
+        // The install folder is what answers: Unreal stages `Binaries/Win64`,
+        // and a title without it gets nothing written.
+        if exe == nil, let id = steamAppID, let root = steamRoot,
+           !SteamLibrary.isUnrealInstall(appID: id, steamRoot: root, bottle: bottle) {
+            return
+        }
+
         guard let resolved = resolveProject(exe: exe,
                                             steamAppID: steamAppID,
                                             steamRoot: steamRoot,
@@ -488,22 +500,43 @@ enum SteamLibrary {
 
     /// The Unreal shipping executable for `appID`, or nil.
     static func unrealExecutable(appID: String, steamRoot: URL, bottle: URL) -> URL? {
+        for game in installFolders(appID: appID, steamRoot: steamRoot, bottle: bottle) {
+            if let exe = unrealExecutable(inGameFolder: game) { return exe }
+        }
+        return nil
+    }
+
+    /// True when `appID` is installed with Unreal's staging layout.
+    ///
+    /// Deliberately looser than `unrealExecutable`: that one has to pick a
+    /// single executable to name the project, and gives up on a `Win64` with
+    /// several plain `.exe`s in it. This only has to answer "is it Unreal",
+    /// and the `Binaries/Win64` directory alone says yes. A title that is not
+    /// installed, or whose manifest cannot be found, answers no -- writing
+    /// nothing is the safe side of not knowing.
+    static func isUnrealInstall(appID: String, steamRoot: URL, bottle: URL) -> Bool {
+        installFolders(appID: appID, steamRoot: steamRoot, bottle: bottle)
+            .contains { !unrealWin64Directories(inGameFolder: $0).isEmpty }
+    }
+
+    /// The folder each library's manifest for `appID` names.
+    static func installFolders(appID: String, steamRoot: URL, bottle: URL) -> [URL] {
+        var out: [URL] = []
         for library in libraries(steamRoot: steamRoot, bottle: bottle) {
             let apps = library.appendingPathComponent("steamapps")
             let manifest = apps.appendingPathComponent("appmanifest_\(appID).acf")
             guard let text = try? String(contentsOf: manifest, encoding: .utf8),
                   let dir = value(of: "installdir", in: text) else { continue }
-            let game = apps.appendingPathComponent("common").appendingPathComponent(dir)
-            if let exe = unrealExecutable(inGameFolder: game) { return exe }
+            out.append(apps.appendingPathComponent("common").appendingPathComponent(dir))
         }
-        return nil
+        return out
     }
 
     /// Unreal stages as `<Game>/<Project>/Binaries/Win64/<exe>`, and a few
     /// titles drop the project level. Only those two shapes are looked at:
     /// walking a game folder is walking tens of gigabytes on an external disk,
     /// and every second of it happens while somebody is waiting to play.
-    static func unrealExecutable(inGameFolder game: URL) -> URL? {
+    static func unrealWin64Directories(inGameFolder game: URL) -> [URL] {
         let f = FileManager.default
         var roots = [game]
         if let children = try? f.contentsOfDirectory(at: game, includingPropertiesForKeys: [.isDirectoryKey],
@@ -512,8 +545,15 @@ enum SteamLibrary {
                 (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
             })
         }
-        for root in roots {
-            let win64 = root.appendingPathComponent("Binaries/Win64")
+        return roots.map { $0.appendingPathComponent("Binaries/Win64") }.filter {
+            var isDir: ObjCBool = false
+            return f.fileExists(atPath: $0.path, isDirectory: &isDir) && isDir.boolValue
+        }
+    }
+
+    static func unrealExecutable(inGameFolder game: URL) -> URL? {
+        let f = FileManager.default
+        for win64 in unrealWin64Directories(inGameFolder: game) {
             guard let entries = try? f.contentsOfDirectory(atPath: win64.path) else { continue }
             let exes = entries.filter { $0.lowercased().hasSuffix(".exe") }
             // The shipping build first; then anything, for the titles that ship

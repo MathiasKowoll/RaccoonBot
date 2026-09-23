@@ -225,8 +225,16 @@ func editCXBottleConfigFile(selectedBottle: String, options: [String: String]) t
 /// screen with no error to explain it. Leaving them also means a staged path
 /// in the bottle wins over the framework path injected at launch, which is
 /// the behaviour we want.
+/// The two values `GameOptions.d3dSupportDXR` takes. The field is a string
+/// because it was declared one long before anything read it; empty means
+/// "D3DMetal decides", which is what every saved title already holds.
+enum DXROption {
+    static let toolkitDefault = ""
+    static let off = "0"
+}
+
 let PROCYON_MANAGED_ENV_KEYS: Set<String> = [
-    "D3DM_ENABLE_METALFX", "D3DM_MTL4", "D3DM_MAX_FPS",
+    "D3DM_ENABLE_METALFX", "D3DM_MTL4", "D3DM_MAX_FPS", "D3DM_SUPPORT_DXR",
     "DXMT_ENABLE_NVEXT", "DXMT_CONFIG", "DXMT_METALFX_SPATIAL_SWAPCHAIN",
     "DXVK_ASYNC",
     "MTL_HUD_ENABLED",
@@ -397,6 +405,13 @@ func getInlineEnvs(from: GameOptions, cxAppPath: String? = nil) -> String {
     // Launcher.swift copies apple_gptk 3 or 4 in on every launch -- so
     // writing them for a 3 engine sets variables nothing reads and puts a
     // frame cap in a launch line that will not honour it.
+    // Both toolkits read this one -- the 3.0 and the 4 binary each contain the
+    // string -- so it follows the D3DMetal family, not the generation. Only Off
+    // is written: On is the toolkit's own default, and saying it again would put
+    // a variable in every launch line that changes nothing.
+    if isD3DMetal || unknownBackend, from.d3dSupportDXR == DXROption.off {
+        value += "D3DM_SUPPORT_DXR=0 "
+    }
     if backend == "d3dmetal4" {
         value += "D3DM_MTL4=\(from.d3dMtl4Enabled ? "1" : "0") "
         if from.d3dMaxFPS > 20 {

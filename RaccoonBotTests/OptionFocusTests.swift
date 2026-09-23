@@ -103,8 +103,9 @@ struct OptionFocusTests {
         #expect(dxmt.firstIndex(of: .hudOpacity)! < dxmt.firstIndex(of: .save)!)
     }
 
-    /// D3DMetal 3 reads neither D3DM_MTL4 nor D3DM_MAX_FPS, so nothing is drawn
-    /// for it -- and a pad must not walk onto controls that are not there.
+    /// D3DMetal 3 reads neither D3DM_MTL4 nor D3DM_MAX_FPS, so neither row is
+    /// drawn for it -- and a pad must not walk onto controls that are not there.
+    /// (It does read D3DM_SUPPORT_DXR; DXROptionTests covers that row.)
     @Test func d3dMetal3HasNoColumnToWalk() {
         let list = OptionFocus.visibleControls(for: OptionPanelState(backend: "d3dmetal3", d3dCapOn: true, osVersion: 27))
         #expect(!list.contains(.d3dMtl4))

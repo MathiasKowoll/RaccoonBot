@@ -55,7 +55,7 @@ nonisolated enum OptionControl: String, CaseIterable, Hashable {
     // Metal HUD
     case hudDetail, hudAlignment, hudOpacity
     // D3DMetal
-    case d3dMtl4, d3dCap, d3dMaxFPS
+    case d3dMtl4, d3dCap, d3dMaxFPS, d3dDXR
     // Actions
     case save, undo, reset, autoconfigure
 
@@ -183,6 +183,8 @@ nonisolated struct OptionFocus: Equatable {
                 list.append(.d3dCap)
                 if state.d3dCapOn { list.append(.d3dMaxFPS) }
             }
+            // Both toolkits read D3DM_SUPPORT_DXR, so 3 has this row as well.
+            if state.backend.hasPrefix("d3dmetal") { list.append(.d3dDXR) }
             list += [.ue4Hack, .mvkArgBuff]
             list.append(.mtlHud)
             if state.hudEnabled { list += [.hudDetail, .hudAlignment, .hudOpacity] }

@@ -162,6 +162,9 @@ struct GameOptionsView: View {
         } else if gameOptions.cxGraphicsBackend == "d3dmetal4" {
             d3dMetalRows
         }
+        if gameOptions.cxGraphicsBackend.hasPrefix("d3dmetal") {
+            dxrRow
+        }
     }
 
     @ViewBuilder private var dxmtRows: some View {
@@ -246,6 +249,25 @@ struct GameOptionsView: View {
         }
         .opacity(capOn ? 1 : 0.35)
         .disabled(!capOn)
+    }
+
+    /// Hardware ray tracing, offered by D3DMetal unless a title is told otherwise.
+    ///
+    /// On is D3DMetal's own default and writes nothing. Off writes
+    /// D3DM_SUPPORT_DXR=0, so the title is told the GPU has no DXR and takes
+    /// its raster path. Silent Hill: Townfall crashed inside Unreal's D3D12
+    /// ray-tracing code (RemoveUpdateRayTracingGeometryListener) after 14
+    /// minutes; whether Off prevents that has not been measured.
+    @ViewBuilder private var dxrRow: some View {
+        GridRow {
+            optionLabel("Ray tracing (DXR)")
+            Toggle("Ray tracing (DXR)", isOn: Binding(
+                get: { gameOptions.d3dSupportDXR != DXROption.off },
+                set: { gameOptions.d3dSupportDXR = $0 ? DXROption.toolkitDefault : DXROption.off }))
+                .labelsHidden()
+                .help("Off writes D3DM_SUPPORT_DXR=0 for this title, so it sees no hardware ray tracing. On leaves D3DMetal's default, which offers it.")
+                .optionFocus(.d3dDXR, current: focus.current, shown: gamepad.showsFocus)
+        }
     }
 
     /// MoltenVK's two switches and the Vulkan library.
@@ -909,6 +931,11 @@ struct GameOptionsView: View {
         case .mvkArgBuff:   return flip(\.mvkArgBuff)
         case .dxmtMetalFX:  return flip(\.dxmtMetalFXSpatial)
         case .d3dMtl4:      return flip(\.d3dMtl4Enabled)
+        case .d3dDXR:
+            guard adjust == .select else { return .nothing }
+            gameOptions.d3dSupportDXR = gameOptions.d3dSupportDXR == DXROption.off
+                ? DXROption.toolkitDefault : DXROption.off
+            return .changed
         case .dxmtCap:
             guard adjust == .select else { return .nothing }
             gameOptions.dxmtPreferredMaxFrameRate = OptionAdjust.cap(!(gameOptions.dxmtPreferredMaxFrameRate > 20))

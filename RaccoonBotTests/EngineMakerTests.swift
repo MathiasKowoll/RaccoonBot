@@ -45,6 +45,9 @@ struct EngineMakerTests {
         #expect(EngineMaker.step(in: "[6/6] signing") == 6)
         #expect(EngineMaker.step(in: "copy      : /Users/x/Applications/Thing.app") == nil)
         #expect(EngineMaker.step(in: "") == nil)
+        #expect(EngineMaker.fraction(in: "[7/7] signing") == 1)
+        #expect(EngineMaker.fraction(in: "[3/6] winegstreamer") == 0.5)
+        #expect(EngineMaker.fraction(in: "[4b/7] runtime version") == nil)
     }
 
     /// Success is the script saying where it put the engine, not merely

@@ -115,8 +115,8 @@ nonisolated enum EngineMaker {
             let text = String(decoding: chunk, as: UTF8.self)
             collected.append(text)
             for line in text.split(whereSeparator: \.isNewline) {
-                if let step = Self.step(in: String(line)) {
-                    progress(Double(step) / 6.0, String(line).trimmingCharacters(in: .whitespaces))
+                if let done = Self.fraction(in: String(line)) {
+                    progress(done, String(line).trimmingCharacters(in: .whitespaces))
                 }
             }
         }
@@ -141,6 +141,16 @@ nonisolated enum EngineMaker {
         let inside = line[line.index(after: line.startIndex)..<close]
         guard let slash = inside.firstIndex(of: "/") else { return nil }
         return Int(inside[inside.startIndex..<slash])
+    }
+
+    /// `[3/7] winegstreamer` -> 3/7. The total is read from the line, not
+    /// assumed: the script went from six steps to seven and a fixed divisor
+    /// ran the bar past its end. A sub-step such as `[4b/7]` is not a step.
+    static func fraction(in line: String) -> Double? {
+        guard let step = step(in: line), let close = line.firstIndex(of: "]"),
+              let slash = line[..<close].firstIndex(of: "/"),
+              let total = Int(line[line.index(after: slash)..<close]), total > 0 else { return nil }
+        return min(Double(step) / Double(total), 1)
     }
 
     /// The script's last word on success: `ready: <path>`.

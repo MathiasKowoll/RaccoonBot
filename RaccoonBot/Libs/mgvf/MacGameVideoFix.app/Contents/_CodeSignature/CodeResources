@@ -24,6 +24,10 @@
 		<data>
 		XbcKGZIWj1RjZID2AJxpQsVU6rw=
 		</data>
+		<key>Resources/PxFoundation_x64-ctl.dll</key>
+		<data>
+		CfSpi/GMiTxn6ugEDQAffFrz3L0=
+		</data>
 		<key>Resources/amd_ags_x64-nioh3.dll</key>
 		<data>
 		EKFKHihJrzlNTq/BfI4Xol48Bf8=
@@ -120,6 +124,10 @@
 		<data>
 		1vtE5KJt+lvm7Kl3Bz1p/w6c5BE=
 		</data>
+		<key>Resources/install-ctl-fix.sh</key>
+		<data>
+		KMnmjfnZNwz5mBpm7eA2d4lKLJU=
+		</data>
 		<key>Resources/install-dwo-bridge.sh</key>
 		<data>
 		9UhzAATLLAyfxS3DabCo+Q8y4sc=
@@ -131,6 +139,10 @@
 		<key>Resources/install-engine-media.sh</key>
 		<data>
 		AtttAID2yFwmwicNs0bRDutyoeI=
+		</data>
+		<key>Resources/install-engine-vcruntime.sh</key>
+		<data>
+		hyguG1K64rzQsPNGf27JyxT25BU=
 		</data>
 		<key>Resources/install-kh-bridge.sh</key>
 		<data>
@@ -234,11 +246,11 @@
 		</data>
 		<key>Resources/make-engine-copy.sh</key>
 		<data>
-		M/Efl1pGacMqor0nLE6yLb5yuds=
+		FbO/Xm9zSsA0EZIAQLIZYW2KQF4=
 		</data>
 		<key>Resources/manifest.json</key>
 		<data>
-		s1i6WyhFq3VzyV7n6XZdwJXiuMY=
+		6K2QKmkvBNUTq6/Sl8qbGOMn0e4=
 		</data>
 		<key>Resources/ng3-THIRD-PARTY-LICENCES.md</key>
 		<data>
@@ -312,6 +324,13 @@
 			<key>hash2</key>
 			<data>
 			RxElbNfDRc22syjBtXmJifH5obVmnfti+CBw1D4O7D8=
+			</data>
+		</dict>
+		<key>Resources/PxFoundation_x64-ctl.dll</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			0dsYsD68fXGNbGpjo9oEvU+KRMeq/sIGOhVRMyHiRkQ=
 			</data>
 		</dict>
 		<key>Resources/amd_ags_x64-nioh3.dll</key>
@@ -482,6 +501,13 @@
 			Idoa2VsfXOQoh8em9Fb5opljmkdFiTVK2ibCUH7ClE0=
 			</data>
 		</dict>
+		<key>Resources/install-ctl-fix.sh</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			1IRgqhrBtksZru6qUo/TNAY4ILfT3G3GjnWX3X3LFfc=
+			</data>
+		</dict>
 		<key>Resources/install-dwo-bridge.sh</key>
 		<dict>
 			<key>hash2</key>
@@ -501,6 +527,13 @@
 			<key>hash2</key>
 			<data>
 			uxz/jqmUkHVWb7NShCCQaw9XKUwLm7QBarkBqEZPNqY=
+			</data>
+		</dict>
+		<key>Resources/install-engine-vcruntime.sh</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			D5bYbfVgtjQuC+LsxYrhIDG4NBaj4PGHxz7YsNRvgTY=
 			</data>
 		</dict>
 		<key>Resources/install-kh-bridge.sh</key>
@@ -682,14 +715,14 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			WgvrpNYeuaRS/MtJPme0unRLxB/vt2fvq6RoP4Vb4W4=
+			kPASn1W4FpVwUc06Y4VB2MKSu2dT3K2nb9AWPH2kssw=
 			</data>
 		</dict>
 		<key>Resources/manifest.json</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			Z3tyni8v5yooKM2M+08/kyHwK09c9ptvizEbyuVJOAw=
+			t1xIUnRYlImI1kzH1puQhcojuwBh2aGg0818oQtKbdY=
 			</data>
 		</dict>
 		<key>Resources/ng3-THIRD-PARTY-LICENCES.md</key>

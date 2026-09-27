@@ -181,7 +181,7 @@ nonisolated struct OptionFocus: Equatable {
             if state.backend == "d3dmetal4" {
                 if state.osVersion >= 27 { list.append(.d3dMtl4) }
                 list.append(.d3dCap)
-                if state.d3dCapOn { list.append(.d3dMaxFPS) }
+                list.append(.d3dMaxFPS) // always: its top stop is "No limit"
             }
             // Both toolkits read D3DM_SUPPORT_DXR, so 3 has this row as well.
             if state.backend.hasPrefix("d3dmetal") { list.append(.d3dDXR) }

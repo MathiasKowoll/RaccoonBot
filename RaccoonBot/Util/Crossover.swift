@@ -414,8 +414,13 @@ func getInlineEnvs(from: GameOptions, cxAppPath: String? = nil) -> String {
     }
     if backend == "d3dmetal4" {
         value += "D3DM_MTL4=\(from.d3dMtl4Enabled ? "1" : "0") "
-        if from.d3dMaxFPS > 20 {
-            value += "D3DM_MAX_FPS=\(DoubleToFormattedStr(from.d3dMaxFPS)) "
+        // The value that holds the chosen rate on this display, not the rate
+        // itself; nothing at all for no cap, which includes the display's own
+        // maximum -- see FrameCap. As stored when no display can be read.
+        let capDisplay = FrameCap.mainDisplay() ?? FrameCap.promotion
+        if !FrameCap.isNoLimit(from.d3dMaxFPS, on: capDisplay) {
+            let held = FrameCap.envValue(for: from.d3dMaxFPS, on: capDisplay)
+            value += "D3DM_MAX_FPS=\(held.map(String.init) ?? DoubleToFormattedStr(from.d3dMaxFPS)) "
         }
     }
 //    switch (from.vulkanLib) {

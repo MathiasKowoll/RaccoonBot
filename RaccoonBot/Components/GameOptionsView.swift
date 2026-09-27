@@ -117,13 +117,13 @@ struct GameOptionsView: View {
     /// A slider and its number, in one control-width slot. The number has a
     /// slot of its own so that 9 becoming 10 moves nothing, and it starts
     /// right after the bar so it reads as the bar's.
-    private func valueSlider<Value: View>(_ slider: Value, value: String) -> some View {
+    private func valueSlider<Value: View>(_ slider: Value, value: String, valueWidth: CGFloat? = nil) -> some View {
         HStack(spacing: 8) {
             slider
             Text(value)
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
-                .frame(width: Self.optionValueWidth, alignment: .leading)
+                .frame(width: valueWidth ?? Self.optionValueWidth, alignment: .leading)
         }
         .frame(width: Self.optionControlWidth)
     }
@@ -218,7 +218,14 @@ struct GameOptionsView: View {
     }
 
     @ViewBuilder private var d3dMetalRows: some View {
-        let capOn = gameOptions.d3dMaxFPS > 20
+        // The rates this display can hold, slowest first, and its own maximum
+        // as the top stop, which is no cap -- the same state as the switch
+        // off; see FrameCap.
+        let capDisplay = FrameCap.mainDisplay() ?? FrameCap.promotion
+        let capOn = !FrameCap.isNoLimit(gameOptions.d3dMaxFPS, on: capDisplay)
+        let capStops = FrameCap.stops(on: capDisplay)
+        let capHeld = FrameCap.snapped(gameOptions.d3dMaxFPS, on: capDisplay) ?? 60
+        let capTop = FrameCap.maximum(on: capDisplay).map(FrameCap.label) ?? "its maximum"
         GridRow {
             optionLabel("Metal 4 backend")
             Toggle("Metal 4 backend", isOn: $gameOptions.d3dMtl4Enabled)
@@ -232,7 +239,7 @@ struct GameOptionsView: View {
         GridRow {
             optionLabel("Limit frame rate")
             Toggle("Limit frame rate", isOn: Binding(
-                get: { gameOptions.d3dMaxFPS > 20 },
+                get: { capOn },
                 set: { gameOptions.d3dMaxFPS = OptionAdjust.cap($0) }))
                 .labelsHidden()
                 .help("Writes D3DM_MAX_FPS for this title while it is on.")
@@ -240,15 +247,18 @@ struct GameOptionsView: View {
         }
         GridRow {
             optionLabel("Max frame rate")
-            // Rounded rather than stepped, for the same reason as DXMT's.
-            valueSlider(Slider(value: Binding(get: { gameOptions.d3dMaxFPS },
-                                              set: { gameOptions.d3dMaxFPS = $0.rounded() }),
-                               in: 19...240)
-                            .optionFocus(.d3dMaxFPS, current: focus.current, shown: gamepad.showsFocus),
-                        value: capOn ? "\(Int(gameOptions.d3dMaxFPS))" : "Off")
+            // Stepped, unlike DXMT's: a handful of rates the display holds
+            // rather than 222 values, so the ticks do not run together. Always
+            // usable: dragging to the top turns the cap off, and turning it
+            // off puts the slider at the top.
+            valueSlider(Slider(value: Binding(get: { Double(FrameCap.stopIndex(for: gameOptions.d3dMaxFPS, on: capDisplay)) },
+                                              set: { gameOptions.d3dMaxFPS = FrameCap.stored(forStop: Int($0.rounded()), on: capDisplay) }),
+                               in: 0...Double(max(capStops.count - 1, 1)), step: 1)
+                            .optionFocus(.d3dMaxFPS, current: focus.current, shown: gamepad.showsFocus)
+                            .help("Only the frame rates this display can hold are offered, which is why some round numbers are missing. The top stop, \(capTop) Hz, is the display's own maximum: no limit. D3DMetal is handed a value just above the rate chosen, so the game holds it instead of dropping to the next one down."),
+                        value: capOn ? FrameCap.label(capHeld) : "No limit",
+                        valueWidth: 62)
         }
-        .opacity(capOn ? 1 : 0.35)
-        .disabled(!capOn)
     }
 
     /// Hardware ray tracing, offered by D3DMetal unless a title is told otherwise.
@@ -942,10 +952,15 @@ struct GameOptionsView: View {
             return .changed
         case .d3dCap:
             guard adjust == .select else { return .nothing }
-            gameOptions.d3dMaxFPS = OptionAdjust.cap(!(gameOptions.d3dMaxFPS > 20))
+            gameOptions.d3dMaxFPS = OptionAdjust.cap(FrameCap.isNoLimit(gameOptions.d3dMaxFPS,
+                                                                        on: FrameCap.mainDisplay() ?? FrameCap.promotion))
             return .changed
         case .dxmtMaxFPS:   return step(\.dxmtPreferredMaxFrameRate, by: OptionAdjust.fpsStep, in: 19...240)
-        case .d3dMaxFPS:    return step(\.d3dMaxFPS, by: OptionAdjust.fpsStep, in: 19...240)
+        case .d3dMaxFPS:
+            guard adjust != .select else { return .nothing }
+            gameOptions.d3dMaxFPS = FrameCap.nudged(gameOptions.d3dMaxFPS, forward: forward,
+                                                    on: FrameCap.mainDisplay() ?? FrameCap.promotion).rounded()
+            return .changed
         case .dxmtUpscale:  return step(\.dxmtMetalSpatialUpscaleFactor, by: OptionAdjust.upscaleStep, in: 1.0...2.0)
         case .hudOpacity:   return step(\.mtlHudOpacity, by: OptionAdjust.opacityStep, in: 0.1...1.0)
         case .hudDetail:

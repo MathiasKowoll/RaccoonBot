@@ -256,10 +256,12 @@ struct FrameCapTests {
         #expect(on.firstIndex(of: .dxmtCap)! < on.firstIndex(of: .dxmtMaxFPS)!, "switch first, then how much")
     }
 
-    @Test func d3dMetalHasTheSameShape() {
+    /// Unlike DXMT's, D3DMetal's slider is offered with the cap off too: its
+    /// top stop is "No limit", the same state as the switch off.
+    @Test func d3dMetalOffersItsSliderEvenWithTheCapOff() {
         var s = OptionPanelState(backend: "d3dmetal4", osVersion: 27)
         #expect(OptionFocus.visibleControls(for: s).contains(.d3dCap))
-        #expect(!OptionFocus.visibleControls(for: s).contains(.d3dMaxFPS))
+        #expect(OptionFocus.visibleControls(for: s).contains(.d3dMaxFPS))
         s.d3dCapOn = true
         #expect(OptionFocus.visibleControls(for: s).contains(.d3dMaxFPS))
     }

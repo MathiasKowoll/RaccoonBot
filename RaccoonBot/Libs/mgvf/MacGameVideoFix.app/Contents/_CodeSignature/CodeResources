@@ -36,6 +36,10 @@
 		<data>
 		NioaK7SKc6pJl0ra2bfhMD7StKk=
 		</data>
+		<key>Resources/amd_fidelityfx_loader_dx12-w3.dll</key>
+		<data>
+		ztUu7g9IbHi0vYpIDnRIVHMFrAE=
+		</data>
 		<key>Resources/bottles.sh</key>
 		<data>
 		Tyx7RLECLdMq1Q+3fAez4nTav9Y=
@@ -188,6 +192,10 @@
 		<data>
 		+LGhGLbwBIJiaHBLZVZRkQKNu0w=
 		</data>
+		<key>Resources/install-w3-fix.sh</key>
+		<data>
+		nrDBPBp9o+gB+gqAcgpCAEO+gfI=
+		</data>
 		<key>Resources/libavcodec.60.dylib</key>
 		<data>
 		IvIw8g4uN5q/XcVIQroRcHpNxzI=
@@ -250,7 +258,7 @@
 		</data>
 		<key>Resources/manifest.json</key>
 		<data>
-		6K2QKmkvBNUTq6/Sl8qbGOMn0e4=
+		ue4AnjpcZr6RVgYRGxFphQ8TrT4=
 		</data>
 		<key>Resources/ng3-THIRD-PARTY-LICENCES.md</key>
 		<data>
@@ -345,6 +353,13 @@
 			<key>hash2</key>
 			<data>
 			7qJwxmNDLzhXhEWAFOKIX+5c//vESjxpjAlMjIczxSA=
+			</data>
+		</dict>
+		<key>Resources/amd_fidelityfx_loader_dx12-w3.dll</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			RbWfqnNRaFJip95VOaTmGcaIj+xuUZePz4/blzz2J+0=
 			</data>
 		</dict>
 		<key>Resources/bottles.sh</key>
@@ -613,6 +628,13 @@
 			nS0UAl6rxvF0tXCcW+KLX1V17mxh/jnb1SQCwgkOTi0=
 			</data>
 		</dict>
+		<key>Resources/install-w3-fix.sh</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			Z86k5Rj+rENDteAoiz0gixMY2CSs+NRZUW/sF1utsCw=
+			</data>
+		</dict>
 		<key>Resources/libavcodec.60.dylib</key>
 		<dict>
 			<key>hash2</key>
@@ -722,7 +744,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			t1xIUnRYlImI1kzH1puQhcojuwBh2aGg0818oQtKbdY=
+			dm+tcLBQwWzfo3QbGbdvZAJdeNe4G+aLzQ1jzLzN9Lo=
 			</data>
 		</dict>
 		<key>Resources/ng3-THIRD-PARTY-LICENCES.md</key>

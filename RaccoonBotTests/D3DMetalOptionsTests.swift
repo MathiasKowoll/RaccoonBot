@@ -44,12 +44,17 @@ struct D3DMetalOptionTests {
     }
 
     @Test func theVariablesAreWrittenOnlyForTheToolkitThatReadsThem() {
-        let four = getInlineEnvs(from: options(backend: "d3dmetal4", mtl4: true, maxFPS: 60))
+        // On the ProMotion panel, where 60 is a cap and not the display's own
+        // maximum. Read from the main display instead, a 60 Hz monitor made 60
+        // "no limit" and this failed on 2026-10-07.
+        let four = getInlineEnvs(from: options(backend: "d3dmetal4", mtl4: true, maxFPS: 60),
+                                 display: FrameCap.promotion)
         #expect(four.contains("D3DM_MTL4=1"))
         #expect(four.contains("D3DM_MAX_FPS="))
 
         for backend in ["d3dmetal3", "d3dmetal", "dxmt", "dxvk"] {
-            let other = getInlineEnvs(from: options(backend: backend, mtl4: true, maxFPS: 60))
+            let other = getInlineEnvs(from: options(backend: backend, mtl4: true, maxFPS: 60),
+                                      display: FrameCap.promotion)
             #expect(!other.contains("D3DM_MTL4"), "\(backend) got a variable only D3DMetal 4 reads")
             #expect(!other.contains("D3DM_MAX_FPS"), "\(backend) got a frame cap it will not honour")
         }
@@ -148,7 +153,7 @@ struct BackendVariableScopeTests {
                             dxmtMetalFXSpatial: true)
         o.d3dMtl4Enabled = true
         o.d3dMaxFPS = 60
-        return getInlineEnvs(from: o)
+        return getInlineEnvs(from: o, display: FrameCap.promotion)
     }
 
     @Test func dxmtGetsNoD3DMetalVariables() {

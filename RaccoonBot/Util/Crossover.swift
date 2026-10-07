@@ -288,7 +288,10 @@ func getDxmtConfigEnv(values: [String]) -> String {
     return values.count == 0 ? "" : "DXMT_CONFIG=\"\(values.joined(separator: ";"))\" "
 }
 
-func getInlineEnvs(from: GameOptions, cxAppPath: String? = nil) -> String {
+/// `display` is the screen a frame cap is held on. Left out, it is the main
+/// display, which is what a launch wants; a test passes one, so that what it
+/// asserts does not change with the monitor the machine happens to have.
+func getInlineEnvs(from: GameOptions, cxAppPath: String? = nil, display: FrameCap.Display? = nil) -> String {
     /**
      @TO DO:
      "MVK_CONFIG_FAST_MATH", "1"
@@ -417,7 +420,7 @@ func getInlineEnvs(from: GameOptions, cxAppPath: String? = nil) -> String {
         // The value that holds the chosen rate on this display, not the rate
         // itself; nothing at all for no cap, which includes the display's own
         // maximum -- see FrameCap. As stored when no display can be read.
-        let capDisplay = FrameCap.mainDisplay() ?? FrameCap.promotion
+        let capDisplay = display ?? FrameCap.mainDisplay() ?? FrameCap.promotion
         if !FrameCap.isNoLimit(from.d3dMaxFPS, on: capDisplay) {
             let held = FrameCap.envValue(for: from.d3dMaxFPS, on: capDisplay)
             value += "D3DM_MAX_FPS=\(held.map(String.init) ?? DoubleToFormattedStr(from.d3dMaxFPS)) "

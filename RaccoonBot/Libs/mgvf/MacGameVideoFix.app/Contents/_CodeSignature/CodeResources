@@ -32,13 +32,17 @@
 		<data>
 		EKFKHihJrzlNTq/BfI4Xol48Bf8=
 		</data>
+		<key>Resources/amd_ags_x64-sm2.dll</key>
+		<data>
+		ye4wtL/zA3y/i9AlLbWUPyirpko=
+		</data>
 		<key>Resources/amd_ags_x64.dll</key>
 		<data>
 		NioaK7SKc6pJl0ra2bfhMD7StKk=
 		</data>
 		<key>Resources/amd_fidelityfx_loader_dx12-w3.dll</key>
 		<data>
-		ztUu7g9IbHi0vYpIDnRIVHMFrAE=
+		Kl4kPqv21fPo9jsueo9a1ePdFX0=
 		</data>
 		<key>Resources/bottles.sh</key>
 		<data>
@@ -148,6 +152,10 @@
 		<data>
 		hyguG1K64rzQsPNGf27JyxT25BU=
 		</data>
+		<key>Resources/install-gow-fix.sh</key>
+		<data>
+		/mRGkemZE7EIMnqPEVp608Fl/4c=
+		</data>
 		<key>Resources/install-kh-bridge.sh</key>
 		<data>
 		fqp2BaEbyfk6QAZ/IYnOxH75Umo=
@@ -184,6 +192,10 @@
 		<data>
 		k7vPuwj7ghC0aRc0KhxpPXZMHA0=
 		</data>
+		<key>Resources/install-sm2-fix.sh</key>
+		<data>
+		emh6/981CcUX0JE47iyjhU+E+nc=
+		</data>
 		<key>Resources/install-tmnt-fix.sh</key>
 		<data>
 		IIgsvGuiYsumNdxEJH2NLoR5tEk=
@@ -194,7 +206,11 @@
 		</data>
 		<key>Resources/install-w3-fix.sh</key>
 		<data>
-		nrDBPBp9o+gB+gqAcgpCAEO+gfI=
+		j2Al9dpw84l+gM8LP6pC8kpdwDk=
+		</data>
+		<key>Resources/libSceJobManager-gow.dll</key>
+		<data>
+		B9l7uvLicw4Jw/t7kp/9Kpx+NR0=
 		</data>
 		<key>Resources/libavcodec.60.dylib</key>
 		<data>
@@ -258,7 +274,7 @@
 		</data>
 		<key>Resources/manifest.json</key>
 		<data>
-		IfCk9MVV/RAItTk3KjPmtMmQzA8=
+		EnRgUKI29bLpSrMSGusHyZCt4NE=
 		</data>
 		<key>Resources/ng3-THIRD-PARTY-LICENCES.md</key>
 		<data>
@@ -287,6 +303,10 @@
 		<key>Resources/pe.pl</key>
 		<data>
 		F2JdaPJ1fX/d3ywGrEyGK7YXFTo=
+		</data>
+		<key>Resources/sm2-shadertool</key>
+		<data>
+		tW/zsmU1AeGycQ9yxaFlOC9bX60=
 		</data>
 		<key>Resources/stage-codecs.sh</key>
 		<data>
@@ -348,6 +368,13 @@
 			yYIrkplCVfJRf8PkqG/pX59L1hq7eR3chkCkOckFyUk=
 			</data>
 		</dict>
+		<key>Resources/amd_ags_x64-sm2.dll</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			d1N2kQYOMgFOC9wleQl/pads5nPfJXS08ZD57hVjQc8=
+			</data>
+		</dict>
 		<key>Resources/amd_ags_x64.dll</key>
 		<dict>
 			<key>hash2</key>
@@ -359,7 +386,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			RbWfqnNRaFJip95VOaTmGcaIj+xuUZePz4/blzz2J+0=
+			oD2pdEZLL36MJw8+MAdX2ZjbrVh4pMpgW6NJJCFbnjc=
 			</data>
 		</dict>
 		<key>Resources/bottles.sh</key>
@@ -551,6 +578,13 @@
 			D5bYbfVgtjQuC+LsxYrhIDG4NBaj4PGHxz7YsNRvgTY=
 			</data>
 		</dict>
+		<key>Resources/install-gow-fix.sh</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			R/UOXFPX46M9C4eN5zI/H4Rj3pQzARKse+8fPXJh+EQ=
+			</data>
+		</dict>
 		<key>Resources/install-kh-bridge.sh</key>
 		<dict>
 			<key>hash2</key>
@@ -614,6 +648,13 @@
 			oC2fW6fo9ogX2M2z0xMzYyLQoDIqoLccQfcnoSmM5XE=
 			</data>
 		</dict>
+		<key>Resources/install-sm2-fix.sh</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			Oip8+gStuyy9dJ+nsS6oiqNmi9+FY7OPmI0hYfYRy4s=
+			</data>
+		</dict>
 		<key>Resources/install-tmnt-fix.sh</key>
 		<dict>
 			<key>hash2</key>
@@ -632,7 +673,14 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			Z86k5Rj+rENDteAoiz0gixMY2CSs+NRZUW/sF1utsCw=
+			e1KGvIgt9flids7Mjw6zk04HPqG+sWmtV3HNManb36U=
+			</data>
+		</dict>
+		<key>Resources/libSceJobManager-gow.dll</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			lmvxt52Mnm8JHdK39hUpKta2FiIOCovIQzESP6A3dLo=
 			</data>
 		</dict>
 		<key>Resources/libavcodec.60.dylib</key>
@@ -744,7 +792,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			B15wDbTs+xPVW73p3HE1OaPRjWxHOtYxKe6p/MjnaDI=
+			K+i6zX2A1JmyTU/6k4Wx8zTDaQ+f2nIsiM8NihdpqlU=
 			</data>
 		</dict>
 		<key>Resources/ng3-THIRD-PARTY-LICENCES.md</key>
@@ -794,6 +842,13 @@
 			<key>hash2</key>
 			<data>
 			IuESnhN+eflX31flKA8QKB7e0im24nMfszNK4Qoo2og=
+			</data>
+		</dict>
+		<key>Resources/sm2-shadertool</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			6me+DvEfbJnan9DINBlETHZ85tdY0VsWXNCokGkvpk0=
 			</data>
 		</dict>
 		<key>Resources/stage-codecs.sh</key>

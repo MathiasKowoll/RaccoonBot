@@ -9,6 +9,11 @@ through CrossOver — and fixes the ones whose cutscenes do not play.**
 
 </div>
 
+> **Archived on 2026-10-16.** RaccoonBot is no longer developed. Its game fixes
+> live on in [MacGameFix](https://github.com/MathiasKowoll/MacGameFix), which
+> works with CrossOver, CrossOver Preview and Steam Play tools such as
+> NotProton. The releases here stay available as they are.
+
 > **RaccoonBot is not a replacement for anything. It needs CrossOver, and it
 > needs it installed and licensed by you.**
 >
